@@ -1,9 +1,27 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Download, Loader2, ShieldAlert, Inbox, FileWarning, Wifi, ShieldOff } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  ShieldAlert,
+  Inbox,
+  FileWarning,
+  Wifi,
+  ShieldOff,
+  X,
+  AlertCircle,
+  Check,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import type { RecipientManifest, ShareResolveErrorCode } from "../../lib/share-resolver";
 import { isSafeDownloadUrl } from "../../lib/share-resolver";
+import {
+  downloadToBlob,
+  saveBlob,
+  DownloadCancelled,
+  DownloadError,
+  type DownloadProgress,
+} from "../../lib/share-download";
 import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
 import { VesselButton } from "../vessel-ui/VesselButton";
 
@@ -57,6 +75,222 @@ function ErrorBlock({ icon, title, body, onRetry }: { icon: React.ReactNode; tit
           Try again
         </VesselButton>
       )}
+    </div>
+  );
+}
+
+type DownloadState =
+  | { status: "idle" }
+  | { status: "downloading"; received: number; total: number | null }
+  | { status: "done" }
+  | { status: "error"; message: string };
+
+type TrackRowProps = {
+  track: RecipientManifest["tracks"][number];
+};
+
+function TrackRow({ track }: TrackRowProps) {
+  const [state, setState] = useState<DownloadState>({ status: "idle" });
+  const controllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+    };
+  }, []);
+
+  const safeSetState = useCallback((next: DownloadState) => {
+    if (mountedRef.current) setState(next);
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    if (!track.url) return;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    safeSetState({ status: "downloading", received: 0, total: null });
+    const fileName = suggestedFilename(track);
+    try {
+      const blob = await downloadToBlob({
+        url: track.url,
+        signal: controller.signal,
+        onProgress: (p: DownloadProgress) => {
+          if (!mountedRef.current) return;
+          setState((prev) =>
+            prev.status === "downloading"
+              ? { status: "downloading", received: p.receivedBytes, total: p.totalBytes }
+              : prev,
+          );
+        },
+      });
+      saveBlob(blob, fileName);
+      safeSetState({ status: "done" });
+    } catch (err) {
+      if (err instanceof DownloadCancelled) {
+        safeSetState({ status: "idle" });
+        return;
+      }
+      const message =
+        err instanceof DownloadError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : "The download failed.";
+      safeSetState({ status: "error", message });
+    } finally {
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+      }
+    }
+  }, [track, safeSetState]);
+
+  const handleCancel = useCallback(() => {
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    safeSetState({ status: "idle" });
+  }, [safeSetState]);
+
+  const fallbackTotal = track.sizeBytes && Number.isFinite(track.sizeBytes) && track.sizeBytes > 0 ? track.sizeBytes : null;
+
+  let actionSlot: React.ReactNode;
+  if (!track.url) {
+    actionSlot = (
+      <span
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-muted text-xs font-medium shrink-0"
+        data-testid={`text-track-unavailable-${track.recordingId}`}
+      >
+        Not yet uploaded
+      </span>
+    );
+  } else if (!isSafeDownloadUrl(track.url)) {
+    actionSlot = (
+      <span
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-muted text-xs font-medium shrink-0"
+        data-testid={`text-track-unsafe-${track.recordingId}`}
+        title="The download address looks unsafe and was blocked."
+      >
+        Blocked
+      </span>
+    );
+  } else if (state.status === "downloading") {
+    actionSlot = (
+      <button
+        type="button"
+        onClick={handleCancel}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-secondary text-xs font-medium shrink-0 hover:text-vessel-text-primary hover:border-vessel-text-secondary transition-colors"
+        data-testid={`button-cancel-${track.recordingId}`}
+      >
+        <X className="w-3.5 h-3.5" />
+        Cancel
+      </button>
+    );
+  } else if (state.status === "done") {
+    actionSlot = (
+      <span
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-accent text-xs font-medium shrink-0"
+        data-testid={`text-download-done-${track.recordingId}`}
+      >
+        <Check className="w-3.5 h-3.5" />
+        Saved
+      </span>
+    );
+  } else {
+    actionSlot = (
+      <button
+        type="button"
+        onClick={handleDownload}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-accent text-vessel-bg-base text-xs font-bold hover:opacity-90 transition-opacity shrink-0"
+        data-testid={`button-download-${track.recordingId}`}
+      >
+        <Download className="w-3.5 h-3.5" />
+        {state.status === "error" ? "Retry" : "Download"}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="p-4 rounded-lg bg-vessel-bg-surface border border-vessel-border"
+      data-testid={`recipient-track-${track.recordingId}`}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+          style={{ backgroundColor: deriveAvatarColorFromPubkey(track.participantPubkey || track.recordingId) }}
+        >
+          <span className="text-white text-xs font-bold">
+            {getInitials(track.participantName)}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-vessel-text-primary truncate">
+            {track.participantName}
+          </div>
+          <div className="text-xs text-vessel-text-muted">
+            {formatDuration(track.durationSeconds)} · {formatSize(track.sizeBytes)}
+          </div>
+        </div>
+        {actionSlot}
+      </div>
+
+      {state.status === "downloading" && (
+        <DownloadProgressBar
+          received={state.received}
+          total={state.total ?? fallbackTotal}
+          recordingId={track.recordingId}
+        />
+      )}
+
+      {state.status === "error" && (
+        <div
+          className="mt-3 flex items-start gap-2 p-3 rounded-md bg-vessel-bg-base border border-vessel-border text-vessel-red"
+          role="alert"
+          data-testid={`text-download-error-${track.recordingId}`}
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="text-xs leading-relaxed">{state.message}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DownloadProgressBar({
+  received,
+  total,
+  recordingId,
+}: {
+  received: number;
+  total: number | null;
+  recordingId: string;
+}) {
+  const hasTotal = !!total && total > 0;
+  const pct = hasTotal ? Math.min(100, Math.round((received / (total as number)) * 100)) : null;
+  return (
+    <div className="mt-3" data-testid={`progress-${recordingId}`}>
+      <div className="h-1.5 w-full rounded-full bg-vessel-bg-base overflow-hidden">
+        {hasTotal ? (
+          <div
+            className="h-full bg-vessel-accent transition-[width] duration-150 ease-out"
+            style={{ width: `${pct}%` }}
+            data-testid={`progress-fill-${recordingId}`}
+          />
+        ) : (
+          <div className="h-full w-1/3 bg-vessel-accent animate-pulse" />
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-[11px] font-mono-vessel text-vessel-text-muted">
+        <span data-testid={`progress-bytes-${recordingId}`}>
+          {formatSize(received)}
+          {hasTotal ? ` / ${formatSize(total as number)}` : ""}
+        </span>
+        <span>
+          {hasTotal ? `${pct}%` : "Downloading…"}
+        </span>
+      </div>
     </div>
   );
 }
@@ -187,53 +421,8 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.04 }}
-                    className="flex items-center gap-3 p-4 rounded-lg bg-vessel-bg-surface border border-vessel-border"
-                    data-testid={`recipient-track-${track.recordingId}`}
                   >
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: deriveAvatarColorFromPubkey(track.participantPubkey || track.recordingId) }}
-                    >
-                      <span className="text-white text-xs font-bold">
-                        {getInitials(track.participantName)}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-vessel-text-primary truncate">
-                        {track.participantName}
-                      </div>
-                      <div className="text-xs text-vessel-text-muted">
-                        {formatDuration(track.durationSeconds)} · {formatSize(track.sizeBytes)}
-                      </div>
-                    </div>
-                    {track.url && isSafeDownloadUrl(track.url) ? (
-                      <a
-                        href={track.url}
-                        download={suggestedFilename(track)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-accent text-vessel-bg-base text-xs font-bold hover:opacity-90 transition-opacity shrink-0"
-                        data-testid={`button-download-${track.recordingId}`}
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    ) : track.url ? (
-                      <span
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-muted text-xs font-medium shrink-0"
-                        data-testid={`text-track-unsafe-${track.recordingId}`}
-                        title="The download address looks unsafe and was blocked."
-                      >
-                        Blocked
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-muted text-xs font-medium shrink-0"
-                        data-testid={`text-track-unavailable-${track.recordingId}`}
-                      >
-                        Not yet uploaded
-                      </span>
-                    )}
+                    <TrackRow track={track} />
                   </motion.div>
                 ))}
               </div>
