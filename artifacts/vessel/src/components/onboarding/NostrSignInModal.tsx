@@ -112,9 +112,9 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       await signInWithExtension(displayName.trim());
       onSuccess();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Couldn't sign in with your browser extension.");
+      setError((err instanceof Error && err.message) || "Couldn't sign in with your browser extension.");
     } finally {
       setIsLoading(false);
     }
@@ -135,9 +135,9 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       await signInWithRemoteSigner(bunkerUri.trim(), displayName.trim());
       onSuccess();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Couldn't connect to your remote signer.");
+      setError((err instanceof Error && err.message) || "Couldn't connect to your remote signer.");
     } finally {
       setIsLoading(false);
     }
@@ -165,9 +165,9 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       setInvite(null);
       onSuccess();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Couldn't complete the connection.");
+      setError((err instanceof Error && err.message) || "Couldn't complete the connection.");
       await cancelInvite();
     } finally {
       setWaitingForSigner(false);
