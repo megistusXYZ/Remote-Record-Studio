@@ -5,6 +5,10 @@ import {
   createNewIdentity as createNewIdentityLib,
   createGuestIdentity as createGuestIdentityLib,
   importIdentityFromBackup as importIdentityFromBackupLib,
+  signInWithExtension as signInWithExtensionLib,
+  signInWithRemoteSigner as signInWithRemoteSignerLib,
+  isNostrExtensionAvailable,
+  persistDisplayNameChange,
   type VesselIdentity,
 } from "../lib/identity";
 
@@ -70,6 +74,26 @@ export function useIdentity() {
     [setIdentity, persistOnServer]
   );
 
+  const signInWithExtension = useCallback(
+    async (displayName: string) => {
+      const id = await signInWithExtensionLib(displayName);
+      setIdentity(id);
+      await persistOnServer(id);
+      return id;
+    },
+    [setIdentity, persistOnServer]
+  );
+
+  const signInWithRemoteSigner = useCallback(
+    async (bunkerUri: string, displayName: string) => {
+      const id = await signInWithRemoteSignerLib(bunkerUri, displayName);
+      setIdentity(id);
+      await persistOnServer(id);
+      return id;
+    },
+    [setIdentity, persistOnServer]
+  );
+
   const setDisplayName = useCallback(
     async (name: string) => {
       if (!identity) {
@@ -78,6 +102,7 @@ export function useIdentity() {
       }
       const updated: VesselIdentity = { ...identity, displayName: name };
       setIdentity(updated);
+      await persistDisplayNameChange(updated);
       await persistOnServer(updated);
     },
     [identity, createNewIdentity, setIdentity, persistOnServer]
@@ -93,11 +118,15 @@ export function useIdentity() {
     displayName: identity?.displayName,
     avatarColor: identity?.avatarColor,
     isGuest: identity?.isGuest ?? false,
+    signerType: identity?.signerType,
     isLoaded,
     setDisplayName,
     createNewIdentity,
     createGuestIdentity,
     importFromBackup,
+    signInWithExtension,
+    signInWithRemoteSigner,
+    isNostrExtensionAvailable,
     signOut,
   };
 }
