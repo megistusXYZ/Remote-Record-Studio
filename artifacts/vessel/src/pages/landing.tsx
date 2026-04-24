@@ -7,11 +7,13 @@ import { VesselCard } from "../components/vessel-ui/VesselCard";
 import { VesselBadge } from "../components/vessel-ui/VesselBadge";
 import { AudioMeter } from "../components/vessel-ui/AudioMeter";
 import { RecordingDot } from "../components/vessel-ui/RecordingDot";
-import { Mic, Video, PhoneOff, Zap, Shield, Check, X } from "lucide-react";
+import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
+import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-react";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { displayName, isLoaded } = useIdentity();
+  const [showBackupModal, setShowBackupModal] = React.useState(false);
 
   React.useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -31,6 +33,7 @@ export default function LandingPage() {
   }
 
   const navigateToStart = () => setLocation("/start");
+  const openBackupSignIn = () => setShowBackupModal(true);
   const scrollToHowItWorks = () => {
     document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
   };
@@ -52,8 +55,25 @@ export default function LandingPage() {
         />
       </div>
 
+      {/* Top Nav */}
+      <header className="relative z-20 px-6 py-5 flex items-center justify-between max-w-6xl mx-auto w-full">
+        <div className="flex items-baseline gap-1">
+          <span className="font-display font-bold text-xl tracking-tight">Vessel</span>
+          <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+        </div>
+        <button
+          type="button"
+          onClick={openBackupSignIn}
+          className="inline-flex items-center gap-2 text-sm font-medium text-vessel-text-secondary hover:text-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent rounded-md px-2 py-1"
+          data-testid="nav-cta-signin"
+        >
+          <KeyRound size={14} />
+          <span>Sign in with backup key</span>
+        </button>
+      </header>
+
       {/* Hero Section */}
-      <section className="relative z-10 min-h-screen flex flex-col items-center justify-center pt-20 pb-32 px-6">
+      <section className="relative z-10 flex flex-col items-center justify-center pt-12 pb-32 px-6">
         <motion.div 
           initial="hidden" 
           animate="visible" 
@@ -97,6 +117,18 @@ export default function LandingPage() {
             <span>✓ No credit card required</span>
             <span className="hidden sm:inline">✓ No subscription fees</span>
             <span className="hidden sm:inline">✓ Works on any device</span>
+          </motion.p>
+
+          <motion.p variants={fadeInUp} className="text-sm text-vessel-text-muted mt-8">
+            Already have a studio?{" "}
+            <button
+              type="button"
+              onClick={openBackupSignIn}
+              className="text-vessel-accent hover:underline focus:outline-none font-medium"
+              data-testid="hero-cta-signin"
+            >
+              Sign in with your backup key
+            </button>
           </motion.p>
         </motion.div>
 
@@ -307,6 +339,17 @@ export default function LandingPage() {
             Create Your Free Studio &rarr;
           </VesselButton>
           <p className="text-xs text-vessel-text-muted font-medium">No credit card. No subscription. Free forever.</p>
+          <p className="text-sm text-vessel-text-muted mt-8">
+            Coming back to your studio?{" "}
+            <button
+              type="button"
+              onClick={openBackupSignIn}
+              className="text-vessel-accent hover:underline focus:outline-none font-medium"
+              data-testid="footer-cta-signin"
+            >
+              Sign in with your backup key
+            </button>
+          </p>
         </motion.div>
       </section>
 
@@ -332,6 +375,12 @@ export default function LandingPage() {
           <p className="text-xs text-vessel-text-muted/60">Built on open protocols. Your media never touches our servers.</p>
         </div>
       </footer>
+
+      <BackupKeySignInModal
+        open={showBackupModal}
+        onOpenChange={setShowBackupModal}
+        onSuccess={() => setLocation("/home")}
+      />
     </div>
   );
 }
