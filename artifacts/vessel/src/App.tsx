@@ -12,6 +12,7 @@ import Settings from "./pages/settings";
 import NewSession from "./pages/session-new";
 import SessionStudio from "./pages/session-studio";
 import Join from "./pages/join";
+import ShareView from "./pages/share-view";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/session/new" component={NewSession} />
       <Route path="/session/:id" component={SessionStudio} />
       <Route path="/join/:inviteCode" component={Join} />
+      <Route path="/s/:pointer" component={ShareView} />
       <Route component={NotFound} />
     </Switch>
   );
