@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, X, Users, Settings } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
+import { useRecording } from "../../hooks/use-recording";
 import { isWebTransportAvailable, useConnectionQuality, getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
@@ -10,8 +11,10 @@ import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
 import { ControlBar } from "./ControlBar";
+import { SessionComplete, type Track } from "./SessionComplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useCreateRecording } from "@workspace/api-client-react";
 
 export type StudioScreenProps = {
   session: {
@@ -27,6 +30,9 @@ export type StudioScreenProps = {
   onStartRecording: () => Promise<void>;
   onStopRecording: () => Promise<void>;
   onLeave: () => Promise<void> | void;
+  onViewVault: () => void;
+  onStartNewSession: () => void;
+  onEnterEndingFlow?: () => void;
   isStartingRecording?: boolean;
   isStoppingRecording?: boolean;
 };
@@ -47,6 +53,9 @@ export function StudioScreen({
   onStartRecording,
   onStopRecording,
   onLeave,
+  onViewVault,
+  onStartNewSession,
+  onEnterEndingFlow,
   isStartingRecording,
   isStoppingRecording,
 }: StudioScreenProps) {
@@ -55,9 +64,16 @@ export function StudioScreen({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showWebTransportBanner, setShowWebTransportBanner] = useState(!isWebTransportAvailable());
+  const [showSessionComplete, setShowSessionComplete] = useState(false);
 
-  const { pubkey: currentPubkey } = useIdentity();
+  const { pubkey: currentPubkey, displayName } = useIdentity();
   const connQuality = useConnectionQuality();
+  const recording = useRecording();
+  const createRecordingMutation = useCreateRecording();
+  const recordingStartedRef = useRef(false);
+  const recordingPersistedRef = useRef(false);
+  const persistPromiseRef = useRef<Promise<unknown> | null>(null);
+  const guestEndingShownRef = useRef(false);
 
   const {
     cameras,
@@ -91,17 +107,174 @@ export function StudioScreen({
     return () => clearInterval(interval);
   }, [session.status]);
 
+  // Auto-start the local recorder once the session is live and the local stream is ready.
+  // Sets the ref to `true` BEFORE start to prevent double-fire on rapid re-renders, but
+  // resets it on failure so the user can retry by re-toggling devices.
+  useEffect(() => {
+    if (
+      session.status === "live" &&
+      localStream &&
+      !recordingStartedRef.current &&
+      !recording.isRecording &&
+      !recording.result &&
+      recording.isSupported
+    ) {
+      recordingStartedRef.current = true;
+      void recording.start(localStream).catch(() => {
+        recordingStartedRef.current = false;
+      });
+    }
+  }, [session.status, localStream, recording]);
+
+  // Reset persistence guards when the session id changes (e.g., a new session in the same tab).
+  useEffect(() => {
+    recordingStartedRef.current = false;
+    recordingPersistedRef.current = false;
+    persistPromiseRef.current = null;
+    guestEndingShownRef.current = false;
+  }, [session.id]);
+
+  // After sync completes, persist the recording metadata to the API once.
+  // We capture the mutation promise on a ref so navigation handlers can await it
+  // before unmounting (avoids losing tracks for guests who get redirected).
+  useEffect(() => {
+    if (
+      recording.result &&
+      !recordingPersistedRef.current &&
+      (recording.syncStatus === "complete" || recording.syncStatus === "partial-failure")
+    ) {
+      recordingPersistedRef.current = true;
+      const r = recording.result;
+      const p = createRecordingMutation
+        .mutateAsync({
+          data: {
+            sessionId: session.id,
+            sessionTitle: session.title,
+            ownerPubkey: currentPubkey || "",
+            participantName: displayName || "Anonymous",
+            durationSeconds: r.meta.durationSeconds,
+            sizeBytes: r.meta.sizeBytes,
+            mimeType: r.meta.mimeType,
+            blobHash: r.blobHash || null,
+            blobUrl: r.blobUrl,
+            status: "ready",
+          },
+        })
+        .catch((err) => {
+          console.error("Failed to save recording metadata", err);
+        });
+      persistPromiseRef.current = p;
+    }
+  }, [recording.result, recording.syncStatus, createRecordingMutation, session.id, session.title, currentPubkey, displayName]);
+
+  // Guests: when the host ends the session externally and a guest is mid-recording,
+  // show the SessionComplete (guest variant) so their track is finalized + persisted
+  // before they navigate away. Also signal the parent to suppress the auto-redirect.
+  useEffect(() => {
+    if (
+      !isHost &&
+      session.status === "ended" &&
+      !guestEndingShownRef.current &&
+      (recording.isRecording || recording.isFinalizing || recording.isSyncing || recording.result)
+    ) {
+      guestEndingShownRef.current = true;
+      onEnterEndingFlow?.();
+      setShowSessionComplete(true);
+      if (recording.isRecording) {
+        void recording.stop().catch((err) => {
+          console.error("Failed to finalize guest recording", err);
+        });
+      }
+    }
+  }, [isHost, session.status, recording, onEnterEndingFlow]);
+
   const handleStartRecording = () => {
     void onStartRecording();
   };
 
-  const handleStopRecording = () => {
-    void onStopRecording();
+  const handleStopRecording = async () => {
+    if (isHost) {
+      onEnterEndingFlow?.();
+      setShowSessionComplete(true);
+      try {
+        await recording.stop();
+      } catch (err) {
+        console.error("Failed to stop recording", err);
+      }
+    } else {
+      void onStopRecording();
+    }
+  };
+
+  // Wait for the metadata POST to complete (or fail) before navigating away,
+  // so we don't lose track records on unmount.
+  const awaitPersistence = async () => {
+    if (persistPromiseRef.current) {
+      try {
+        await persistPromiseRef.current;
+      } catch {
+        // already logged in the persistence effect
+      }
+    }
+  };
+
+  const handleViewVault = async () => {
+    await awaitPersistence();
+    setShowSessionComplete(false);
+    if (isHost) {
+      await onStopRecording();
+    } else {
+      onViewVault();
+    }
+  };
+
+  const handleStartNew = async () => {
+    await awaitPersistence();
+    setShowSessionComplete(false);
+    if (isHost) {
+      await onStopRecording();
+    }
+    onStartNewSession();
+  };
+
+  // Guest "Close" button — finalize persistence then navigate to their vault.
+  const handleGuestClose = async () => {
+    await awaitPersistence();
+    setShowSessionComplete(false);
+    onViewVault();
   };
 
   const handleLeave = () => {
     void onLeave();
   };
+
+  // Build the SessionComplete tracks array (currently only the local user's track is captured)
+  const localParticipant = session.participants.find((p) => p.pubkey === currentPubkey);
+  const sessionCompleteTracks: Track[] = recording.result && localParticipant
+    ? [{
+        participantId: localParticipant.id,
+        participantName: localParticipant.displayName,
+        participantPubkey: localParticipant.pubkey,
+        recordingId: recording.result.recordingId,
+        blob: recording.result.blob,
+        durationSeconds: recording.result.meta.durationSeconds,
+        sizeBytes: recording.result.meta.sizeBytes,
+        mimeType: recording.result.meta.mimeType,
+        hasVideo: recording.result.meta.hasVideo,
+      }]
+    : localParticipant
+    ? [{
+        participantId: localParticipant.id,
+        participantName: localParticipant.displayName,
+        participantPubkey: localParticipant.pubkey,
+        recordingId: null,
+        blob: null,
+        durationSeconds: recordingSeconds,
+        sizeBytes: 0,
+        mimeType: "video/webm",
+        hasVideo: true,
+      }]
+    : [];
 
   const connQualityColor =
     connQuality === "good" ? "bg-vessel-accent" :
@@ -259,6 +432,18 @@ export function StudioScreen({
           onOpenChange={setShowInviteModal}
           inviteUrl={buildInviteUrl(session.inviteCode)}
           inviteCode={session.inviteCode}
+        />
+
+        <SessionComplete
+          open={showSessionComplete}
+          isHost={isHost}
+          hostName={session.hostName}
+          syncStatus={recording.syncStatus}
+          syncProgress={recording.syncProgress}
+          tracks={sessionCompleteTracks}
+          onViewVault={handleViewVault}
+          onStartNew={handleStartNew}
+          onClose={handleGuestClose}
         />
       </div>
     </TooltipProvider>
