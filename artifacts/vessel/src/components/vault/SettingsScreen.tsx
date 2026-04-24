@@ -98,8 +98,10 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
       const nsec = exportIdentityBackup(identity);
       setBackupValue(nsec);
       setShowBackup(true);
-    } catch (err: any) {
-      toast({ title: "Not available", description: err.message, variant: "destructive" });
+    } catch (err) {
+      const description =
+        err instanceof Error ? err.message : "Couldn't reveal your backup key.";
+      toast({ title: "Not available", description, variant: "destructive" });
     }
   };
 

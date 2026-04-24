@@ -288,8 +288,20 @@ export async function importIdentityFromBackup(
 
 /* ------------------------- Nostr extension sign-in ----------------------- */
 
+/** NIP-07 ambient declaration: a Nostr signer extension exposes a small RPC
+ * surface on the window object. We only need to detect presence here; the
+ * actual calls go through `applesauce-signers/ExtensionSigner`. */
+declare global {
+  interface Window {
+    nostr?: {
+      getPublicKey(): Promise<string>;
+      signEvent(event: unknown): Promise<unknown>;
+    };
+  }
+}
+
 export function isNostrExtensionAvailable(): boolean {
-  return typeof window !== "undefined" && !!(window as any).nostr;
+  return typeof window !== "undefined" && !!window.nostr;
 }
 
 export async function signInWithExtension(displayName: string): Promise<VesselIdentity> {
@@ -430,8 +442,9 @@ export function startNostrConnectInvite(
       }
       await signer.waitForSigner(signal);
       const pubkey = await signer.getPublicKey();
-      const remotePubkey =
-        (signer as unknown as { remote?: string }).remote ?? pubkey;
+      // After waitForSigner resolves the handshake, NostrConnectSigner
+      // populates its public `remote` field with the signer's pubkey.
+      const remotePubkey = signer.remote ?? pubkey;
       const meta: RemoteSignerMeta = {
         bunkerUri: uri,
         relays,
