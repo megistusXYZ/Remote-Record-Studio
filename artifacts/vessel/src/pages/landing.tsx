@@ -16,6 +16,7 @@ import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
+import shipSketch from "@assets/Gemini_Generated_Image_qnqdd4qnqdd4qnqd_1777074939928.png";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -341,7 +342,17 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative z-10 py-32 px-6 text-center border-t border-vessel-border">
+      <section id="cta" className="relative z-10 py-32 px-6 text-center border-t border-vessel-border overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.07]"
+          style={{
+            backgroundImage: `url(${shipSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
+            WebkitMaskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
+          }}
+          aria-hidden="true"
+        />
         <div className="absolute inset-0 bg-vessel-accent/5 pointer-events-none" />
         <motion.div 
           initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}
