@@ -168,8 +168,10 @@ interface StoredRemoteV3 {
   signerType: "remote";
   displayName: string;
   pubkey: string;
-  /** Original connection URI (`bunker://` or `nostrconnect://`). */
-  bunkerUri: string;
+  // NOTE: we deliberately DO NOT persist the original `bunker://` /
+  // `nostrconnect://` URI — it can carry the pairing `secret=` token and is
+  // unnecessary for reconnect. Restore reconstructs the signer from
+  // `relays` + `remotePubkey` + the encrypted `clientSecret` below.
   relays: string[];
   remotePubkey: string;
   clientSecret: EncryptedBlob; // encrypts the local NIP-46 client secret key bytes
@@ -466,7 +468,6 @@ async function finalizeRemoteSignIn(
       signerType: "remote",
       displayName,
       pubkey,
-      bunkerUri: meta.bunkerUri,
       relays: meta.relays,
       remotePubkey: meta.remotePubkey,
       clientSecret: encryptedClientSecret,
@@ -578,7 +579,9 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
       console.warn("Failed to re-open remote signer transport on restore:", err);
     }
     const meta: RemoteSignerMeta = {
-      bunkerUri: stored.bunkerUri,
+      // Empty: original pairing URI is intentionally not persisted (see
+      // StoredRemoteV3 note). After restore we don't need it anywhere.
+      bunkerUri: "",
       relays: stored.relays,
       remotePubkey: stored.remotePubkey,
       clientSecretKeyHex: bytesToHex(clientSecretKey),
