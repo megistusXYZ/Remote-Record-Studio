@@ -12,6 +12,7 @@ import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-re
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
+import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -60,9 +61,12 @@ export default function LandingPage() {
 
       {/* Top Nav */}
       <header className="relative z-20 px-6 py-5 flex items-center justify-between max-w-6xl mx-auto w-full">
-        <div className="flex items-baseline gap-1">
-          <span className="font-display font-bold text-xl tracking-tight">Vessel</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+        <div className="flex items-center gap-2">
+          <VesselBrandIcon className="w-7 h-7 text-vessel-accent" />
+          <div className="flex items-baseline gap-1">
+            <span className="font-display font-bold text-xl tracking-tight">Vessel</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+          </div>
         </div>
         <button
           type="button"
@@ -360,9 +364,12 @@ export default function LandingPage() {
       <footer className="relative z-10 py-12 px-6 border-t border-vessel-border bg-vessel-bg-base">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex flex-col items-center md:items-start gap-2">
-            <div className="flex items-baseline gap-1">
-              <span className="font-display font-bold text-2xl tracking-tight">Vessel</span>
-              <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+            <div className="flex items-center gap-2">
+              <VesselBrandIcon className="w-8 h-8 text-vessel-accent" />
+              <div className="flex items-baseline gap-1">
+                <span className="font-display font-bold text-2xl tracking-tight">Vessel</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+              </div>
             </div>
             <p className="text-xs text-vessel-text-secondary">Studio-quality recordings, delivered straight to you.</p>
           </div>
