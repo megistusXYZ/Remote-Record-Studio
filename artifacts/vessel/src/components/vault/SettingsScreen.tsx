@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { Settings, ChevronDown, Copy, Chrome, KeyRound, ShieldCheck, Loader2, CheckCircle2, AlertCircle, RotateCcw } from "lucide-react";
+import { Settings, ChevronDown, Chrome, KeyRound, ShieldCheck, Loader2, CheckCircle2, AlertCircle, RotateCcw, Key } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useToast } from "../../hooks/use-toast";
 import { clearAllLocalRecordings } from "../../lib/recordings-storage";
 import {
   deriveAvatarColorFromPubkey,
   describeSignerType,
-  exportIdentityBackup,
   getInitials,
 } from "../../lib/identity";
+import { BackupKeyModal } from "./BackupKeyModal";
 import {
   DEFAULT_STORAGE_URL,
   checkStorageReachability,
@@ -62,8 +62,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [relayReachability, setRelayReachability] = useState<ReachabilityState>({ kind: "idle" });
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [showBackup, setShowBackup] = useState(false);
-  const [backupValue, setBackupValue] = useState<string | null>(null);
+  const [backupModalOpen, setBackupModalOpen] = useState(false);
 
   const isLocalSigner = signerType === "local";
   const signerLabel = signerType ? describeSignerType(signerType) : "—";
@@ -220,25 +219,6 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
       await signOut();
       setLocation("/");
     }
-  };
-
-  const handleShowBackup = () => {
-    if (!identity) return;
-    try {
-      const nsec = exportIdentityBackup(identity);
-      setBackupValue(nsec);
-      setShowBackup(true);
-    } catch (err) {
-      const description =
-        err instanceof Error ? err.message : "Couldn't reveal your backup key.";
-      toast({ title: "Not available", description, variant: "destructive" });
-    }
-  };
-
-  const handleCopyBackup = () => {
-    if (!backupValue) return;
-    navigator.clipboard.writeText(backupValue);
-    toast({ title: "Copied", description: "Backup key copied to clipboard." });
   };
 
   const isStorageDirty = normalizeStorageUrl(storageUrl) !== savedStorageUrl;
@@ -466,23 +446,20 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 
                   {isLocalSigner ? (
                     <div className="space-y-1.5">
-                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Export backup key</label>
-                      <p className="text-xs text-vessel-text-muted">This key is your account. Keep it somewhere safe &mdash; it lets you restore your studio on any device.</p>
+                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Backup key</label>
+                      <p className="text-xs text-vessel-text-muted">
+                        This key is your account. Save it somewhere private &mdash; it's the only way to restore your studio on a new device.
+                      </p>
                       <div className="mt-2">
-                        {!showBackup ? (
-                          <VesselButton variant="ghost" size="sm" onClick={handleShowBackup} data-testid="button-show-backup">
-                            Show backup key
-                          </VesselButton>
-                        ) : (
-                          <div className="flex gap-2 items-center">
-                            <code className="flex-1 font-mono-vessel text-xs select-all break-all p-3 rounded-lg bg-vessel-bg-base border border-vessel-border-strong text-vessel-text-secondary">
-                              {backupValue}
-                            </code>
-                            <VesselButton variant="ghost" size="sm" onClick={handleCopyBackup} data-testid="button-copy-backup" className="shrink-0">
-                              <Copy className="w-4 h-4 mr-2" /> Copy
-                            </VesselButton>
-                          </div>
-                        )}
+                        <VesselButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBackupModalOpen(true)}
+                          data-testid="button-show-backup"
+                        >
+                          <Key className="w-4 h-4 mr-2" />
+                          Reveal backup key
+                        </VesselButton>
                       </div>
                     </div>
                   ) : (
@@ -524,6 +501,12 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
           </VesselCard>
         </div>
       </main>
+
+      <BackupKeyModal
+        open={backupModalOpen}
+        onOpenChange={setBackupModalOpen}
+        identity={identity}
+      />
     </div>
   );
 }
