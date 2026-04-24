@@ -71,7 +71,9 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
       return;
     }
     setError(null);
-    persistStorageUrl(chosen);
+    // Persist scoped to this identity so two accounts on the same device
+    // never bleed each other's storage choice.
+    persistStorageUrl(chosen, createdIdentity?._pubkey);
     if (createdIdentity) {
       // Best-effort: mirror the choice across devices for portable signers.
       publishStorageServerList(createdIdentity, [chosen]).catch((err) => {

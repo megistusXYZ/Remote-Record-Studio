@@ -37,7 +37,13 @@ export type UploadEvent =
   | { type: "sync-started"; total: number }
   | { type: "chunk-synced"; index: number; sizeBytes: number; progress: SyncProgress }
   | { type: "chunk-sync-failed"; index: number; error: string; progress: SyncProgress }
-  | { type: "sync-complete"; status: SyncStatus; progress: SyncProgress; remoteUrl: string | null };
+  | { type: "sync-complete"; status: SyncStatus; progress: SyncProgress; remoteUrl: string | null }
+  // Live, mid-recording uploads of finalized recorder slices. Independent of
+  // the final-blob `chunk-synced` stream above so the saving overlay can keep
+  // its existing progress UX while listeners interested in crash-resilience
+  // (vault, status chip) can react in real time.
+  | { type: "incremental-chunk-uploaded"; index: number; sizeBytes: number; remoteUrl: string; saved: number; failed: number }
+  | { type: "incremental-chunk-failed"; index: number; error: string; saved: number; failed: number };
 
 export type UploadListener = (event: UploadEvent) => void;
 
@@ -235,6 +241,11 @@ export class BlossomUploadQueue {
   private status: SyncStatus = "idle";
   private progress: SyncProgress = { synced: 0, total: 0, percent: 0, failed: 0 };
   private cancelController: AbortController | null = null;
+  // Live mid-recording uploads — totals visible to UI for crash-safety chip.
+  private incrementalSaved = 0;
+  private incrementalFailed = 0;
+  private incrementalInflight = new Set<Promise<unknown>>();
+  private incrementalRemoteUrls: string[] = [];
 
   constructor(opts: UploadQueueOptions) {
     this.client = new BlossomClient({
@@ -278,6 +289,78 @@ export class BlossomUploadQueue {
 
   cancel(): void {
     this.cancelController?.abort();
+  }
+
+  getIncrementalStats(): { saved: number; failed: number; remoteUrls: string[] } {
+    return {
+      saved: this.incrementalSaved,
+      failed: this.incrementalFailed,
+      remoteUrls: [...this.incrementalRemoteUrls],
+    };
+  }
+
+  /**
+   * Wait for any in-flight live chunk uploads to settle. Bounded by `timeoutMs`
+   * so a stuck upload doesn't block session teardown — leftover uploads are
+   * simply orphaned (their chunks are content-addressed, so no UI implication).
+   */
+  async waitForIncrementalUploads(timeoutMs = 8000): Promise<void> {
+    const inflight = Array.from(this.incrementalInflight);
+    if (inflight.length === 0) return;
+    await Promise.race([
+      Promise.allSettled(inflight),
+      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  }
+
+  /**
+   * Live, mid-recording upload of a finalized recorder slice. Each slice is
+   * uploaded as its own content-addressed Blossom blob so a mid-session crash
+   * preserves every slice that finished syncing. Fire-and-forget — failures
+   * are surfaced via `incremental-chunk-failed` events but never thrown.
+   *
+   * Note: timeslice WebM chunks are not independently playable on their own,
+   * but each is durably persisted at the user's storage and can be reassembled
+   * after a crash. This is the "first iteration" per the task spec — true
+   * rolling streaming (independently playable segments) is a follow-up.
+   */
+  enqueueIncrementalChunk(blob: Blob, index: number): void {
+    if (blob.size === 0) return;
+    const task = (async () => {
+      try {
+        const hash = await sha256Hex(blob);
+        const descriptor = await this.client.upload(blob, {
+          hash,
+          description: `Vessel session slice #${index}`,
+        });
+        const remoteUrl =
+          descriptor.url ?? `${this.client.getServerUrl()}/${descriptor.sha256 ?? hash}`;
+        this.incrementalSaved += 1;
+        this.incrementalRemoteUrls.push(remoteUrl);
+        this.emit({
+          type: "incremental-chunk-uploaded",
+          index,
+          sizeBytes: blob.size,
+          remoteUrl,
+          saved: this.incrementalSaved,
+          failed: this.incrementalFailed,
+        });
+      } catch (err) {
+        this.incrementalFailed += 1;
+        const message = err instanceof Error ? err.message : "Slice upload failed.";
+        this.emit({
+          type: "incremental-chunk-failed",
+          index,
+          error: message,
+          saved: this.incrementalSaved,
+          failed: this.incrementalFailed,
+        });
+      }
+    })();
+    this.incrementalInflight.add(task);
+    task.finally(() => {
+      this.incrementalInflight.delete(task);
+    });
   }
 
   /**

@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useCreateIdentity } from "@workspace/api-client-react";
 import { useIdentityStore } from "../store/identityStore";
 import {
@@ -12,6 +12,7 @@ import {
   tearDownSigner,
   type VesselIdentity,
 } from "../lib/identity";
+import { applyRemoteStorageChoiceIfMissing } from "../lib/storage-config";
 
 export {
   startNostrConnectInvite,
@@ -36,6 +37,21 @@ export function useIdentity() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Once identity is loaded (either from sign-in or restored from local
+  // storage), best-effort fetch any published storage server list and apply
+  // it iff this device has no local choice yet. Local choice always wins —
+  // never silently overwritten. Runs at most once per pubkey per session.
+  const remoteStorageAppliedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!identity || identity.isGuest) return;
+    const pk = identity._pubkey;
+    if (remoteStorageAppliedRef.current.has(pk)) return;
+    remoteStorageAppliedRef.current.add(pk);
+    void applyRemoteStorageChoiceIfMissing(pk).catch(() => {
+      // Best-effort only; never block the UI on relay availability.
+    });
+  }, [identity]);
 
   const persistOnServer = useCallback(
     async (id: VesselIdentity) => {

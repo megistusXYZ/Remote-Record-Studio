@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Loader2, Download, Link as LinkIcon } from "lucide-react";
+import { Check, Loader2, Download, Link as LinkIcon, Cloud, CloudOff, AlertCircle } from "lucide-react";
 import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
 import { downloadBlob } from "../../lib/recordings-storage";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -16,6 +16,10 @@ export type Track = {
   sizeBytes: number;
   mimeType: string;
   hasVideo: boolean;
+  /** Where this track ended up. `remote` = saved to participant's storage,
+   *  `local-only` = upload didn't reach the storage server (kept on this
+   *  device only), `unknown` = sync state still settling. */
+  storageState?: "remote" | "local-only" | "unknown";
 };
 
 export type SessionCompleteProps = {
@@ -41,6 +45,31 @@ function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function StorageStateChip({ state }: { state?: "remote" | "local-only" | "unknown" }) {
+  if (!state || state === "unknown") {
+    return (
+      <div className="text-xs text-vessel-text-muted mt-1.5 flex items-center gap-1.5">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        <span>Saving to your storage…</span>
+      </div>
+    );
+  }
+  if (state === "remote") {
+    return (
+      <div className="text-xs text-vessel-green mt-1.5 flex items-center gap-1.5" data-testid="chip-track-storage-remote">
+        <Cloud className="w-3 h-3" />
+        <span>Saved to your storage</span>
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs text-vessel-amber mt-1.5 flex items-center gap-1.5" data-testid="chip-track-storage-local">
+      <CloudOff className="w-3 h-3" />
+      <span>On this device only — couldn't reach your storage</span>
+    </div>
+  );
 }
 
 export function SessionComplete({
@@ -230,6 +259,7 @@ export function SessionComplete({
                               <div className="text-xs text-vessel-text-muted font-mono-vessel mt-0.5">
                                 {track.hasVideo ? 'Video + Audio' : 'Audio'} &middot; {formatDuration(track.durationSeconds)} &middot; {formatSize(track.sizeBytes)}
                               </div>
+                              <StorageStateChip state={track.storageState} />
                             </div>
                           </div>
                           <div className="flex items-center gap-2">

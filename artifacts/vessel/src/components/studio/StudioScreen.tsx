@@ -283,8 +283,23 @@ export function StudioScreen({
     void onLeave();
   };
 
-  // Build the SessionComplete tracks array (currently only the local user's track is captured)
+  // Build the SessionComplete tracks array (currently only the local user's track is captured).
+  // `storageState` mirrors recording.syncStatus so the per-track chip surfaces
+  // whether the track landed on the participant's storage server or fell back
+  // to local-only.
   const localParticipant = session.participants.find((p) => p.pubkey === currentPubkey);
+  const trackStorageState: "remote" | "local-only" | "unknown" =
+    recording.syncStatus === "complete"
+      ? "remote"
+      : recording.syncStatus === "partial-failure"
+      ? // If at least one mid-recording slice made it through, treat the
+        // track as remotely persisted even if the final-blob upload failed —
+        // user can recover from slices.
+        (recording.result && recording.result.incrementalSaved > 0)
+        ? "remote"
+        : "local-only"
+      : "unknown";
+
   const sessionCompleteTracks: Track[] = recording.result && localParticipant
     ? [{
         participantId: localParticipant.id,
@@ -296,6 +311,7 @@ export function StudioScreen({
         sizeBytes: recording.result.meta.sizeBytes,
         mimeType: recording.result.meta.mimeType,
         hasVideo: recording.result.meta.hasVideo,
+        storageState: trackStorageState,
       }]
     : localParticipant
     ? [{
@@ -308,6 +324,7 @@ export function StudioScreen({
         sizeBytes: 0,
         mimeType: "video/webm",
         hasVideo: true,
+        storageState: "unknown",
       }]
     : [];
 

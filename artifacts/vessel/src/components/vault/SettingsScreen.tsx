@@ -49,8 +49,8 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [selectedColor, setSelectedColor] = useState(() => localStorage.getItem("vessel_avatar_color") || deriveAvatarColorFromPubkey(pubkey));
   const [inviteMessage, setInviteMessage] = useState(() => localStorage.getItem("vessel_invite_message") || "");
 
-  const [storageUrl, setStorageUrlInput] = useState(() => getStorageUrl());
-  const [savedStorageUrl, setSavedStorageUrl] = useState(() => getStorageUrl());
+  const [storageUrl, setStorageUrlInput] = useState(() => getStorageUrl(pubkey));
+  const [savedStorageUrl, setSavedStorageUrl] = useState(() => getStorageUrl(pubkey));
   const [reachability, setReachability] = useState<ReachabilityState>({ kind: "idle" });
   const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem("vessel_relay_url") || "wss://relay.vessel.local");
 
@@ -119,7 +119,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
       toast({ title: "Can't save", description: "Enter a valid https:// URL.", variant: "destructive" });
       return;
     }
-    persistStorageUrl(normalized);
+    persistStorageUrl(normalized, pubkey);
     setSavedStorageUrl(normalized);
     setStorageUrlInput(normalized);
     toast({ title: "Saved", description: "Storage location updated." });

@@ -10,10 +10,16 @@ import type { VesselIdentity } from "./identity";
  * Blossom / BUD / SHA-256 are forbidden in rendered UI text.
  *
  * Layout:
- * - The chosen URL is persisted to localStorage under STORAGE_URL_KEY.
+ * - The chosen URL is persisted to localStorage under STORAGE_URL_KEY,
+ *   scoped per identity pubkey: `vessel_storage_url:<pubkey>`. The bare
+ *   `vessel_storage_url` key is the legacy global slot, still read as a
+ *   fallback / migration source for users created before scoping landed.
  * - For portable signers (extension / remote), the same URL is also published
  *   as a Kind 10063 server-list event so the setting follows the user across
  *   devices. (BUD-03 spec.)
+ * - On sign-in we best-effort fetch any published Kind 10063 list for the
+ *   pubkey and apply it iff there is no local override yet — local browser
+ *   choice always wins, never silently overwritten.
  * - LEGACY_PLACEHOLDER ("https://storage.vessel.local") was used by an earlier
  *   simulation. Reads coerce it back to the real default so users aren't stuck
  *   pointing at a non-existent host.
@@ -30,6 +36,7 @@ const DEFAULT_PUBLISH_RELAYS = [
 ];
 
 const KIND_USER_SERVER_LIST = 10063;
+const REMOTE_FETCH_TIMEOUT_MS = 4000;
 
 export type ReachabilityResult =
   | { state: "ok"; latencyMs: number }
@@ -57,26 +64,79 @@ export function isValidStorageUrl(raw: string): boolean {
   }
 }
 
-export function getStorageUrl(): string {
-  if (typeof localStorage === "undefined") return DEFAULT_STORAGE_URL;
-  const raw = localStorage.getItem(STORAGE_URL_KEY);
-  if (!raw) return DEFAULT_STORAGE_URL;
-  // Normalize before comparison so legacy values with whitespace or trailing
-  // slashes ("https://storage.vessel.local/") still get coerced to the real
-  // default. Otherwise the user would silently keep pointing at a dead host.
+function scopedKey(pubkey: string): string {
+  return `${STORAGE_URL_KEY}:${pubkey}`;
+}
+
+function readRaw(key: string): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(key);
+}
+
+function coerce(raw: string | null): string | null {
+  if (!raw) return null;
   const normalized = normalizeStorageUrl(raw);
+  if (!normalized) return null;
+  // Coerce dead simulation host back to real default rather than leaving the
+  // user pointing at nothing.
   if (normalized === LEGACY_PLACEHOLDER) return DEFAULT_STORAGE_URL;
   return normalized;
 }
 
-export function setStorageUrl(url: string): void {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STORAGE_URL_KEY, normalizeStorageUrl(url));
+/**
+ * Resolve the effective storage URL for a given identity. Lookup order:
+ *   1. identity-scoped slot (`vessel_storage_url:<pubkey>`)
+ *   2. legacy global slot (`vessel_storage_url`) — pre-scoping migration path
+ *   3. compiled-in default
+ *
+ * Pass `undefined` for an anonymous / pre-sign-in caller — only the global
+ * slot and default are consulted in that case, so two accounts on the same
+ * device never bleed each other's storage choice.
+ */
+export function getStorageUrl(pubkey?: string): string {
+  if (pubkey) {
+    const scoped = coerce(readRaw(scopedKey(pubkey)));
+    if (scoped) return scoped;
+  }
+  const legacy = coerce(readRaw(STORAGE_URL_KEY));
+  if (legacy) return legacy;
+  return DEFAULT_STORAGE_URL;
 }
 
-export function clearStorageUrl(): void {
+/**
+ * True iff there is any explicit local choice for this identity that the
+ * remote-list applier must not overwrite. This includes:
+ *   - the per-identity scoped key, or
+ *   - the legacy global key (during migration — a user who set the global
+ *     URL before scoping landed should not have it silently replaced by the
+ *     remote list when they next sign in).
+ *
+ * Used to enforce the "local always wins" contract on
+ * applyRemoteStorageChoiceIfMissing.
+ */
+export function hasLocalStorageChoice(pubkey: string): boolean {
+  if (readRaw(scopedKey(pubkey)) != null) return true;
+  if (readRaw(STORAGE_URL_KEY) != null) return true;
+  return false;
+}
+
+export function setStorageUrl(url: string, pubkey?: string): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.removeItem(STORAGE_URL_KEY);
+  const normalized = normalizeStorageUrl(url);
+  if (pubkey) {
+    localStorage.setItem(scopedKey(pubkey), normalized);
+  } else {
+    localStorage.setItem(STORAGE_URL_KEY, normalized);
+  }
+}
+
+export function clearStorageUrl(pubkey?: string): void {
+  if (typeof localStorage === "undefined") return;
+  if (pubkey) {
+    localStorage.removeItem(scopedKey(pubkey));
+  } else {
+    localStorage.removeItem(STORAGE_URL_KEY);
+  }
 }
 
 /**
@@ -174,4 +234,91 @@ export async function publishStorageServerList(
     console.warn("Failed to publish storage server list:", err);
   }
   return { event: signed, published };
+}
+
+/**
+ * Best-effort fetch the most recent Kind 10063 server-list event for this
+ * pubkey from the default relay set. Returns the parsed list of server URLs
+ * (in `["server", <url>]` tag order), or `[]` if nothing is published or any
+ * failure occurs. Always resolves within ~`REMOTE_FETCH_TIMEOUT_MS`.
+ */
+export async function fetchUserStorageServerList(
+  pubkey: string,
+  relays: string[] = DEFAULT_PUBLISH_RELAYS,
+): Promise<string[]> {
+  if (!pubkey) return [];
+  return new Promise<string[]>((resolve) => {
+    const events: Event[] = [];
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        sub?.unsubscribe();
+      } catch {
+        // ignore
+      }
+      clearTimeout(timeoutId);
+      if (events.length === 0) return resolve([]);
+      // Replaceable event — multiple relays may return slightly different
+      // versions; keep the most recent.
+      const latest = [...events].sort((a, b) => b.created_at - a.created_at)[0];
+      if (!latest || !Array.isArray(latest.tags)) return resolve([]);
+      const urls: string[] = [];
+      for (const tag of latest.tags) {
+        if (Array.isArray(tag) && tag[0] === "server" && typeof tag[1] === "string") {
+          const normalized = normalizeStorageUrl(tag[1]);
+          if (isValidStorageUrl(normalized)) urls.push(normalized);
+        }
+      }
+      resolve(urls);
+    };
+
+    const timeoutId = setTimeout(settle, REMOTE_FETCH_TIMEOUT_MS);
+    let sub: { unsubscribe: () => void } | null = null;
+    try {
+      const pool = getRelayPool();
+      const obs = pool.request(relays, [
+        { kinds: [KIND_USER_SERVER_LIST], authors: [pubkey], limit: 1 },
+      ]);
+      sub = obs.subscribe({
+        next: (ev) => {
+          // request() yields NostrEvent values directly (not subscription
+          // responses). Defensive guard for non-event payloads anyway.
+          if (ev && typeof (ev as Event).created_at === "number") {
+            events.push(ev as Event);
+          }
+        },
+        error: () => settle(),
+        complete: () => settle(),
+      });
+    } catch (err) {
+      console.warn("Failed to fetch storage server list:", err);
+      settle();
+    }
+  });
+}
+
+/**
+ * If this identity has no local storage choice on this device, best-effort
+ * apply the first server URL from their published Kind 10063 list. Local
+ * choices always win — never silently overwritten. Returns the URL that was
+ * adopted (so callers can show a "synced from your other device" hint), or
+ * `null` if nothing was applied.
+ */
+export async function applyRemoteStorageChoiceIfMissing(
+  pubkey: string,
+): Promise<string | null> {
+  if (!pubkey) return null;
+  // Pre-check: skip the network round-trip entirely if the user already has a
+  // local choice on this device.
+  if (hasLocalStorageChoice(pubkey)) return null;
+  const list = await fetchUserStorageServerList(pubkey);
+  if (list.length === 0) return null;
+  // Double-check after the async fetch returns. The user may have picked a
+  // server in Settings while the relay request was in flight; "local always
+  // wins" requires we not clobber that choice.
+  if (hasLocalStorageChoice(pubkey)) return null;
+  setStorageUrl(list[0], pubkey);
+  return list[0];
 }
