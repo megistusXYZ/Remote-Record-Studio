@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { RecipientManifest, ShareResolveErrorCode } from "../../lib/share-resolver";
-import { isSafeDownloadUrl } from "../../lib/share-resolver";
+import { isSafeDownloadUrl, verifyTrackHash } from "../../lib/share-resolver";
 import {
   downloadToBlob,
   saveBlob,
@@ -82,7 +82,9 @@ function ErrorBlock({ icon, title, body, onRetry }: { icon: React.ReactNode; tit
 type DownloadState =
   | { status: "idle" }
   | { status: "downloading"; received: number; total: number | null }
+  | { status: "verifying" }
   | { status: "done" }
+  | { status: "tampered"; expected: string; actual: string }
   | { status: "error"; message: string };
 
 type TrackRowProps = {
@@ -126,6 +128,32 @@ function TrackRow({ track }: TrackRowProps) {
           );
         },
       });
+
+      // Re-hash the bytes locally and compare against the per-track hash from
+      // the decrypted manifest. This catches a malicious storage server that
+      // serves different bytes than the host originally uploaded — without
+      // this check the recipient would silently save tampered files.
+      safeSetState({ status: "verifying" });
+      const verification = await verifyTrackHash(blob, track.hash);
+      if (controller.signal.aborted) {
+        safeSetState({ status: "idle" });
+        return;
+      }
+      if (verification.status === "mismatch") {
+        // Do NOT save — surface a loud warning so the recipient can ask the
+        // host for a new link or download from a trusted server.
+        safeSetState({
+          status: "tampered",
+          expected: verification.expected,
+          actual: verification.actual,
+        });
+        return;
+      }
+      if (verification.status === "error") {
+        safeSetState({ status: "error", message: verification.message });
+        return;
+      }
+      // status === "ok" or "skipped" (no expected hash in the manifest)
       saveBlob(blob, fileName);
       safeSetState({ status: "done" });
     } catch (err) {
@@ -185,6 +213,28 @@ function TrackRow({ track }: TrackRowProps) {
       >
         <X className="w-3.5 h-3.5" />
         Cancel
+      </button>
+    );
+  } else if (state.status === "verifying") {
+    actionSlot = (
+      <span
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-secondary text-xs font-medium shrink-0"
+        data-testid={`text-verifying-${track.recordingId}`}
+      >
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        Verifying
+      </span>
+    );
+  } else if (state.status === "tampered") {
+    actionSlot = (
+      <button
+        type="button"
+        onClick={handleDownload}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-bg-base border border-vessel-red text-vessel-red text-xs font-bold hover:opacity-90 transition-opacity shrink-0"
+        data-testid={`button-retry-${track.recordingId}`}
+      >
+        <Download className="w-3.5 h-3.5" />
+        Try again
       </button>
     );
   } else if (state.status === "done") {
@@ -252,6 +302,46 @@ function TrackRow({ track }: TrackRowProps) {
         >
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <div className="text-xs leading-relaxed">{state.message}</div>
+        </div>
+      )}
+
+      {state.status === "tampered" && (
+        <div
+          className="mt-3 flex items-start gap-2 p-3 rounded-md bg-vessel-red/10 border border-vessel-red text-vessel-red"
+          role="alert"
+          data-testid={`text-download-tampered-${track.recordingId}`}
+        >
+          <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="text-xs leading-relaxed">
+            <div className="font-bold mb-1">
+              This file doesn't match what the host shared
+            </div>
+            <p className="opacity-90">
+              The bytes from the storage server don't match the fingerprint in
+              the host's signed manifest. The file was not saved. Ask the host
+              to share a new link, or try again later in case the storage
+              server is in a bad state.
+            </p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[11px] opacity-80 hover:opacity-100">
+                Technical details
+              </summary>
+              <div className="mt-1 font-mono-vessel text-[10px] break-all opacity-80">
+                <div>
+                  <span className="opacity-70">expected: </span>
+                  <span data-testid={`text-tampered-expected-${track.recordingId}`}>
+                    {state.expected}
+                  </span>
+                </div>
+                <div>
+                  <span className="opacity-70">received: </span>
+                  <span data-testid={`text-tampered-actual-${track.recordingId}`}>
+                    {state.actual}
+                  </span>
+                </div>
+              </div>
+            </details>
+          </div>
         </div>
       )}
     </div>

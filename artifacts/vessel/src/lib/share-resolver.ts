@@ -314,6 +314,62 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
 /** Re-export so consumers can construct keys for tests / debugging. */
 export { decodeShareKey };
 
+/**
+ * Compute the lowercase-hex SHA-256 of a downloaded blob so the recipient page
+ * can verify the bytes match the per-track hash from the decrypted manifest.
+ * The manifest carries hashes the host computed at upload time (see
+ * `sha256Hex` in `blossom.ts`); recomputing here detects a storage server that
+ * swapped the file between upload and download.
+ */
+export async function sha256HexOfBlob(blob: Blob): Promise<string> {
+  if (typeof crypto === "undefined" || !crypto.subtle) {
+    throw new Error("Web Crypto is not available in this environment");
+  }
+  const buf = await blob.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export type TrackHashVerification =
+  | { status: "ok"; actual: string }
+  | { status: "mismatch"; actual: string; expected: string }
+  | { status: "skipped"; reason: "no_expected_hash" }
+  | { status: "error"; message: string };
+
+/**
+ * Verify a downloaded blob against the per-track hash from the decrypted
+ * manifest. Returns a structured result so the UI can distinguish a true
+ * mismatch (loud warning, do not save) from a manifest that simply didn't
+ * include a hash (skip verification, save normally).
+ *
+ * Comparison is case-insensitive to tolerate manifests that happen to store
+ * the hash in upper case, and trims whitespace for the same reason.
+ */
+export async function verifyTrackHash(
+  blob: Blob,
+  expected: string | null | undefined,
+): Promise<TrackHashVerification> {
+  const trimmed = typeof expected === "string" ? expected.trim() : "";
+  if (!trimmed) {
+    return { status: "skipped", reason: "no_expected_hash" };
+  }
+  let actual: string;
+  try {
+    actual = await sha256HexOfBlob(blob);
+  } catch (err) {
+    return {
+      status: "error",
+      message: err instanceof Error ? err.message : "Couldn't verify the file.",
+    };
+  }
+  if (actual.toLowerCase() === trimmed.toLowerCase()) {
+    return { status: "ok", actual };
+  }
+  return { status: "mismatch", actual, expected: trimmed.toLowerCase() };
+}
+
 function dedupe(items: string[]): string[] {
   return Array.from(new Set(items.filter(Boolean)));
 }
