@@ -7,10 +7,7 @@ import {
   PrivateKeySigner,
   type ISigner,
 } from "applesauce-signers";
-import {
-  parseBunkerURI,
-  parseNostrConnectURI,
-} from "applesauce-signers/helpers/nostr-connect";
+import { parseBunkerURI } from "applesauce-signers/helpers/nostr-connect";
 import { ensureNostrConnectWired } from "./relay-pool";
 
 /** Public alias so other modules don't have to depend on applesauce types directly. */
