@@ -10,6 +10,7 @@ import { RecordingDot } from "../components/vessel-ui/RecordingDot";
 import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
 import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-react";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
+import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -211,7 +212,7 @@ export default function LandingPage() {
             
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} transition={{ delay: 0.1 }}>
               <VesselCard variant="interactive" className="p-8 h-full">
-                <Zap className="w-12 h-12 text-vessel-accent mb-6" strokeWidth={1.5} />
+                <FilePersonIcon className="w-12 h-12 text-vessel-accent mb-6" />
                 <h3 className="font-display font-bold text-xl mb-3">Files the Moment You Stop</h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
                   Your recordings land in your vault the instant the session ends. No processing queue, no waiting for an email.
