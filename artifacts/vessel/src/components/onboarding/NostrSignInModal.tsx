@@ -28,15 +28,6 @@ interface NostrSignInModalProps {
 
 type Mode = "choose" | "extension" | "remote-paste" | "remote-invite";
 
-/**
- * Sign-in modal for users who already have a Nostr identity. The word "Nostr"
- * is allowed here per the product brief — this is the explicit Nostr on-ramp.
- *
- * Two NIP-46 sub-flows:
- *   - "remote-paste": user has a `bunker://` URL from their signer, pastes it.
- *   - "remote-invite": we generate a `nostrconnect://` URL (with our client
- *     keypair baked in) for the user to scan/paste in their signer.
- */
 export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInModalProps) {
   const {
     signInWithExtension,

@@ -47,8 +47,6 @@ const STORAGE_KEY_V3 = "vessel_identity_v3";
 const STORAGE_KEY_LEGACY = "vessel_identity_v2";
 const PBKDF2_ITERATIONS = 100_000;
 
-/* ----------------------------- byte helpers ------------------------------ */
-
 function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
@@ -91,8 +89,6 @@ function deriveAvatarColor(pubkey: string): string {
   const hue = parseInt(pubkey.slice(0, 4), 16) % 360;
   return `hsl(${hue}, 65%, 55%)`;
 }
-
-/* --------------------------- crypto envelope ----------------------------- */
 
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
   const enc = new TextEncoder();
@@ -152,8 +148,6 @@ async function decryptBytes(blob: EncryptedBlob, passphraseSeed: string): Promis
   return new Uint8Array(pt);
 }
 
-/* ---------------------------- stored shapes ------------------------------ */
-
 interface StoredLocalV3 {
   v: 3;
   signerType: "local";
@@ -190,8 +184,6 @@ interface StoredV2Legacy {
   displayName: string;
   email?: string;
 }
-
-/* ------------------------------ build helpers ---------------------------- */
 
 function buildLocalIdentity(
   displayName: string,
@@ -250,8 +242,6 @@ function persist(stored: StoredV3, isGuest: boolean): void {
   else localStorage.setItem(STORAGE_KEY_V3, json);
 }
 
-/* ----------------------- local-key sign-in & guest ----------------------- */
-
 export async function createNewIdentity(
   displayName: string,
   email?: string,
@@ -286,8 +276,6 @@ export async function importIdentityFromBackup(
   return identity;
 }
 
-/* ------------------------- Nostr extension sign-in ----------------------- */
-
 /** NIP-07 ambient declaration: a Nostr signer extension exposes a small RPC
  * surface on the window object. We only need to detect presence here; the
  * actual calls go through `applesauce-signers/ExtensionSigner`. */
@@ -316,8 +304,6 @@ export async function signInWithExtension(displayName: string): Promise<VesselId
   persist({ v: 3, signerType: "extension", displayName, pubkey }, false);
   return identity;
 }
-
-/* -------------------------- NIP-46 remote sign-in ------------------------ */
 
 const REMOTE_PERMISSIONS = [
   "get_public_key",
@@ -490,8 +476,6 @@ async function finalizeRemoteSignIn(
   return identity;
 }
 
-/* ----------------------------- restore on load --------------------------- */
-
 export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
   const v3Local = localStorage.getItem(STORAGE_KEY_V3);
   const v3Session = sessionStorage.getItem(STORAGE_KEY_V3);
@@ -600,8 +584,6 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
   }
   return null;
 }
-
-/* ------------------------------ utilities -------------------------------- */
 
 export function exportIdentityBackup(identity: VesselIdentity): string {
   if (identity.signerType !== "local" || !identity._secretKey) {
