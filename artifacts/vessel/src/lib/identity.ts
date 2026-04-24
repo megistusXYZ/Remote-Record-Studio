@@ -541,6 +541,15 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
       signer: clientSigner,
       pubkey: stored.pubkey,
     });
+    // Proactively re-open the relay subscription so signing requests land on
+    // an already-listening transport instead of waiting for the first lazy
+    // requireConnection() call. Failures here are non-fatal — the signer will
+    // attempt to reconnect on first use and surface a clearer error there.
+    try {
+      await signer.open();
+    } catch (err) {
+      console.warn("Failed to re-open remote signer transport on restore:", err);
+    }
     const meta: RemoteSignerMeta = {
       bunkerUri: stored.bunkerUri,
       relays: stored.relays,
