@@ -239,6 +239,10 @@ function buildRemoteIdentity(
 }
 
 function persist(stored: StoredV3, isGuest: boolean): void {
+  // Always clear the opposite slot first so a guest→creator (or vice-versa)
+  // transition can't leave a stale identity blob in the other storage layer.
+  if (isGuest) localStorage.removeItem(STORAGE_KEY_V3);
+  else sessionStorage.removeItem(STORAGE_KEY_V3);
   const json = JSON.stringify(stored);
   if (isGuest) sessionStorage.setItem(STORAGE_KEY_V3, json);
   else localStorage.setItem(STORAGE_KEY_V3, json);
