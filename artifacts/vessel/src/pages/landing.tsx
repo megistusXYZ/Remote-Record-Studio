@@ -344,7 +344,7 @@ export default function LandingPage() {
       {/* CTA Section */}
       <section id="cta" className="relative z-10 py-32 px-6 text-center border-t border-vessel-border overflow-hidden">
         <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.035]"
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.07]"
           style={{
             backgroundImage: `url(${shipSketch})`,
             filter: "invert(1) grayscale(1)",
