@@ -78,16 +78,16 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
     }
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (window.confirm("Sign out and remove your identity from this device?")) {
-      signOut();
+      await signOut();
       setLocation("/");
     }
   };
 
-  const handleSwitchSignIn = () => {
+  const handleSwitchSignIn = async () => {
     if (window.confirm("Sign out so you can sign in a different way? Your local recordings stay safe.")) {
-      signOut();
+      await signOut();
       setLocation("/");
     }
   };

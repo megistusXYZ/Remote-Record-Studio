@@ -9,6 +9,7 @@ import {
   signInWithRemoteSigner as signInWithRemoteSignerLib,
   isNostrExtensionAvailable,
   persistDisplayNameChange,
+  tearDownSigner,
   type VesselIdentity,
 } from "../lib/identity";
 
@@ -108,9 +109,12 @@ export function useIdentity() {
     [identity, createNewIdentity, setIdentity, persistOnServer]
   );
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    // Close any active signer transports (e.g. NIP-46 relay subscription)
+    // before clearing identity. Local recordings stored elsewhere are untouched.
+    await tearDownSigner(identity ?? null);
     clearIdentity();
-  }, [clearIdentity]);
+  }, [identity, clearIdentity]);
 
   return {
     identity,

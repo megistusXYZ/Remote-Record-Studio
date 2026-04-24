@@ -7,7 +7,10 @@ import {
   PrivateKeySigner,
   type ISigner,
 } from "applesauce-signers";
-import { parseBunkerURI } from "applesauce-signers/helpers/nostr-connect";
+import {
+  parseBunkerURI,
+  parseNostrConnectURI,
+} from "applesauce-signers/helpers/nostr-connect";
 import { ensureNostrConnectWired } from "./relay-pool";
 
 /** Public alias so other modules don't have to depend on applesauce types directly. */
@@ -33,11 +36,11 @@ export interface VesselIdentity {
 }
 
 export interface RemoteSignerMeta {
-  /** Original bunker:// URI, kept so we can show the user where they're signed in. */
+  /** Original connection URI (`bunker://` or `nostrconnect://`). */
   bunkerUri: string;
-  /** Relays the bunker listens on. */
+  /** Relays the remote signer listens on. */
   relays: string[];
-  /** Pubkey of the remote signer app. */
+  /** Pubkey of the remote signer app, learned during the handshake. */
   remotePubkey: string;
   /** Hex-encoded secret key for our local NIP-46 client. */
   clientSecretKeyHex: string;
@@ -174,6 +177,7 @@ interface StoredRemoteV3 {
   signerType: "remote";
   displayName: string;
   pubkey: string;
+  /** Original connection URI (`bunker://` or `nostrconnect://`). */
   bunkerUri: string;
   relays: string[];
   remotePubkey: string;
@@ -306,18 +310,53 @@ export async function signInWithExtension(displayName: string): Promise<VesselId
 
 /* -------------------------- NIP-46 remote sign-in ------------------------ */
 
+const REMOTE_PERMISSIONS = [
+  "get_public_key",
+  "sign_event",
+  "nip04_encrypt",
+  "nip04_decrypt",
+  "nip44_encrypt",
+  "nip44_decrypt",
+];
+
+export function isSupportedRemoteSignerUri(uri: string): boolean {
+  const t = uri.trim();
+  return t.startsWith("bunker://") || t.startsWith("nostrconnect://");
+}
+
+/**
+ * Sign in via NIP-46. Accepts both `bunker://` URIs (signer-initiated — the URI
+ * carries the remote pubkey + relays + optional pairing secret) and
+ * `nostrconnect://` URIs (client-initiated — the URI carries client pubkey +
+ * shared secret + relays; we listen on those relays for the signer to call us).
+ */
 export async function signInWithRemoteSigner(
-  bunkerUri: string,
+  rawUri: string,
   displayName: string,
 ): Promise<VesselIdentity> {
   ensureNostrConnectWired();
+  const uri = rawUri.trim();
+
+  if (uri.startsWith("bunker://")) {
+    return signInWithBunkerUri(uri, displayName);
+  }
+  if (uri.startsWith("nostrconnect://")) {
+    return signInWithNostrConnectUri(uri, displayName);
+  }
+  throw new Error(
+    "That doesn't look like a valid connection URL. Paste one that starts with 'bunker://' or 'nostrconnect://'.",
+  );
+}
+
+async function signInWithBunkerUri(
+  uri: string,
+  displayName: string,
+): Promise<VesselIdentity> {
   let parsed;
   try {
-    parsed = parseBunkerURI(bunkerUri.trim());
+    parsed = parseBunkerURI(uri);
   } catch {
-    throw new Error(
-      "That doesn't look like a valid bunker connection URL. It should start with 'bunker://'.",
-    );
+    throw new Error("This bunker:// URL is malformed. Try copying it again.");
   }
   if (!parsed.relays || parsed.relays.length === 0) {
     throw new Error("This connection URL is missing a relay. Ask your signer for a complete URL.");
@@ -332,25 +371,68 @@ export async function signInWithRemoteSigner(
     signer: clientSigner,
   });
 
-  // Run the handshake with the bunker. Uses the secret from the URI if present.
-  await signer.connect(parsed.secret, [
-    "get_public_key",
-    "sign_event",
-    "nip04_encrypt",
-    "nip04_decrypt",
-    "nip44_encrypt",
-    "nip44_decrypt",
-  ]);
+  // Signer-initiated handshake — we know the remote pubkey from the URI.
+  await signer.connect(parsed.secret, REMOTE_PERMISSIONS);
   const pubkey = await signer.getPublicKey();
 
   const meta: RemoteSignerMeta = {
-    bunkerUri: bunkerUri.trim(),
+    bunkerUri: uri,
     relays: parsed.relays,
     remotePubkey: parsed.remote,
     clientSecretKeyHex: bytesToHex(clientSecretKey),
   };
-  const identity = buildRemoteIdentity(displayName, pubkey, signer, meta);
+  return finalizeRemoteSignIn(displayName, pubkey, signer, meta, clientSecretKey);
+}
 
+async function signInWithNostrConnectUri(
+  uri: string,
+  displayName: string,
+): Promise<VesselIdentity> {
+  let parsed;
+  try {
+    parsed = parseNostrConnectURI(uri);
+  } catch {
+    throw new Error("This nostrconnect:// URL is malformed. Try copying it again.");
+  }
+  if (!parsed.relays || parsed.relays.length === 0) {
+    throw new Error("This connection URL is missing a relay. Ask your signer for a complete URL.");
+  }
+
+  // For client-initiated nostrconnect://, we listen on the specified relays
+  // using the embedded shared secret, and wait for the signer to call us back.
+  const clientSecretKey = generateSecretKey();
+  const clientSigner = new PrivateKeySigner(clientSecretKey);
+
+  const signer = new NostrConnectSigner({
+    relays: parsed.relays,
+    signer: clientSigner,
+    secret: parsed.secret,
+  });
+
+  // Open the relay subscription, then block until the signer initiates the
+  // handshake from its side. After this, signer.remote will be populated.
+  await signer.open();
+  await signer.waitForSigner();
+  const pubkey = await signer.getPublicKey();
+  const remotePubkey = (signer as unknown as { remote?: string }).remote ?? pubkey;
+
+  const meta: RemoteSignerMeta = {
+    bunkerUri: uri,
+    relays: parsed.relays,
+    remotePubkey,
+    clientSecretKeyHex: bytesToHex(clientSecretKey),
+  };
+  return finalizeRemoteSignIn(displayName, pubkey, signer, meta, clientSecretKey);
+}
+
+async function finalizeRemoteSignIn(
+  displayName: string,
+  pubkey: string,
+  signer: NostrConnectSigner,
+  meta: RemoteSignerMeta,
+  clientSecretKey: Uint8Array,
+): Promise<VesselIdentity> {
+  const identity = buildRemoteIdentity(displayName, pubkey, signer, meta);
   const encryptedClientSecret = await encryptBytes(clientSecretKey, displayName);
   persist(
     {
@@ -469,6 +551,27 @@ export function clearStoredIdentity(): void {
   sessionStorage.removeItem(STORAGE_KEY_V3);
   localStorage.removeItem(STORAGE_KEY_LEGACY);
   sessionStorage.removeItem(STORAGE_KEY_LEGACY);
+}
+
+/**
+ * Tear down any open transports / subscriptions held by an identity's signer.
+ * Safe to call multiple times and on signers that don't need teardown.
+ *
+ * Specifically: a remote (NIP-46) signer keeps an open relay subscription so it
+ * can receive responses from the bunker. We must close that before clearing
+ * the identity, otherwise the subscription stays open until page reload.
+ */
+export async function tearDownSigner(identity: VesselIdentity | null): Promise<void> {
+  if (!identity) return;
+  if (identity.signerType !== "remote") return;
+  const signer = identity._signer as NostrConnectSigner;
+  if (typeof signer.close === "function") {
+    try {
+      await signer.close();
+    } catch (err) {
+      console.warn("Failed to close remote signer cleanly:", err);
+    }
+  }
 }
 
 /**
