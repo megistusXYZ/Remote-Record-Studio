@@ -530,8 +530,10 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
   }
   if (stored.signerType === "extension") {
     if (!isNostrExtensionAvailable()) {
-      // Extension was uninstalled — clear and force re-sign-in.
+      // Extension was uninstalled — clear stored state so we don't repeatedly
+      // warn / fail-restore on every reload. User will re-sign in fresh.
       console.warn("Saved Nostr extension identity but no extension is installed.");
+      clearStoredIdentity();
       return null;
     }
     const signer = new ExtensionSigner();
@@ -544,6 +546,7 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
       livePubkey = await signer.getPublicKey();
     } catch (err) {
       console.warn("Couldn't read extension public key on restore:", err);
+      clearStoredIdentity();
       return null;
     }
     if (livePubkey !== stored.pubkey) {
