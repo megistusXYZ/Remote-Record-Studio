@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Copy, Check, Loader2, Share2, Users, Info } from "lucide-react";
+import { Copy, Check, Loader2, Share2, Users, Info, Trash2, ShieldOff } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   Dialog,
@@ -16,6 +16,11 @@ import {
   type SessionArchiveResult,
   type TrackDescriptor,
 } from "../../lib/session-archive";
+import {
+  revokeShareLink,
+  ShareRevokeError,
+  isLocallyRevoked,
+} from "../../lib/share-revoke";
 import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
 import { VesselButton } from "../vessel-ui/VesselButton";
 
@@ -86,6 +91,10 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
   const [archive, setArchive] = useState<SessionArchiveResult | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [revokeRequested, setRevokeRequested] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revoked, setRevoked] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   // Versioned guard: each archive call gets a unique id; only the latest one
   // is allowed to write back to component state. Prevents stale completions
   // from a previous session.id (or a previous open cycle) clobbering UI.
@@ -144,8 +153,48 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
     }
     setArchive(null);
     setError(null);
+    setRevokeRequested(false);
+    setIsRevoking(false);
+    setRevoked(false);
+    setRevokeError(null);
     void archiveSession();
   }, [open, session.id, archiveSession]);
+
+  // Reflect any prior revocation as soon as the archive lands. Covers the
+  // case where the modal is reopened and the archive is re-published with a
+  // fresh fingerprint that we've never revoked, plus the (unusual) case where
+  // a prior tab already revoked this exact archiveId.
+  useEffect(() => {
+    if (archive && isLocallyRevoked(archive.archiveId)) {
+      setRevoked(true);
+    }
+  }, [archive]);
+
+  const handleRevoke = useCallback(async () => {
+    if (!archive) return;
+    setIsRevoking(true);
+    setRevokeError(null);
+    try {
+      const result = await revokeShareLink(archive.archiveId);
+      setRevoked(true);
+      setRevokeRequested(false);
+      if (result.publish.successCount < result.publish.totalCount) {
+        toast({
+          description: `Link revoked on ${result.publish.successCount} of ${result.publish.totalCount} sharing servers.`,
+        });
+      } else {
+        toast({ description: "Share link revoked." });
+      }
+    } catch (err) {
+      const message =
+        err instanceof ShareRevokeError
+          ? err.message
+          : "Couldn't revoke this link right now. Try again in a moment.";
+      setRevokeError(message);
+    } finally {
+      setIsRevoking(false);
+    }
+  }, [archive, toast]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -174,6 +223,22 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
             <VesselButton variant="ghost" size="sm" onClick={archiveSession}>
               Try again
             </VesselButton>
+          </div>
+        ) : archive && revoked ? (
+          <div className="py-10 text-center" data-testid="share-revoked">
+            <div className="mx-auto w-12 h-12 rounded-full bg-vessel-bg-base border border-vessel-border flex items-center justify-center text-vessel-text-secondary mb-4">
+              <ShieldOff className="w-6 h-6" />
+            </div>
+            <h3 className="font-display text-lg font-bold text-vessel-text-primary mb-2">
+              Link revoked
+            </h3>
+            <p className="text-sm text-vessel-text-secondary leading-relaxed max-w-sm mx-auto">
+              Anyone who tries to open this link will see a "share has been
+              revoked" message instead of the tracks.
+            </p>
+            <p className="text-xs text-vessel-text-muted mt-3">
+              Archive {archive.archiveId}
+            </p>
           </div>
         ) : archive ? (
           <Tabs defaultValue="editor" className="w-full">
@@ -295,6 +360,77 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 <div>Tracks: {archive.perTrackUrls.length}</div>
               </div>
             </TabsContent>
+
+            {/* Revoke action — always visible at the bottom of the tab area */}
+            <div className="mt-5 pt-4 border-t border-vessel-border">
+              {revokeRequested ? (
+                <div className="space-y-3" data-testid="revoke-confirm">
+                  <p className="text-xs text-vessel-text-secondary leading-relaxed">
+                    Take this link down? Anyone who opens it from now on will see
+                    a "share has been revoked" message instead of the tracks.
+                    This can't be undone — you'd need to share again to make a
+                    new link.
+                  </p>
+                  {revokeError && (
+                    <p
+                      className="text-xs text-vessel-red leading-relaxed"
+                      data-testid="text-revoke-error"
+                    >
+                      {revokeError}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <VesselButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRevokeRequested(false);
+                        setRevokeError(null);
+                      }}
+                      disabled={isRevoking}
+                      data-testid="button-revoke-cancel"
+                    >
+                      Cancel
+                    </VesselButton>
+                    <button
+                      type="button"
+                      onClick={handleRevoke}
+                      disabled={isRevoking}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-vessel-red text-white text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-60"
+                      data-testid="button-revoke-confirm"
+                    >
+                      {isRevoking ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Revoking…
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Revoke link
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-vessel-text-muted leading-relaxed">
+                    Change your mind? You can take this link down so it stops
+                    working.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRevokeRequested(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-vessel-border bg-vessel-bg-base text-vessel-text-primary text-xs font-bold hover:border-vessel-red hover:text-vessel-red transition-colors shrink-0"
+                    data-testid="button-revoke"
+                  >
+                    <ShieldOff className="w-3.5 h-3.5" />
+                    Revoke link
+                  </button>
+                </div>
+              )}
+            </div>
           </Tabs>
         ) : null}
       </DialogContent>

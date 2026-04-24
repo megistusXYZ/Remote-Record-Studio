@@ -46,7 +46,8 @@ export type ShareResolveErrorCode =
   | "not_found"
   | "wrong_key"
   | "bad_format"
-  | "network";
+  | "network"
+  | "revoked";
 
 export class ShareResolveError extends Error {
   constructor(public code: ShareResolveErrorCode, message: string) {
@@ -128,20 +129,38 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
     ...FALLBACK_RELAYS,
   ]);
 
-  // 3. Race the relays for the matching event. We treat the request as an
-  //    Observable but consume it via subscribe + Promise so we don't add a
-  //    direct rxjs dependency to this package. Defensive: always unsubscribe
-  //    in every settle path (resolve, reject, timeout, error, complete) — the
-  //    relay pool's request observable can stay open keeping sockets in use.
+  // 3. Race the relays for the matching event. We subscribe with TWO filters
+  //    in one request: the manifest event itself plus any kind-5 deletion
+  //    events authored by the same ephemeral pubkey that reference this
+  //    archive's NIP-33 address. If we see the deletion we surface the link
+  //    as revoked even on relays that don't honor NIP-09.
+  //
+  //    Defensive: always unsubscribe in every settle path — the relay pool's
+  //    request observable can stay open keeping sockets in use.
+  const archiveAddress = `${decoded.kind}:${decoded.pubkey}:${decoded.identifier}`;
+  // Small grace window after we receive the manifest, so a deletion event
+  // arriving from a slower relay can still preempt the resolve. Without this,
+  // a fast relay that hasn't dropped the manifest yet would win the race and
+  // the recipient would download the archive even though it's revoked.
+  const POST_MANIFEST_GRACE_MS = 1500;
+
   const pool = getRelayPool();
   const evt: Event = await new Promise<Event>((resolve, reject) => {
     let settled = false;
     let sub: { unsubscribe: () => void } | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+    let manifest: Event | null = null;
+    let revoked = false;
+
     const cleanup = () => {
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;
+      }
+      if (graceTimer !== null) {
+        clearTimeout(graceTimer);
+        graceTimer = null;
       }
       if (sub) {
         try {
@@ -158,41 +177,23 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
       cleanup();
       fn();
     };
-    sub = pool
-      .request(relays, [
-        {
-          kinds: [decoded.kind],
-          authors: [decoded.pubkey],
-          "#d": [decoded.identifier],
-          limit: 1,
-        },
-      ])
-      .subscribe({
-        next: (e: Event) => {
-          if (settled) return;
-          if (
-            e.kind === decoded.kind &&
-            e.pubkey === decoded.pubkey &&
-            e.tags.some((t) => t[0] === "d" && t[1] === decoded.identifier)
-          ) {
-            settle(() => resolve(e));
-          }
-        },
-        error: (err: any) =>
-          settle(() =>
-            reject(new ShareResolveError("network", err?.message || "Couldn't reach any relay.")),
-          ),
-        complete: () =>
-          settle(() =>
-            reject(
-              new ShareResolveError(
-                "not_found",
-                "We couldn't find this archive on any relay.",
-              ),
+    const decide = () => {
+      if (revoked) {
+        settle(() =>
+          reject(
+            new ShareResolveError(
+              "revoked",
+              "The host took this share down.",
             ),
           ),
-      });
-    timer = setTimeout(() => {
+        );
+        return;
+      }
+      if (manifest) {
+        const m = manifest;
+        settle(() => resolve(m));
+        return;
+      }
       settle(() =>
         reject(
           new ShareResolveError(
@@ -201,7 +202,61 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
           ),
         ),
       );
-    }, FETCH_TIMEOUT_MS);
+    };
+
+    sub = pool
+      .request(relays, [
+        {
+          kinds: [decoded.kind],
+          authors: [decoded.pubkey],
+          "#d": [decoded.identifier],
+          limit: 1,
+        },
+        {
+          kinds: [5],
+          authors: [decoded.pubkey],
+          "#a": [archiveAddress],
+          limit: 5,
+        },
+      ])
+      .subscribe({
+        next: (e: Event) => {
+          if (settled) return;
+          if (e.pubkey !== decoded.pubkey) return;
+          if (e.kind === 5) {
+            // Confirm this deletion event actually references our archive.
+            const refsAddress = e.tags.some(
+              (t) => t[0] === "a" && t[1] === archiveAddress,
+            );
+            const refsManifestEvent =
+              !!manifest &&
+              e.tags.some((t) => t[0] === "e" && t[1] === manifest!.id);
+            if (refsAddress || refsManifestEvent) {
+              revoked = true;
+              decide();
+            }
+            return;
+          }
+          if (
+            e.kind === decoded.kind &&
+            e.tags.some((t) => t[0] === "d" && t[1] === decoded.identifier)
+          ) {
+            if (!manifest) manifest = e;
+            // Don't resolve immediately — give a brief window for a deletion
+            // event from a slower relay to land. If a deletion is already
+            // known, decide() will short-circuit to revoked.
+            if (graceTimer === null) {
+              graceTimer = setTimeout(() => decide(), POST_MANIFEST_GRACE_MS);
+            }
+          }
+        },
+        error: (err: any) =>
+          settle(() =>
+            reject(new ShareResolveError("network", err?.message || "Couldn't reach any relay.")),
+          ),
+        complete: () => decide(),
+      });
+    timer = setTimeout(() => decide(), FETCH_TIMEOUT_MS);
   });
 
   // 4. Decrypt the content under the key.

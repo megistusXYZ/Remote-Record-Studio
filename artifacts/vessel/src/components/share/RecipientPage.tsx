@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { Download, Loader2, ShieldAlert, Inbox, FileWarning, Wifi } from "lucide-react";
+import { Download, Loader2, ShieldAlert, Inbox, FileWarning, Wifi, ShieldOff } from "lucide-react";
 import { motion } from "framer-motion";
 import type { RecipientManifest, ShareResolveErrorCode } from "../../lib/share-resolver";
 import { isSafeDownloadUrl } from "../../lib/share-resolver";
@@ -101,7 +101,9 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
         {!loading && error && (
           <ErrorBlock
             icon={
-              error.code === "missing_key" || error.code === "wrong_key" ? (
+              error.code === "revoked" ? (
+                <ShieldOff className="w-6 h-6" />
+              ) : error.code === "missing_key" || error.code === "wrong_key" ? (
                 <ShieldAlert className="w-6 h-6" />
               ) : error.code === "not_found" ? (
                 <Inbox className="w-6 h-6" />
@@ -112,7 +114,9 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
               )
             }
             title={
-              error.code === "missing_key"
+              error.code === "revoked"
+                ? "This share has been revoked"
+                : error.code === "missing_key"
                 ? "This link can't be opened"
                 : error.code === "wrong_key"
                 ? "Wrong link"
@@ -125,7 +129,9 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
                 : "Connection trouble"
             }
             body={
-              error.code === "missing_key"
+              error.code === "revoked"
+                ? "The host took this link down, so the tracks are no longer available here. If you still need a copy, ask the host to share a new link."
+                : error.code === "missing_key"
                 ? "This link is missing the part that lets you read it. Make sure you copied the whole link, including everything after the # sign."
                 : error.code === "wrong_key"
                 ? "The reading code in this link doesn't match this archive. The link may have been edited or truncated."
