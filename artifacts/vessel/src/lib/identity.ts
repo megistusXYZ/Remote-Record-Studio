@@ -319,16 +319,25 @@ const REMOTE_PERMISSIONS = [
   "nip44_decrypt",
 ];
 
+/** Validates that the user-pasted string is a connection URL we can act on.
+ * Only `bunker://` URIs are paste-able — a `nostrconnect://` URI is generated
+ * BY the client and given to the signer, so it carries our client privkey
+ * implicitly. For that flow, see {@link startNostrConnectInvite}. */
 export function isSupportedRemoteSignerUri(uri: string): boolean {
-  const t = uri.trim();
-  return t.startsWith("bunker://") || t.startsWith("nostrconnect://");
+  return uri.trim().startsWith("bunker://");
 }
 
+/** Default relays used when we generate a `nostrconnect://` invite for the
+ * signer. We use the shared NIP-46 pool. */
+const DEFAULT_NOSTRCONNECT_RELAYS = [
+  "wss://relay.nsec.app",
+  "wss://relay.damus.io",
+];
+
 /**
- * Sign in via NIP-46. Accepts both `bunker://` URIs (signer-initiated — the URI
- * carries the remote pubkey + relays + optional pairing secret) and
- * `nostrconnect://` URIs (client-initiated — the URI carries client pubkey +
- * shared secret + relays; we listen on those relays for the signer to call us).
+ * Sign in via NIP-46 using a pasted `bunker://` URI. The signer initiates the
+ * session, so the URI fully describes how to find it (remote pubkey + relays
+ * + optional pairing secret).
  */
 export async function signInWithRemoteSigner(
   rawUri: string,
@@ -336,16 +345,12 @@ export async function signInWithRemoteSigner(
 ): Promise<VesselIdentity> {
   ensureNostrConnectWired();
   const uri = rawUri.trim();
-
-  if (uri.startsWith("bunker://")) {
-    return signInWithBunkerUri(uri, displayName);
+  if (!uri.startsWith("bunker://")) {
+    throw new Error(
+      "That doesn't look like a valid connection URL. Paste one that starts with 'bunker://'.",
+    );
   }
-  if (uri.startsWith("nostrconnect://")) {
-    return signInWithNostrConnectUri(uri, displayName);
-  }
-  throw new Error(
-    "That doesn't look like a valid connection URL. Paste one that starts with 'bunker://' or 'nostrconnect://'.",
-  );
+  return signInWithBunkerUri(uri, displayName);
 }
 
 async function signInWithBunkerUri(
@@ -384,45 +389,70 @@ async function signInWithBunkerUri(
   return finalizeRemoteSignIn(displayName, pubkey, signer, meta, clientSecretKey);
 }
 
-async function signInWithNostrConnectUri(
-  uri: string,
-  displayName: string,
-): Promise<VesselIdentity> {
-  let parsed;
-  try {
-    parsed = parseNostrConnectURI(uri);
-  } catch {
-    throw new Error("This nostrconnect:// URL is malformed. Try copying it again.");
-  }
-  if (!parsed.relays || parsed.relays.length === 0) {
-    throw new Error("This connection URL is missing a relay. Ask your signer for a complete URL.");
-  }
+/**
+ * Handle for an in-progress client-initiated NIP-46 handshake.
+ *
+ * `uri` is the `nostrconnect://` URL the user pastes/scans into their signer.
+ * `awaitConnection()` resolves once the signer responds (the user approved on
+ * the signer side). `cancel()` closes the relay subscription.
+ *
+ * Per NIP-46: the URI's `client` pubkey is OUR pubkey, and we hold the matching
+ * private key locally. That's what makes a paste-back of a foreign
+ * `nostrconnect://` URI semantically wrong — only the original generator can
+ * complete the handshake. We always generate fresh.
+ */
+export interface NostrConnectInvite {
+  uri: string;
+  awaitConnection(displayName: string, signal?: AbortSignal): Promise<VesselIdentity>;
+  cancel(): Promise<void>;
+}
 
-  // For client-initiated nostrconnect://, we listen on the specified relays
-  // using the embedded shared secret, and wait for the signer to call us back.
+export function startNostrConnectInvite(
+  relays: string[] = DEFAULT_NOSTRCONNECT_RELAYS,
+): NostrConnectInvite {
+  ensureNostrConnectWired();
   const clientSecretKey = generateSecretKey();
   const clientSigner = new PrivateKeySigner(clientSecretKey);
-
   const signer = new NostrConnectSigner({
-    relays: parsed.relays,
+    relays,
     signer: clientSigner,
-    secret: parsed.secret,
+  });
+  const uri = signer.getNostrConnectURI({
+    name: "Vessel",
+    permissions: REMOTE_PERMISSIONS,
   });
 
-  // Open the relay subscription, then block until the signer initiates the
-  // handshake from its side. After this, signer.remote will be populated.
-  await signer.open();
-  await signer.waitForSigner();
-  const pubkey = await signer.getPublicKey();
-  const remotePubkey = (signer as unknown as { remote?: string }).remote ?? pubkey;
+  let opened = false;
 
-  const meta: RemoteSignerMeta = {
-    bunkerUri: uri,
-    relays: parsed.relays,
-    remotePubkey,
-    clientSecretKeyHex: bytesToHex(clientSecretKey),
+  return {
+    uri,
+    async awaitConnection(displayName, signal) {
+      if (!opened) {
+        await signer.open();
+        opened = true;
+      }
+      await signer.waitForSigner(signal);
+      const pubkey = await signer.getPublicKey();
+      const remotePubkey =
+        (signer as unknown as { remote?: string }).remote ?? pubkey;
+      const meta: RemoteSignerMeta = {
+        bunkerUri: uri,
+        relays,
+        remotePubkey,
+        clientSecretKeyHex: bytesToHex(clientSecretKey),
+      };
+      return finalizeRemoteSignIn(displayName, pubkey, signer, meta, clientSecretKey);
+    },
+    async cancel() {
+      if (opened) {
+        try {
+          await signer.close();
+        } catch (err) {
+          console.warn("Failed to close nostrconnect invite:", err);
+        }
+      }
+    },
   };
-  return finalizeRemoteSignIn(displayName, pubkey, signer, meta, clientSecretKey);
 }
 
 async function finalizeRemoteSignIn(
