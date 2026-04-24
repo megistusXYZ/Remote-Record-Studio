@@ -2,50 +2,143 @@
 
 ## Overview
 
-Vessel is a studio-quality remote recording platform designed to offer a polished SaaS experience for remote recording. It simplifies the user journey, allowing sign-ups with just a display name and enabling guest invitations via a simple link. The project aims to provide users with full control over their audio ("Your voice. Your studio. Your files."). It leverages a Nostr-inspired identity system, abstracting away complex cryptographic details from the end-user. The platform focuses on delivering high-quality audio and video recording capabilities, secure storage, and intuitive session management.
+**Vessel** is a studio-quality remote recording platform. To users it looks and feels like a polished SaaS product. Users sign up with just a display name and can invite guests via a simple link. Under the hood it uses a Nostr-inspired identity system (keypairs stored in localStorage) — users never see any of this.
 
-## User Preferences
+**Product tagline:** "Your voice. Your studio. Your files."
 
-- Never mention "Nostr", "Blossom", "keypair", "relay" in any UI text.
-- Do not mention `Nostr / nsec / npub / keypair / pubkey / Blossom / MoQ / WebTransport / MediaRecorder / getUserMedia / IndexedDB / QUIC` in user-visible text.
-- The only exception for forbidden terms is `BackupKeySignInModal` which may show "nsec1…" because the user is explicitly importing one.
+## Stack
 
-## System Architecture
+- **Monorepo tool**: pnpm workspaces
+- **Node.js version**: 24
+- **Package manager**: pnpm
+- **TypeScript version**: 5.9
+- **API framework**: Express 5
+- **Database**: PostgreSQL + Drizzle ORM
+- **Validation**: Zod (`zod/v4`), `drizzle-zod`
+- **API codegen**: Orval (from OpenAPI spec)
+- **Frontend**: React + Vite + TypeScript (artifact: `vessel`, path: `/`)
+- **Styling**: Tailwind CSS v4 + custom CSS variables (Broadcast Dark design system)
+- **Build**: esbuild (CJS bundle for API server)
 
-Vessel is built as a monorepo using `pnpm workspaces`, targeting Node.js 24 and TypeScript 5.9.
+## Design System — "Broadcast Dark"
 
-**Frontend (`vessel` artifact):**
-- **Framework:** React with Vite.
-- **Styling:** Tailwind CSS v4, augmented with custom CSS variables as part of the "Broadcast Dark" design system.
-- **Design System:** "Broadcast Dark" features Syne (headlines), DM Sans (body/UI), and JetBrains Mono (technical) fonts. The primary accent color is `#00d4aa` (mint/teal) on a near-black background (`#080b0f`).
-- **Identity Management:** Pluggable signer architecture with three on-ramps: (1) **local studio key** (default one-tap path — generates an in-memory secret encrypted at rest with AES-GCM keyed off displayName + device fingerprint), (2) **browser extension** (NIP-07 via `applesauce-signers/ExtensionSigner`), (3) **remote signer** (NIP-46 via `applesauce-signers/NostrConnectSigner`). The remote-signer surface offers two NIP-46 sub-flows: pasting a signer-issued `bunker://` URL, OR generating a `nostrconnect://` invite (URL + QR) for the user to approve inside their signer app — paste is intentionally bunker-only because a foreign `nostrconnect://` URL carries the original client privkey implicitly and can't be honored from the outside. All event signing flows through `identity._signer.signEvent(...)` — no call site touches `_secretKey` directly. Storage v3 (`vessel_identity_v3`) auto-migrates from legacy v2; rename re-encrypts persisted secrets so the new displayName-derived key still decrypts on reload. On reload, extension identities re-validate the live extension pubkey against the stored one and clear if the user switched accounts; remote identities proactively re-open their relay subscription so signing is ready before the first archive event. Sign-out tears down the NIP-46 transport before clearing identity. The word "Nostr" is allowed in the user-visible UI only on this explicit sign-in surface (per product brief); everywhere else the broader brand-substitute terms apply. See `lib/identity.ts`, `lib/relay-pool.ts`, `hooks/use-identity.ts`, `components/onboarding/NostrSignInModal.tsx`.
-- **Session Management:** Provides functionalities for creating, joining, canceling sessions, and generating invite links.
-- **Studio:** Features include media device management (`use-media-devices.ts`), a flexible video grid (`VideoGrid.tsx`), and a control bar (`ControlBar.tsx`) for recording and device settings.
-- **Recording Engine:** Uses `ChunkedRecorder` (wrapping `MediaRecorder`) to capture audio/video, storing chunks locally in IndexedDB (`recordings-storage.ts`).
-- **Vault:** A dashboard for managing recordings, grouped by session, with options for per-track downloads and sharing.
-- **Sharing:** Implements `publishSessionArchive` to create NIP-94 inspired session archives (Kind 1063 for tracks, Kind 30563 for manifest).
-- **UI Pages:** Includes a marketing landing page (`/`), onboarding (`/start`), home dashboard (`/home`), session creation (`/session/new`), the studio room (`/session/:id`), guest join flow (`/join/:inviteCode`), vault (`/vault`), and settings (`/settings`).
-- **Key UI Components:** Reusable design primitives are located in `artifacts/vessel/src/components/vessel-ui/`.
+- **Fonts**: Syne (display/headlines), DM Sans (body/UI), JetBrains Mono (technical)
+- **Accent color**: `#00d4aa` (mint/teal)
+- **Background**: `#080b0f` (near-black with blue tint)
+- **Key principle**: Never mention "Nostr", "Blossom", "keypair", "relay" in any UI text
 
-**Backend (`api-server` artifact):**
-- **Framework:** Express 5.
-- **Database:** PostgreSQL with Drizzle ORM.
-- **Validation:** Zod (`zod/v4`) and `drizzle-zod`.
-- **API Definition:** OpenAPI spec (`openapi.yaml`) is the source of truth, with Orval used for API codegen.
-- **Routes:** API route handlers are organized in `artifacts/api-server/src/routes/`.
-- **Database Schema:** Defined in `lib/db/src/schema/` (identities, sessions, participants, recordings).
-- **API Conventions:** `GET /api/sessions/:idOrInvite` and `POST /api/sessions/:idOrInvite/join` accept either a session UUID or an 8-character invite code, resolved server-side. User-scoped requests require `pubkey` as a query parameter.
+## Artifacts
 
-**General Architecture Notes:**
-- Identity is stored in `localStorage` (`vessel_identity_v3`) — local-key identities encrypt the secret with AES-GCM, extension identities store only signerType + pubkey, remote identities store the bunker URL + relays + encrypted client-side NIP-46 secret. Guest identities live in `sessionStorage`. Legacy `vessel_identity_v2` blobs are migrated forward on first load and then removed.
-- All key commands are executed using `pnpm`.
+- **vessel** — React + Vite frontend (path: `/`)
+- **api-server** — Express 5 REST API (path: `/api`)
 
-## External Dependencies
+## Pages
 
-- **Database:** PostgreSQL
-- **ORM:** Drizzle ORM
-- **API Codegen:** Orval
-- **Styling:** Tailwind CSS
-- **Identity/Cryptography:** `nostr-tools`, `applesauce-signers` (`PrivateKeySigner` for local keys, `ExtensionSigner` for NIP-07 browser extensions, `NostrConnectSigner` for NIP-46 remote signers — all lazy-wired through a shared relay pool in `lib/relay-pool.ts`)
-- **State Management:** Zustand
-- **QR Code Generation:** `qrcode.react`
+- `/` — Landing page (marketing; auto-redirects to /home if identity exists in localStorage)
+- `/start` — Onboarding (name entry, generates identity silently, redirects to /home)
+- `/home` — Dashboard (vault stats, recent sessions + recordings)
+- `/session/new` — Create a new recording session
+- `/session/:id` — Studio room (recording controls, participants, invite link)
+- `/join/:inviteCode` — Guest join flow (invite code is resolved to real session UUID on the backend)
+- `/vault` — Vault home (sidebar nav + session-grouped recordings + per-track download)
+- `/settings` — General settings + collapsible Advanced (storage URL, relay URL, backup key, danger zone)
+
+## Key Files
+
+### Identity / Onboarding (Module 1)
+- `artifacts/vessel/src/lib/identity.ts` — Pluggable signer architecture. `VesselIdentity` carries `signerType: "local" | "extension" | "remote"` plus an `_signer: ISigner` (`applesauce-signers`). Local-key identities additionally hold `_secretKey` (encrypted at rest with AES-GCM, PBKDF2-SHA256 100k iters, derived silently from displayName + deviceFingerprint). Three sign-in builders: `signInWithExtension` (NIP-07 / `ExtensionSigner`), `signInWithRemoteSigner(uri, displayName)` (NIP-46 via `bunker://` URL), and `startNostrConnectInvite()` (generates `nostrconnect://` URL + QR for the user to approve in their signer app). Restore on load (`restoreV3`) re-instantiates the right signer; for extension it re-validates the live pubkey against the stored one and clears on mismatch; for remote it proactively re-opens the NIP-46 transport. Storage v3 (`vessel_identity_v3`) auto-migrates legacy v2 local-key blobs forward and removes them.
+- `artifacts/vessel/src/lib/relay-pool.ts` — Shared relay pool used by NIP-46. Avoids opening duplicate WebSocket connections per signer instance.
+- `artifacts/vessel/src/store/identityStore.ts` — Zustand store with promise-cached `hydrate()` for React StrictMode safety. Async `signOut` awaits `tearDownSigner(identity)` (closes NIP-46 transport) before clearing identity.
+- `artifacts/vessel/src/hooks/use-identity.ts` — React hook wrapping the store. Backward-compatible plus: `signInWithExtension`, `signInWithRemoteSigner`, `startNostrConnectInvite`, `adoptIdentity` (used after a NIP-46 invite resolves), `isNostrExtensionAvailable`, `signerType`.
+- `artifacts/vessel/src/components/onboarding/SignUpScreen.tsx` — 2-step creator sign-up with animated checkmark; ref-locked submission for race-safety. Now also renders a secondary "Sign in with Nostr" button that opens `NostrSignInModal`.
+- `artifacts/vessel/src/components/onboarding/NostrSignInModal.tsx` — Explicit Nostr on-ramp (the word "Nostr" is allowed here per product brief). Three sub-modes: `extension` (one-tap NIP-07), `remote-paste` (paste a `bunker://` URL — pasted `nostrconnect://` is intentionally rejected because the foreign client privkey is unobtainable), `remote-invite` (we generate a `nostrconnect://` URL and render it as QR + copy button + waiting indicator; cancellation cleans up the open subscription on close/unmount).
+- `artifacts/vessel/src/components/onboarding/BackupKeySignInModal.tsx` — Power-user nsec restore modal (creates a local-key identity).
+- `artifacts/vessel/src/components/onboarding/GuestJoinScreen.tsx` — Zero-friction guest join; fetches session via invite code, shows host avatar, requires explicit consent.
+
+### Lobby & Session Management (Module 2)
+- `artifacts/vessel/src/lib/session.ts` — Session API wrappers: `createSession(identity, { title })`, `joinSession(idOrInvite, identity)`, `cancelSession(id)`, `buildInviteUrl(inviteCode)` (returns canonical `/join/:code` URL), `extractInviteCodeFromInput(raw)` (handles full URLs OR bare codes — supports both new `/join/:code` and legacy `?session=` formats).
+- `artifacts/vessel/src/components/lobby/LobbyScreen.tsx` — Main lobby with two states: `default` (greeting + create card + join card + recent sessions sidebar) and `waitingRoom` (invite link + QR + participant list + Start/Cancel). Pure presentational; all mutations come through props.
+- `artifacts/vessel/src/components/lobby/InviteModal.tsx` — Dialog with copy-to-clipboard + QR code (qrcode.react) + Web Share API.
+- `artifacts/vessel/src/components/lobby/ParticipantCard.tsx` — Animated participant row with avatar (color from pubkey), role/you badge, status dot, mic/cam icons.
+- `artifacts/vessel/src/pages/home.tsx` — Thin orchestrator wiring LobbyScreen state="default" with createSession/joinSession handlers; redirects to `/` if no identity.
+- `artifacts/vessel/src/pages/session-studio.tsx` — Routes by `session.status`: `waiting` → LobbyScreen waitingRoom, `live` → StudioScreen, `ended` → auto-redirect to `/vault`. Polls every 3s while waiting. Wires handleStartRecording (PATCH live), handleStopRecording (PATCH ended → /vault), handleCancelSession, handleLeave.
+
+### Studio (Module 3)
+- `artifacts/vessel/src/lib/moq.ts` — Transport layer abstraction. `isWebTransportAvailable()` (capability detect), `useConnectionQuality()` hook (reads `navigator.connection.effectiveType` → good/fair/poor/unknown), `getConnectionQualityLabel()` (friendly text), `connectMoQ()` stub. No real peer streaming yet — wired in a future module.
+- `artifacts/vessel/src/hooks/use-media-devices.ts` — Two hooks: `useMediaDevices()` (enumerateDevices, persists camera/mic selection in localStorage, refreshes on devicechange) and `useLocalStream({ cameraId, micId, cameraEnabled, micEnabled })` (getUserMedia with capability guard, race-safe with cancellation flag, auto-stops superseded tracks, friendly error messages for NotAllowed/NotFound/NotReadable, toggles `track.enabled` for mute/cam-off without re-acquisition).
+- `artifacts/vessel/src/components/studio/StudioScreen.tsx` — Main wrapper. Header (wordmark + session title + recording status/timer + connection quality dots + participant count). Two banners: media-error (red) + WebTransport-degradation (amber, says "Live preview is limited in this browser. Your recording will still be full quality."). VideoGrid + ControlBar + InviteModal. Recording timer ticks only while status="live", resets otherwise. Local participant gets real MediaStream; remote participants render avatar fallback (no peer streams yet).
+- `artifacts/vessel/src/components/studio/VideoGrid.tsx` — Auto-fit grid (1 → max-w-720 centered, 2 → 2-col, 3-4 → 2x2, 5+ → 3-col on lg).
+- `artifacts/vessel/src/components/studio/VideoTile.tsx` — Tile with `<video muted>` (local only, prevents echo) OR avatar fallback OR shimmer placeholder. Bottom-left name pill + bottom-right AudioMeter + top-left LOCAL badge + red border + mic-off icon when muted.
+- `artifacts/vessel/src/components/studio/ControlBar.tsx` — Fixed-bottom bar (h-20). Three groups: settings (DevicePickerPopover trigger), center (mic + cam 56px round buttons + framer-motion morphing record button visible to host only — animates green→red on record), right (Invite + Leave with confirm). Timer label "Stop · MM:SS" or "HH:MM:SS" below record button.
+- `artifacts/vessel/src/components/studio/DevicePickerPopover.tsx` — shadcn Popover content with camera list + mic list + live preview thumbnail.
+- `artifacts/vessel/src/components/studio/SavingOverlay.tsx` — "Saving your session..." overlay with per-participant progress bars (component built; superseded by SessionComplete in Module 4).
+
+### Recording Engine + Vault Redesign (Module 4)
+- `artifacts/vessel/src/lib/recorder.ts` — `ChunkedRecorder` class wrapping `MediaRecorder`. Picks best supported MIME type (vp9/vp8/webm fallback chain), accumulates `Blob` chunks via 5s timeslices, emits friendly events (`recording-started`, `chunk-saved-locally`, `recording-complete`). Returns final `Blob` from `stop()`.
+- `artifacts/vessel/src/lib/blossom.ts` — `BlossomUploadQueue` STUB. Simulates chunked upload to a storage server (~220ms per chunk, ~12 chunks per file), emits `sync-started`/`chunk-synced`/`sync-complete` events with `{ synced, total, percent, failed }` progress. Computes SHA-256 of the final blob via `crypto.subtle`. Real Blossom HTTP upload comes in a later module.
+- `artifacts/vessel/src/lib/recordings-storage.ts` — IndexedDB persistence for final recording blobs. `saveRecordingBlob(id, blob)`, `loadRecordingBlob(id)`, `deleteRecordingBlob(id)`, `clearAllLocalRecordings()`, `downloadBlob(blob, filename)`, `downloadRecordingById(id, filename)`. Uses URL scheme `idb://<recordingId>` to mark blobs that live only locally (vs. real remote URLs).
+- `artifacts/vessel/src/hooks/use-recording.ts` — React hook orchestrating the full recording lifecycle: owns one `ChunkedRecorder` + one `BlossomUploadQueue` per recording. Returns `{ start, stop, isRecording, isFinalizing, isSyncing, syncProgress, syncStatus, result, error, isSupported, reset }`. On `stop()`: finalizes blob → saves to IndexedDB → triggers simulated sync → returns `RecordingResult { recordingId, blob, meta, blobHash, blobUrl, syncStatus }`.
+- `artifacts/vessel/src/components/studio/SessionComplete.tsx` — Full-screen overlay with two phases. Phase 1 (syncing): pulsing waveform SVG + per-track progress bars (avatar + name + percent + spinner→checkmark). Phase 2 (complete): animated checkmark SVG + canvas-based confetti burst (no external lib) + per-track download cards (Download Track / Copy Link buttons) + View Vault / Start New CTAs. Guest variant: smaller "Thanks for recording with X" card with optional download + Close.
+- `artifacts/vessel/src/components/vault/VaultSidebar.tsx` — Left rail nav with three items (My Vault, Shared with Me, Settings) + sticky "+ New Session" CTA at the bottom. Used by both VaultScreen and SettingsScreen.
+- `artifacts/vessel/src/components/vault/EmptyState.tsx` — Reusable empty state with mic+sparkle SVG illustration.
+- `artifacts/vessel/src/components/vault/VaultScreen.tsx` — Owns the full-screen layout (sidebar + main). Fetches via `useListRecordings({ pubkey })`, groups recordings by `sessionId` into session cards. Each card: title + date + total size + participant chips + "Download All" + "View Tracks" expand. Expanded state lists individual track rows with per-track download (calls `downloadRecordingById`).
+- `artifacts/vessel/src/components/vault/SettingsScreen.tsx` — General section (display name save, 8-color avatar swatch picker persisted in `localStorage` key `vessel_avatar_color`, default invite message in `vessel_invite_message`) + collapsible Advanced section (storage URL `vessel_storage_url`, live preview relay URL `vessel_relay_url`, Show/Copy backup key, danger zone with `clearAllLocalRecordings()` + `signOut()`).
+- `artifacts/vessel/src/pages/vault.tsx` + `pages/settings.tsx` — Thin wrappers that gate on identity then render the new screens (no Layout wrapper since the screens own the full viewport).
+- **Integration in StudioScreen**: Auto-starts the recorder when `session.status === "live"` and a localStream is ready (with retry on failure — ref clears on catch). On Stop click (host), shows SessionComplete overlay, awaits sync completion, POSTs metadata via `useCreateRecording` (guarded by `recordingPersistedRef`, promise tracked on `persistPromiseRef`). When the host clicks "View in Vault" / "Start New Session", awaits the persistence promise BEFORE calling `onStopRecording` (PATCH ended) and navigating — so we never lose track records on unmount. Guests are auto-shown the SessionComplete (guest variant) when `session.status` flips to "ended" while they're recording, ensuring their track is finalized + persisted before they navigate away.
+- **Forbidden-term audit**: identifier names (e.g., `participantPubkey`, `deriveAvatarColorFromPubkey`) may contain forbidden words; rendered UI strings must not. The terms `Nostr / nsec / npub / keypair / pubkey / Blossom / MoQ / WebTransport / MediaRecorder / getUserMedia / IndexedDB / QUIC` never appear in user-visible text in any Module 4 file.
+- **Known limitations**: (1) Recorder is locked to the initial localStream — switching camera/mic mid-recording does not rebind the active recorder. (2) IndexedDB is unbounded — no quota check yet; future module should add retention limits. (3) Real Blossom upload is still simulated — chunks aren't actually sent to a remote server.
+
+### Sharing, Polish & Final Module (Module 5)
+- `artifacts/vessel/src/lib/session-archive.ts` — `publishSessionArchive(identity, sessionInput, tracks)`. Builds + signs Kind 1063 (per-track, NIP-94 inspired: `d`, `m`, `size`, `duration`, `session`, `alt`, optional `url` and `x` for SHA-256) and a Kind 30563 parameterized replaceable manifest (tags `d`=sessionId, `title`, `session`, `host`, `ended_at`, `track_count`, `e` references to each track). Uses `finalizeEvent` from `nostr-tools/pure` with `identity._secretKey` to compute id+pubkey+sig. Returns `{ archiveId (real naddr1...), shareUrl, perTrackUrls, manifestEventId, archivedAt }`. Publish itself is currently simulated (~600ms delay) — no actual relay POST yet. The `url` tag is omitted for local-only blobs (`idb://...`) so strict NIP-94 consumers don't see empty strings.
+- `artifacts/vessel/src/components/vault/ShareModal.tsx` — Three-tab Dialog (Share with Editor / Share Individual Tracks / Archive Info). Auto-archives on open per `session.id` with a `requestIdRef` versioning guard so stale completions from a previous open cycle or session swap can't clobber state. Each tab has copy-to-clipboard buttons with toast feedback. The "Archive Info" tab uses the user-friendly label "Archive ID" — never says "naddr" or "Nostr".
+- `artifacts/vessel/src/hooks/use-keyboard-shortcuts.ts` — Generic `useKeyboardShortcuts(shortcuts, enabled)` hook. Each `Shortcut` is `{ key, handler, preventDefault?, whenTyping? }`. Skips when modifier keys (cmd/ctrl/alt) are pressed. The `isNativeKeyTarget` helper expands beyond input/textarea/contentEditable: it also lets Space/Enter pass through to focused buttons / links / `[role=button]` so shortcuts never hijack native button activation.
+- `artifacts/vessel/src/components/lobby/LobbyEmptyState.tsx` — Microphone-on-stand SVG illustration + "Your studio is empty" / "Start a session to invite guests and record together."
+- `artifacts/vessel/src/components/lobby/WaitingForGuestsEmpty.tsx` — Two-chairs-facing SVG illustration + pulsing dot + "Waiting for guests…" / "Share the invite link above. They'll appear here when they join."
+- `artifacts/vessel/index.html` — Production SEO meta: title "Vessel — Studio-Quality Remote Recording", description, og:* and twitter:* tags, theme-color `#080b0f`.
+- **Integrations**:
+  - StudioScreen wires keyboard shortcuts: `M` toggles mic, `V` toggles camera, `Space` (host only) starts/stops recording. Shortcuts are disabled while SessionComplete overlay or InviteModal is open.
+  - VaultScreen replaced the placeholder more-menu on each session card with a proper "Share" button that opens ShareModal. Improved download-all toast feedback (counts downloaded vs. missing tracks).
+  - LobbyScreen replaced the basic "No sessions yet" card with `LobbyEmptyState`; replaced the lone "Waiting for guests…" text in the waiting room with `WaitingForGuestsEmpty`.
+  - `pages/home.tsx` — On `createSession` success, auto-copies the invite URL to clipboard and toasts "Session created — invite link copied!". On failure, friendly "Couldn't create session — Check your connection and try again."
+- **Deferred for a future module** (intentionally out-of-scope to keep this final module ship-ready):
+  - Onboarding coach marks (3-step popover tour)
+  - Page transition animations with framer-motion `AnimatePresence`
+  - PWA manifest + service worker (vite-plugin-pwa)
+  - Real Blossom HTTP upload (still simulated as in Module 4)
+
+### Landing & UI Primitives (Module 0)
+- `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer). Handles `?session=XXX` query → redirect to `/join/XXX`.
+- `artifacts/vessel/src/components/vessel-ui/` — Design primitives (VesselButton, VesselCard, VesselBadge, AudioMeter, RecordingDot)
+- `artifacts/vessel/src/pages/` — All page components
+
+## Storage policy
+
+- **Full identity** (`vessel_identity_v2` in `localStorage`): encrypted nsec + displayName + optional email. Survives across browser sessions; only way to restore is via the encrypted blob OR the user's exported nsec backup key.
+- **Guest identity** (`vessel_identity_v2` in `sessionStorage`): same encrypted shape but ephemeral by design — guest pubkeys should NOT persist past tab close. This is intentional, not a bug.
+- **Encryption strength** is "convenience over strong at-rest secrecy" for MVP. Key is derived from displayName+deviceFingerprint (low-entropy). A future module may add an opt-in PIN/passphrase for users who want true at-rest security.
+
+## API conventions
+
+- Both `GET /api/sessions/:idOrInvite` and `POST /api/sessions/:idOrInvite/join` accept either a session UUID or an 8-char invite code; the server resolves via `findSessionByIdOrInvite()` in `routes/sessions.ts`.
+- Join responses always return the real session UUID; clients should navigate using that, not the invite code.
+
+## Other Key Files
+
+- `artifacts/vessel/src/index.css` — Broadcast Dark design system (CSS vars, Tailwind theme, utility classes)
+- `artifacts/api-server/src/routes/` — API route handlers
+- `lib/db/src/schema/` — Database schema (identities, sessions, participants, recordings)
+- `lib/api-spec/openapi.yaml` — OpenAPI contract (source of truth)
+
+## Key Commands
+
+- `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas
+- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+
+## Architecture Notes
+
+- Identity is stored in `localStorage` under key `vessel_identity_v2` as `{iv, salt, ciphertext, displayName, email}` — the `ciphertext` is the AES-GCM-encrypted nsec; the symmetric key is derived via PBKDF2-SHA256(displayName + deviceFingerprint).
+- Pubkey is a real Nostr secp256k1 public key (32-byte hex), but "Nostr/nsec/npub/keypair/relay/pubkey/Blossom" must NEVER appear in normal UI text. The only exception: `BackupKeySignInModal` may show "nsec1…" because the user is explicitly importing one.
+- API endpoints require `pubkey` as a query param for user-scoped requests.
+- The `api-zod/src/index.ts` only exports from `./generated/api` (NOT `./generated/types`) to avoid duplicate export conflicts after codegen — must be fixed after each codegen run if the types directory gets regenerated.
