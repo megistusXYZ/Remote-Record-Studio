@@ -1,67 +1,103 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { useCreateIdentity } from "@workspace/api-client-react";
+import { useIdentityStore } from "../store/identityStore";
+import {
+  createNewIdentity as createNewIdentityLib,
+  createGuestIdentity as createGuestIdentityLib,
+  importIdentityFromBackup as importIdentityFromBackupLib,
+  type VesselIdentity,
+} from "../lib/identity";
+
+export type { VesselIdentity };
 
 export type Identity = {
   pubkey: string;
   displayName: string;
 };
 
-const IDENTITY_KEY = "vessel_identity";
-
-function generatePubkey() {
-  const array = new Uint8Array(32);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
 export function useIdentity() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const identity = useIdentityStore((s) => s.identity);
+  const isLoaded = useIdentityStore((s) => s.isLoaded);
+  const setIdentity = useIdentityStore((s) => s.setIdentity);
+  const clearIdentity = useIdentityStore((s) => s.clearIdentity);
+  const hydrate = useIdentityStore((s) => s.hydrate);
   const createIdentityMutation = useCreateIdentity();
 
   useEffect(() => {
-    const stored = localStorage.getItem(IDENTITY_KEY);
-    if (stored) {
-      try {
-        setIdentityState(JSON.parse(stored));
-      } catch (e) {
-        // ignore
-      }
-    }
-    setIsLoaded(true);
-  }, []);
+    void hydrate();
+  }, [hydrate]);
 
-  const setDisplayName = useCallback(async (name: string) => {
-    let currentPubkey = identity?.pubkey;
-    
-    if (!currentPubkey) {
-      currentPubkey = generatePubkey();
-    }
-    
-    const newIdentity = { pubkey: currentPubkey, displayName: name };
-    
-    try {
-      await createIdentityMutation.mutateAsync({
-        data: {
-          pubkey: currentPubkey,
-          displayName: name
-        }
-      });
-      
-      localStorage.setItem(IDENTITY_KEY, JSON.stringify(newIdentity));
-      setIdentityState(newIdentity);
-    } catch (error) {
-      console.error("Failed to save identity:", error);
-      // Still save locally even if sync fails
-      localStorage.setItem(IDENTITY_KEY, JSON.stringify(newIdentity));
-      setIdentityState(newIdentity);
-    }
-  }, [identity, createIdentityMutation]);
+  const persistOnServer = useCallback(
+    async (id: VesselIdentity) => {
+      if (id.isGuest) return;
+      try {
+        await createIdentityMutation.mutateAsync({
+          data: { pubkey: id._pubkey, displayName: id.displayName },
+        });
+      } catch (err) {
+        console.error("Failed to register identity with server:", err);
+      }
+    },
+    [createIdentityMutation]
+  );
+
+  const createNewIdentity = useCallback(
+    async (displayName: string, email?: string) => {
+      const id = await createNewIdentityLib(displayName, email);
+      setIdentity(id);
+      await persistOnServer(id);
+      return id;
+    },
+    [setIdentity, persistOnServer]
+  );
+
+  const createGuestIdentity = useCallback(
+    async (displayName: string) => {
+      const id = await createGuestIdentityLib(displayName);
+      setIdentity(id);
+      return id;
+    },
+    [setIdentity]
+  );
+
+  const importFromBackup = useCallback(
+    async (nsec: string, displayName: string) => {
+      const id = await importIdentityFromBackupLib(nsec, displayName);
+      setIdentity(id);
+      await persistOnServer(id);
+      return id;
+    },
+    [setIdentity, persistOnServer]
+  );
+
+  const setDisplayName = useCallback(
+    async (name: string) => {
+      if (!identity) {
+        await createNewIdentity(name);
+        return;
+      }
+      const updated: VesselIdentity = { ...identity, displayName: name };
+      setIdentity(updated);
+      await persistOnServer(updated);
+    },
+    [identity, createNewIdentity, setIdentity, persistOnServer]
+  );
+
+  const signOut = useCallback(() => {
+    clearIdentity();
+  }, [clearIdentity]);
 
   return {
-    pubkey: identity?.pubkey,
+    identity,
+    pubkey: identity?._pubkey,
     displayName: identity?.displayName,
+    avatarColor: identity?.avatarColor,
+    isGuest: identity?.isGuest ?? false,
+    isLoaded,
     setDisplayName,
-    isLoaded
+    createNewIdentity,
+    createGuestIdentity,
+    importFromBackup,
+    signOut,
   };
 }

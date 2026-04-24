@@ -45,10 +45,32 @@
 
 ## Key Files
 
-- `artifacts/vessel/src/hooks/use-identity.ts` — Identity abstraction (hides keypair)
-- `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer)
+### Identity / Onboarding (Module 1)
+- `artifacts/vessel/src/lib/identity.ts` — Identity abstraction. Generates real Nostr keypairs (nostr-tools), encrypts the secret key (nsec) with AES-GCM (PBKDF2-SHA256, 100k iterations) using a key derived silently from displayName + a deviceFingerprint stored in localStorage. Lazy-loads applesauce-signers/SimpleSigner.
+- `artifacts/vessel/src/store/identityStore.ts` — Zustand store with promise-cached `hydrate()` for React StrictMode safety.
+- `artifacts/vessel/src/hooks/use-identity.ts` — React hook wrapping the store. Backward-compatible (pubkey, displayName, setDisplayName, isLoaded) plus new methods (createNewIdentity, createGuestIdentity, importFromBackup, signOut, identity, avatarColor, isGuest).
+- `artifacts/vessel/src/components/onboarding/SignUpScreen.tsx` — 2-step creator sign-up with animated checkmark; ref-locked submission for race-safety.
+- `artifacts/vessel/src/components/onboarding/BackupKeySignInModal.tsx` — Power-user nsec restore modal.
+- `artifacts/vessel/src/components/onboarding/GuestJoinScreen.tsx` — Zero-friction guest join; fetches session via invite code, shows host avatar, requires explicit consent.
+
+### Landing & UI Primitives (Module 0)
+- `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer). Handles `?session=XXX` query → redirect to `/join/XXX`.
+- `artifacts/vessel/src/components/vessel-ui/` — Design primitives (VesselButton, VesselCard, VesselBadge, AudioMeter, RecordingDot)
 - `artifacts/vessel/src/pages/` — All page components
-- `artifacts/vessel/src/components/vessel-ui/` — Brand-specific UI primitives (VesselButton, VesselCard, VesselBadge, AudioMeter, RecordingDot)
+
+## Storage policy
+
+- **Full identity** (`vessel_identity_v2` in `localStorage`): encrypted nsec + displayName + optional email. Survives across browser sessions; only way to restore is via the encrypted blob OR the user's exported nsec backup key.
+- **Guest identity** (`vessel_identity_v2` in `sessionStorage`): same encrypted shape but ephemeral by design — guest pubkeys should NOT persist past tab close. This is intentional, not a bug.
+- **Encryption strength** is "convenience over strong at-rest secrecy" for MVP. Key is derived from displayName+deviceFingerprint (low-entropy). A future module may add an opt-in PIN/passphrase for users who want true at-rest security.
+
+## API conventions
+
+- Both `GET /api/sessions/:idOrInvite` and `POST /api/sessions/:idOrInvite/join` accept either a session UUID or an 8-char invite code; the server resolves via `findSessionByIdOrInvite()` in `routes/sessions.ts`.
+- Join responses always return the real session UUID; clients should navigate using that, not the invite code.
+
+## Other Key Files
+
 - `artifacts/vessel/src/index.css` — Broadcast Dark design system (CSS vars, Tailwind theme, utility classes)
 - `artifacts/api-server/src/routes/` — API route handlers
 - `lib/db/src/schema/` — Database schema (identities, sessions, participants, recordings)
@@ -63,7 +85,7 @@
 
 ## Architecture Notes
 
-- Identity (pubkey + displayName) is stored in `localStorage` under key `vessel_identity`
-- Pubkey is a 32-byte random hex string (Nostr-compatible format, but Nostr is never mentioned in UI)
-- API endpoints require `pubkey` as a query param for user-scoped requests
-- The `api-zod/src/index.ts` only exports from `./generated/api` (NOT `./generated/types`) to avoid duplicate export conflicts after codegen — must be fixed after each codegen run if the types directory gets regenerated
+- Identity is stored in `localStorage` under key `vessel_identity_v2` as `{iv, salt, ciphertext, displayName, email}` — the `ciphertext` is the AES-GCM-encrypted nsec; the symmetric key is derived via PBKDF2-SHA256(displayName + deviceFingerprint).
+- Pubkey is a real Nostr secp256k1 public key (32-byte hex), but "Nostr/nsec/npub/keypair/relay/pubkey/Blossom" must NEVER appear in normal UI text. The only exception: `BackupKeySignInModal` may show "nsec1…" because the user is explicitly importing one.
+- API endpoints require `pubkey` as a query param for user-scoped requests.
+- The `api-zod/src/index.ts` only exports from `./generated/api` (NOT `./generated/types`) to avoid duplicate export conflicts after codegen — must be fixed after each codegen run if the types directory gets regenerated.

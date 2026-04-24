@@ -14,6 +14,13 @@ export default function LandingPage() {
   const { displayName, isLoaded } = useIdentity();
 
   React.useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const sessionInvite = searchParams.get("session");
+    if (sessionInvite) {
+      setLocation(`/join/${sessionInvite}`);
+      return;
+    }
+
     if (isLoaded && displayName) {
       setLocation("/home");
     }
