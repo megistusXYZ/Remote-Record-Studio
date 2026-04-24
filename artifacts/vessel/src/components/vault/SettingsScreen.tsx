@@ -20,11 +20,17 @@ import {
   setStorageUrl as persistStorageUrl,
   type ReachabilityResult,
 } from "../../lib/storage-config";
+import { MoqClient } from "../../lib/moq";
+import { notifyRelayUrlChanged } from "../../hooks/use-live-transport";
 import { VaultSidebar } from "./VaultSidebar";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
+const DEFAULT_RELAY_URL =
+  (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) ||
+  "https://relay.quic.video";
 
 export type SettingsScreenProps = {
   pubkey: string;
@@ -52,7 +58,8 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [storageUrl, setStorageUrlInput] = useState(() => getStorageUrl(pubkey));
   const [savedStorageUrl, setSavedStorageUrl] = useState(() => getStorageUrl(pubkey));
   const [reachability, setReachability] = useState<ReachabilityState>({ kind: "idle" });
-  const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem("vessel_relay_url") || "wss://relay.vessel.local");
+  const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem("vessel_relay_url") || DEFAULT_RELAY_URL);
+  const [relayReachability, setRelayReachability] = useState<ReachabilityState>({ kind: "idle" });
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
@@ -142,10 +149,57 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
     setStorageUrlInput(DEFAULT_STORAGE_URL);
   };
 
+  // Mirror the storage-URL pattern: debounced live probe with abort, plus
+  // an explicit Save that only writes once the URL is at least syntactically
+  // valid. Probe uses a real WebTransport open (not just a DNS check) via
+  // MoqClient.probe.
+  const relayProbeAbortRef = useRef<AbortController | null>(null);
+  const runRelayReachabilityCheck = useCallback((url: string) => {
+    if (!url || !url.startsWith("https://")) {
+      setRelayReachability({ kind: "error", reason: "Enter an https:// URL." });
+      return;
+    }
+    setRelayReachability({ kind: "checking" });
+    relayProbeAbortRef.current?.abort();
+    const ctl = new AbortController();
+    relayProbeAbortRef.current = ctl;
+    void (async () => {
+      const result = await MoqClient.probe(url, ctl.signal, 4000);
+      if (ctl.signal.aborted) return;
+      if (result.ok) {
+        setRelayReachability({ kind: "ok", latencyMs: result.latencyMs });
+      } else {
+        setRelayReachability({ kind: "error", reason: result.reason });
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => runRelayReachabilityCheck(relayUrl), 400);
+    return () => clearTimeout(t);
+  }, [relayUrl, runRelayReachabilityCheck]);
+
+  useEffect(() => {
+    return () => {
+      relayProbeAbortRef.current?.abort();
+    };
+  }, []);
+
   const handleSaveRelayUrl = () => {
+    if (!relayUrl || !relayUrl.startsWith("https://")) {
+      toast({ title: "Can't save", description: "Enter an https:// URL.", variant: "destructive" });
+      return;
+    }
     localStorage.setItem("vessel_relay_url", relayUrl);
+    notifyRelayUrlChanged();
     toast({ title: "Saved", description: "Live preview relay updated." });
   };
+
+  const handleRestoreDefaultRelay = () => {
+    setRelayUrl(DEFAULT_RELAY_URL);
+  };
+
+  const isRelayAtDefault = relayUrl === DEFAULT_RELAY_URL;
 
   const handleClearData = async () => {
     if (window.confirm("Permanently delete all recordings stored on this device?")) {
@@ -362,15 +416,51 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Live preview relay</label>
-                    <p className="text-xs text-vessel-text-muted">Powers the live video preview during recording.</p>
+                    <p className="text-xs text-vessel-text-muted">Powers the live video preview during recording. Recording quality is unaffected.</p>
                     <div className="flex gap-2 mt-2">
-                      <Input 
-                        value={relayUrl} 
-                        onChange={e => setRelayUrl(e.target.value)} 
+                      <Input
+                        value={relayUrl}
+                        onChange={e => setRelayUrl(e.target.value)}
+                        placeholder="https://relay.example.com"
                         className="bg-vessel-bg-base border-vessel-border text-vessel-text-primary"
                         data-testid="input-relay-url"
                       />
-                      <VesselButton variant="primary" size="sm" onClick={handleSaveRelayUrl}>Save</VesselButton>
+                      <VesselButton variant="primary" size="sm" onClick={handleSaveRelayUrl} data-testid="button-save-relay-url">Save</VesselButton>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 min-h-[1.25rem]">
+                      <div className="flex items-center gap-1.5 text-xs flex-1 min-w-0" data-testid="relay-reachability">
+                        {relayReachability.kind === "idle" && (
+                          <span className="text-vessel-text-muted truncate">Enter a URL to test it.</span>
+                        )}
+                        {relayReachability.kind === "checking" && (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 text-vessel-text-muted animate-spin shrink-0" />
+                            <span className="text-vessel-text-muted truncate">Testing relay...</span>
+                          </>
+                        )}
+                        {relayReachability.kind === "ok" && (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-vessel-green shrink-0" />
+                            <span className="text-vessel-green truncate">Reachable · {relayReachability.latencyMs} ms</span>
+                          </>
+                        )}
+                        {relayReachability.kind === "error" && (
+                          <>
+                            <AlertCircle className="w-3.5 h-3.5 text-vessel-red shrink-0" />
+                            <span className="text-vessel-red truncate">{relayReachability.reason}</span>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRestoreDefaultRelay}
+                        disabled={isRelayAtDefault}
+                        className="text-xs flex items-center gap-1 text-vessel-text-secondary hover:text-vessel-text-primary disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        data-testid="button-restore-default-relay"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Restore default
+                      </button>
                     </div>
                   </div>
 
