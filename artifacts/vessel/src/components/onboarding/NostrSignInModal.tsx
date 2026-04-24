@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Chrome, Copy, KeyRound, Loader2, QrCode } from "lucide-react";
+import { Chrome, Copy, FileKey2, KeyRound, Loader2, QrCode } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Dialog,
@@ -24,11 +24,12 @@ interface NostrSignInModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  onUseBackupKey?: () => void;
 }
 
 type Mode = "choose" | "extension" | "remote-paste" | "remote-invite";
 
-export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInModalProps) {
+export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey }: NostrSignInModalProps) {
   const {
     signInWithExtension,
     signInWithRemoteSigner,
@@ -259,6 +260,26 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
                 </div>
               </div>
             </button>
+
+            {onUseBackupKey && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleOpenChange(false);
+                  onUseBackupKey();
+                }}
+                className="w-full text-left p-4 rounded-xl bg-vessel-bg-base border border-vessel-border hover:border-vessel-accent/40 transition-colors flex items-start gap-3"
+                data-testid="button-choose-backup-key"
+              >
+                <FileKey2 className="w-5 h-5 text-vessel-accent shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-medium text-vessel-text-primary">Use your backup key</div>
+                  <div className="text-xs text-vessel-text-secondary mt-1">
+                    Paste the backup key Vessel gave you when you first set up your studio.
+                  </div>
+                </div>
+              </button>
+            )}
           </div>
         )}
 

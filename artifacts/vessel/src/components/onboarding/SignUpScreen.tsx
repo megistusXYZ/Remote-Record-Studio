@@ -338,6 +338,10 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
         open={showNostrModal}
         onOpenChange={setShowNostrModal}
         onSuccess={onComplete}
+        onUseBackupKey={() => {
+          setShowNostrModal(false);
+          setShowBackupModal(true);
+        }}
       />
     </div>
   );
