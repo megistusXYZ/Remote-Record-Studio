@@ -25,12 +25,18 @@ export default function Home() {
     setIsCreating(true);
     try {
       const result = await createSession(identity, { title });
+      try {
+        await navigator.clipboard.writeText(result.inviteUrl);
+        toast({ description: "Session created — invite link copied!" });
+      } catch {
+        toast({ description: "Session created — share the invite link from the lobby." });
+      }
       setLocation(`/session/${result.sessionId}`);
     } catch (err) {
       console.error(err);
       toast({
-        title: "Error",
-        description: "Failed to create session. Please try again.",
+        title: "Couldn't create session",
+        description: "Check your connection and try again.",
         variant: "destructive"
       });
     } finally {

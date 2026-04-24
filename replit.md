@@ -86,6 +86,24 @@
 - **Forbidden-term audit**: identifier names (e.g., `participantPubkey`, `deriveAvatarColorFromPubkey`) may contain forbidden words; rendered UI strings must not. The terms `Nostr / nsec / npub / keypair / pubkey / Blossom / MoQ / WebTransport / MediaRecorder / getUserMedia / IndexedDB / QUIC` never appear in user-visible text in any Module 4 file.
 - **Known limitations**: (1) Recorder is locked to the initial localStream — switching camera/mic mid-recording does not rebind the active recorder. (2) IndexedDB is unbounded — no quota check yet; future module should add retention limits. (3) Real Blossom upload is still simulated — chunks aren't actually sent to a remote server.
 
+### Sharing, Polish & Final Module (Module 5)
+- `artifacts/vessel/src/lib/session-archive.ts` — `publishSessionArchive(identity, sessionInput, tracks)`. Builds + signs Kind 1063 (per-track, NIP-94 inspired: `d`, `m`, `size`, `duration`, `session`, `alt`, optional `url` and `x` for SHA-256) and a Kind 30563 parameterized replaceable manifest (tags `d`=sessionId, `title`, `session`, `host`, `ended_at`, `track_count`, `e` references to each track). Uses `finalizeEvent` from `nostr-tools/pure` with `identity._secretKey` to compute id+pubkey+sig. Returns `{ archiveId (real naddr1...), shareUrl, perTrackUrls, manifestEventId, archivedAt }`. Publish itself is currently simulated (~600ms delay) — no actual relay POST yet. The `url` tag is omitted for local-only blobs (`idb://...`) so strict NIP-94 consumers don't see empty strings.
+- `artifacts/vessel/src/components/vault/ShareModal.tsx` — Three-tab Dialog (Share with Editor / Share Individual Tracks / Archive Info). Auto-archives on open per `session.id` with a `requestIdRef` versioning guard so stale completions from a previous open cycle or session swap can't clobber state. Each tab has copy-to-clipboard buttons with toast feedback. The "Archive Info" tab uses the user-friendly label "Archive ID" — never says "naddr" or "Nostr".
+- `artifacts/vessel/src/hooks/use-keyboard-shortcuts.ts` — Generic `useKeyboardShortcuts(shortcuts, enabled)` hook. Each `Shortcut` is `{ key, handler, preventDefault?, whenTyping? }`. Skips when modifier keys (cmd/ctrl/alt) are pressed. The `isNativeKeyTarget` helper expands beyond input/textarea/contentEditable: it also lets Space/Enter pass through to focused buttons / links / `[role=button]` so shortcuts never hijack native button activation.
+- `artifacts/vessel/src/components/lobby/LobbyEmptyState.tsx` — Microphone-on-stand SVG illustration + "Your studio is empty" / "Start a session to invite guests and record together."
+- `artifacts/vessel/src/components/lobby/WaitingForGuestsEmpty.tsx` — Two-chairs-facing SVG illustration + pulsing dot + "Waiting for guests…" / "Share the invite link above. They'll appear here when they join."
+- `artifacts/vessel/index.html` — Production SEO meta: title "Vessel — Studio-Quality Remote Recording", description, og:* and twitter:* tags, theme-color `#080b0f`.
+- **Integrations**:
+  - StudioScreen wires keyboard shortcuts: `M` toggles mic, `V` toggles camera, `Space` (host only) starts/stops recording. Shortcuts are disabled while SessionComplete overlay or InviteModal is open.
+  - VaultScreen replaced the placeholder more-menu on each session card with a proper "Share" button that opens ShareModal. Improved download-all toast feedback (counts downloaded vs. missing tracks).
+  - LobbyScreen replaced the basic "No sessions yet" card with `LobbyEmptyState`; replaced the lone "Waiting for guests…" text in the waiting room with `WaitingForGuestsEmpty`.
+  - `pages/home.tsx` — On `createSession` success, auto-copies the invite URL to clipboard and toasts "Session created — invite link copied!". On failure, friendly "Couldn't create session — Check your connection and try again."
+- **Deferred for a future module** (intentionally out-of-scope to keep this final module ship-ready):
+  - Onboarding coach marks (3-step popover tour)
+  - Page transition animations with framer-motion `AnimatePresence`
+  - PWA manifest + service worker (vite-plugin-pwa)
+  - Real Blossom HTTP upload (still simulated as in Module 4)
+
 ### Landing & UI Primitives (Module 0)
 - `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer). Handles `?session=XXX` query → redirect to `/join/XXX`.
 - `artifacts/vessel/src/components/vessel-ui/` — Design primitives (VesselButton, VesselCard, VesselBadge, AudioMeter, RecordingDot)

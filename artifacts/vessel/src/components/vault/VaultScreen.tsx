@@ -2,13 +2,14 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MoreHorizontal, Download, AlertTriangle, Check, Loader2 } from "lucide-react";
+import { Search, Share2, Download, AlertTriangle, Check, Loader2 } from "lucide-react";
 import { useListRecordings, getListRecordingsQueryKey } from "@workspace/api-client-react";
 import { downloadRecordingById, isLocalBlobUrl } from "../../lib/recordings-storage";
 import { useToast } from "../../hooks/use-toast";
 import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
 import { VaultSidebar } from "./VaultSidebar";
 import { EmptyState } from "./EmptyState";
+import { ShareModal, type ShareModalRecording } from "./ShareModal";
 import { VesselButton } from "../vessel-ui/VesselButton";
 
 export type VaultScreenProps = {
@@ -33,6 +34,12 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(new Set());
+  const [shareSession, setShareSession] = useState<{
+    id: string;
+    title: string;
+    createdAt: Date;
+    recordings: ShareModalRecording[];
+  } | null>(null);
 
   const { data: recordings, isLoading } = useListRecordings(
     { pubkey },
@@ -68,13 +75,43 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   };
 
   const handleDownloadAll = async (session: any) => {
+    let downloaded = 0;
+    let missing = 0;
     for (const r of session.recordings) {
       if (isLocalBlobUrl(r.blobUrl)) {
         await downloadRecordingById(r.id, `${r.participantName}_track.webm`);
+        downloaded++;
       } else {
-        toast({ description: "Local copy not available — was this recording made on a different device?" });
+        missing++;
       }
     }
+    if (downloaded > 0) {
+      toast({ description: `Downloading ${downloaded} track${downloaded === 1 ? "" : "s"}…` });
+    }
+    if (missing > 0) {
+      toast({
+        variant: "destructive",
+        description: `${missing} track${missing === 1 ? "" : "s"} not available on this device.`,
+      });
+    }
+  };
+
+  const handleShareSession = (session: any) => {
+    setShareSession({
+      id: session.id,
+      title: session.title,
+      createdAt: session.createdAt,
+      recordings: session.recordings.map((r: any) => ({
+        id: r.id,
+        ownerPubkey: r.ownerPubkey,
+        participantName: r.participantName,
+        blobUrl: r.blobUrl,
+        blobHash: r.blobHash,
+        mimeType: r.mimeType,
+        sizeBytes: r.sizeBytes,
+        durationSeconds: r.durationSeconds,
+      })),
+    });
   };
 
   const handleDownloadTrack = async (r: any) => {
@@ -161,9 +198,15 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                     <VesselButton variant="ghost" size="sm" onClick={() => toggleExpand(session.id)} data-testid={`button-toggle-tracks-${session.id}`}>
                       {isExpanded ? "Hide Tracks" : "View Tracks"}
                     </VesselButton>
-                    <button className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-vessel-bg-base transition-colors ml-auto text-vessel-text-secondary">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
+                    <VesselButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleShareSession(session)}
+                      className="ml-auto"
+                      data-testid={`button-share-session-${session.id}`}
+                    >
+                      <Share2 className="w-4 h-4 mr-2" /> Share
+                    </VesselButton>
                   </div>
 
                   <AnimatePresence>
@@ -208,6 +251,15 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
           )}
         </div>
       </main>
+      {shareSession && (
+        <ShareModal
+          open={!!shareSession}
+          onOpenChange={(o) => {
+            if (!o) setShareSession(null);
+          }}
+          session={shareSession}
+        />
+      )}
     </div>
   );
 }
