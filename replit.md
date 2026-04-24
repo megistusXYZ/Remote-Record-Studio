@@ -34,18 +34,22 @@
 
 ## Pages
 
-- `/` — Onboarding (name entry, generates identity silently)
+- `/` — Landing page (marketing; auto-redirects to /home if identity exists in localStorage)
+- `/start` — Onboarding (name entry, generates identity silently, redirects to /home)
 - `/home` — Dashboard (vault stats, recent sessions + recordings)
 - `/session/new` — Create a new recording session
 - `/session/:id` — Studio room (recording controls, participants, invite link)
-- `/join/:inviteCode` — Guest join flow
+- `/join/:inviteCode` — Guest join flow (invite code is resolved to real session UUID on the backend)
 - `/vault` — Recordings list
 - `/settings` — Profile settings + Advanced (identity export)
 
 ## Key Files
 
 - `artifacts/vessel/src/hooks/use-identity.ts` — Identity abstraction (hides keypair)
+- `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer)
 - `artifacts/vessel/src/pages/` — All page components
+- `artifacts/vessel/src/components/vessel-ui/` — Brand-specific UI primitives (VesselButton, VesselCard, VesselBadge, AudioMeter, RecordingDot)
+- `artifacts/vessel/src/index.css` — Broadcast Dark design system (CSS vars, Tailwind theme, utility classes)
 - `artifacts/api-server/src/routes/` — API route handlers
 - `lib/db/src/schema/` — Database schema (identities, sessions, participants, recordings)
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (source of truth)

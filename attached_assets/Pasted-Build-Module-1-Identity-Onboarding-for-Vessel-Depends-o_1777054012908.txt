@@ -1,0 +1,109 @@
+Build Module 1: Identity & Onboarding for Vessel.
+Depends on Module 0 design system.
+
+=== IDENTITY ABSTRACTION LAYER (src/lib/identity.ts) ===
+
+This file is the wall between Nostr internals and the rest of the app.
+NOTHING in the UI layer imports nostr-tools directly. Everything goes through identity.ts.
+
+export interface VesselIdentity {
+  displayName: string;
+  avatarColor: string;       // hex, derived from pubkey
+  isGuest: boolean;
+  // These are NEVER shown to users unless they request export:
+  _pubkey: string;
+  _signer: object;           // applesauce signer instance
+}
+
+createNewIdentity(displayName: string, email?: string): VesselIdentity
+  - Generates Nostr keypair silently using generateSecretKey() from nostr-tools
+  - Stores encrypted nsec in localStorage under 'vessel_identity' 
+    (encrypt with a key derived from displayName + deviceFingerprint, not a password)
+  - Creates a SimpleSigner from applesauce-signers
+  - Returns VesselIdentity (no keypair details exposed)
+  - Also publishes a Kind 0 (profile) event to relays with name + optional picture
+
+createGuestIdentity(displayName: string): VesselIdentity
+  - Same as above but isGuest: true
+  - Stored in sessionStorage only (gone when tab closes)
+  - Does NOT publish a Kind 0 event
+
+loadSavedIdentity(): VesselIdentity | null
+  - Checks localStorage for saved identity
+  - Returns null if not found or if decryption fails
+
+exportIdentityBackup(identity: VesselIdentity): string
+  - Returns a backup string (nsec bech32) for power users
+  - ONLY called from Settings > Export Identity
+
+=== SIGN UP SCREEN (src/components/onboarding/SignUpScreen.tsx) ===
+
+Two-step flow, minimal and clean:
+
+Step 1 — "Create your studio":
+  - Full-screen centered card, Vessel logo at top
+  - Heading (Syne Bold): "What should we call you?"
+  - Subtext: "This is how you'll appear to guests in your studio."
+  - Large Input: "Your name" (autofocused)
+  - Optional small Input: "Email (for account recovery)" with helper: "Optional. We'll never spam you."
+  - Primary CTA: "Create My Studio →"
+  - Below CTA (small muted text): "Already have a studio? Sign in with your backup key"
+    (links to a modal with nsec import)
+  - NO mention of accounts, passwords, Nostr, or crypto
+
+Step 2 — "Your studio is ready" (shown for 2 seconds, then auto-advance):
+  - Large animated checkmark (CSS animation, accent color)
+  - Heading: "Welcome to Vessel, [Name]."
+  - Subtext: "Your studio is set up and ready."
+  - Auto-navigates to Lobby after 2s (or user can click "Enter Studio")
+
+=== GUEST JOIN SCREEN (src/components/onboarding/GuestJoinScreen.tsx) ===
+
+This is triggered when URL has ?session= and ?host= params.
+The entire experience must take under 15 seconds and require zero prior knowledge.
+
+Layout: Full-screen, centered. Background has the subtle gradient from landing page.
+
+Top: Small text "You've been invited to record with" + host's display name in bold
+Avatar of host (colored initials circle) centered, large (80px)
+
+Heading (Syne): "Ready to record with [Host Name]?"
+Subtext: "You'll record from your browser — no app download needed.
+          Your audio and video stay on your device until the session ends."
+
+Input: "Your name" (what others will see)
+Checkbox: "I agree to be recorded in this session" (required)
+
+Primary CTA: "Join the Studio →"
+
+On click:
+  - Creates guest identity with their name
+  - Shows brief loading state: "Connecting to [Host Name]'s studio..."
+  - Navigates to Lobby
+
+Below CTA: small muted text: "Your files will be delivered to you after recording ends."
+
+DO NOT show: session IDs, relay URLs, pubkeys, protocol details, or any technical info.
+
+=== GLOBAL STATE (src/store/identityStore.ts) ===
+
+Use Zustand:
+  interface IdentityStore {
+    identity: VesselIdentity | null;
+    isLoaded: boolean;
+    setIdentity: (identity: VesselIdentity) => void;
+    clearIdentity: () => void;
+  }
+
+=== APP ROUTING (App.tsx) ===
+
+Routing logic (no router library needed, use URL params + state):
+  - ?session= in URL + no identity → GuestJoinScreen
+  - ?session= in URL + identity exists → Lobby (auto-join)
+  - No session, no identity → LandingPage (with Sign Up modal)
+  - No session, identity exists → Lobby (home screen)
+  - ?play= in URL → Vault/SessionPlayer
+
+Test: Open app fresh (no localStorage). Confirm landing page loads.
+Click "Create My Studio" → complete sign-up → confirm "studio is ready" screen → lobby.
+Test guest flow: add ?session=abc&host=xyz to URL → GuestJoinScreen → lobby.
