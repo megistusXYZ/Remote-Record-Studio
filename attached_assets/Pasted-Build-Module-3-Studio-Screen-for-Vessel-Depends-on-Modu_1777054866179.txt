@@ -1,0 +1,101 @@
+Build Module 3: Studio Screen for Vessel.
+Depends on Modules 0–2.
+
+=== STUDIO SCREEN (src/components/studio/StudioScreen.tsx) ===
+
+This is the main recording interface. Think: broadcast control room meets modern SaaS.
+
+LAYOUT:
+  Full screen. Three zones:
+  1. Header bar (48px): Logo + session name + recording status + participant count + settings icon
+  2. Main area: Video grid (flex, auto-layout)
+  3. Control bar (80px, fixed bottom): mic, camera, record controls
+
+HEADER BAR:
+  Left: "Vessel" wordmark (small) + "/" + session display name ("Session with [Guest Name]")
+  Center: RecordingDot (pulsing red) + "Recording • 00:14:32" timer when active
+           OR "Ready to record" with green dot when idle
+  Right: Participant count badge + Settings gear icon
+
+VIDEO GRID (src/components/studio/VideoGrid.tsx):
+  - CSS Grid with auto-fit columns, min 280px, gap 12px
+  - 1 participant: centered, large tile (max 720px wide)
+  - 2 participants: side by side, equal
+  - 3-4: 2x2 grid
+  - 5+: 3-column wrapping grid
+
+VIDEO TILE (src/components/studio/VideoTile.tsx):
+  - Rounded corners (16px), bg-surface background
+  - Video element fills the tile (object-fit: cover)
+  - If no video: centered avatar (large initials circle, colored) on bg-elevated background
+  - Bottom gradient overlay (transparent → black at 40% opacity) for label readability
+  - Bottom-left: Avatar (sm) + display name label in DM Sans
+  - Bottom-right: AudioMeter component (5 animated bars)
+  - Top-left: small "LOCAL" badge on the user's own tile
+  - If muted: red mic-slash icon overlaid, subtle red border on tile
+  - Hover: subtle border-strong glow
+  - "Connecting..." placeholder state with shimmer animation
+
+CONTROL BAR (src/components/studio/ControlBar.tsx):
+  Full-width, bg-overlay, backdrop-blur, border-top border
+  Layout: three groups — Left | Center | Right
+
+  Left group:
+    - Settings/Devices button: gear icon, opens device picker (camera/mic selector in a popover)
+
+  Center group (the main controls):
+    - Mic toggle button: round (56px), icon-only. Active: bg-surface. Muted: bg-red/20, red icon.
+      Tooltip: "Mute microphone" / "Unmute microphone"
+    - Camera toggle: same style as mic toggle
+    - RECORD button: the hero control.
+      Idle state: round, large (68px), accent background, white circle icon + "Record" label below
+      Active state: pulsing red background, square icon (stop symbol) + "Stop • 00:14:32" label
+      Transition: 400ms morph animation between states (framer-motion layoutId)
+
+  Right group:
+    - "Invite" button (ghost, small): opens InviteModal
+    - "Leave" button (ghost, danger color): confirms then exits
+
+DEVICE PICKER POPOVER:
+  Opens above the control bar.
+  Lists available cameras and microphones from enumerateDevices().
+  Current device highlighted with accent dot.
+  Preview: small live video feed of selected camera.
+
+RECORDING STATE MANAGEMENT:
+  When host clicks Record:
+    1. All participants' clients start their local ChunkedRecorder simultaneously
+       (via Nostr signaling event: Kind 1 ephemeral with tag ['action', 'start-recording', sessionId])
+    2. Header bar transitions to recording state, timer starts
+    3. Control bar Record button transforms to Stop button
+
+  When host clicks Stop:
+    1. Signaling event sent to all clients to stop recording
+    2. Transition overlay appears: "Saving your session..."
+       Shows progress: "[Name]'s track: 12/12 chunks saved ✓"
+                       "[Guest Name]'s track: uploading... 8/12"
+       (This is Blossom upload progress, user-friendly language)
+    3. All green: auto-navigate to Vault/SessionComplete screen
+
+MOBILE LAYOUT:
+  - Single column video tiles, stacked
+  - Control bar icons slightly larger (touch targets min 44px)
+  - Header simplified to just recording status + leave button
+
+=== MoQ TRANSPORT (src/lib/moq.ts) ===
+
+Build as described in previous version but with graceful degradation UI:
+
+If WebTransport unavailable:
+  - VideoTile shows avatar-only (no live video)
+  - Small banner at top: "Live preview is limited in this browser.
+    Your recording will be full quality." (amber, dismissible)
+  - Recording still works perfectly via MediaRecorder
+
+Connection quality indicator:
+  Three-dot icon in header. Color = green/amber/red based on latency.
+  Hover tooltip: "Connection quality: Good" / "Fair" / "Poor"
+  (Never shows technical details like "87ms RTT to relay.quic.video")
+
+Test: Two tabs, both in Studio. Confirm video tiles show, mic/camera toggles work visually,
+Record button transitions correctly, and control bar feels polished at all viewport sizes.

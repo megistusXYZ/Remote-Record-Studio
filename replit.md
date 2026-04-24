@@ -53,6 +53,14 @@
 - `artifacts/vessel/src/components/onboarding/BackupKeySignInModal.tsx` — Power-user nsec restore modal.
 - `artifacts/vessel/src/components/onboarding/GuestJoinScreen.tsx` — Zero-friction guest join; fetches session via invite code, shows host avatar, requires explicit consent.
 
+### Lobby & Session Management (Module 2)
+- `artifacts/vessel/src/lib/session.ts` — Session API wrappers: `createSession(identity, { title })`, `joinSession(idOrInvite, identity)`, `cancelSession(id)`, `buildInviteUrl(inviteCode)` (returns canonical `/join/:code` URL), `extractInviteCodeFromInput(raw)` (handles full URLs OR bare codes — supports both new `/join/:code` and legacy `?session=` formats).
+- `artifacts/vessel/src/components/lobby/LobbyScreen.tsx` — Main lobby with two states: `default` (greeting + create card + join card + recent sessions sidebar) and `waitingRoom` (invite link + QR + participant list + Start/Cancel). Pure presentational; all mutations come through props.
+- `artifacts/vessel/src/components/lobby/InviteModal.tsx` — Dialog with copy-to-clipboard + QR code (qrcode.react) + Web Share API.
+- `artifacts/vessel/src/components/lobby/ParticipantCard.tsx` — Animated participant row with avatar (color from pubkey), role/you badge, status dot, mic/cam icons.
+- `artifacts/vessel/src/pages/home.tsx` — Thin orchestrator wiring LobbyScreen state="default" with createSession/joinSession handlers; redirects to `/` if no identity.
+- `artifacts/vessel/src/pages/session-studio.tsx` — When `session.status === "waiting"`, renders LobbyScreen state="waitingRoom" (host sees Start/Cancel; guests see "host will start shortly"). Polls `getSession` every 3s while waiting (refetchInterval). When status flips to "live", existing studio UI takes over.
+
 ### Landing & UI Primitives (Module 0)
 - `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer). Handles `?session=XXX` query → redirect to `/join/XXX`.
 - `artifacts/vessel/src/components/vessel-ui/` — Design primitives (VesselButton, VesselCard, VesselBadge, AudioMeter, RecordingDot)
