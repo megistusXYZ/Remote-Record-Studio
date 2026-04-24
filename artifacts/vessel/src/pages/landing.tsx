@@ -9,6 +9,7 @@ import { AudioMeter } from "../components/vessel-ui/AudioMeter";
 import { RecordingDot } from "../components/vessel-ui/RecordingDot";
 import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
 import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-react";
+import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -200,7 +201,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}>
               <VesselCard variant="interactive" className="p-8 h-full">
-                <Mic className="w-12 h-12 text-vessel-accent mb-6" strokeWidth={1.5} />
+                <SupportPersonIcon className="w-12 h-12 text-vessel-accent mb-6" />
                 <h3 className="font-display font-bold text-xl mb-3">Lossless Local Recording</h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
                   Every participant records directly on their device at full quality — not a compressed video call screengrab.
