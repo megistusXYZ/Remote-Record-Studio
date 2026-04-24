@@ -13,6 +13,11 @@ import {
   type VesselIdentity,
 } from "../lib/identity";
 
+export {
+  startNostrConnectInvite,
+  type NostrConnectInvite,
+} from "../lib/identity";
+
 export type { VesselIdentity };
 
 export type Identity = {
@@ -95,6 +100,22 @@ export function useIdentity() {
     [setIdentity, persistOnServer]
   );
 
+  /**
+   * Adopt an identity that the caller has already constructed (e.g. via
+   * `startNostrConnectInvite()` → `awaitConnection()`). Performs the same
+   * post-sign-in side effects as the dedicated sign-in helpers above:
+   * stores the identity in the Zustand store and best-effort registers
+   * the pubkey with the backend.
+   */
+  const adoptIdentity = useCallback(
+    async (id: VesselIdentity) => {
+      setIdentity(id);
+      await persistOnServer(id);
+      return id;
+    },
+    [setIdentity, persistOnServer]
+  );
+
   const setDisplayName = useCallback(
     async (name: string) => {
       if (!identity) {
@@ -130,6 +151,7 @@ export function useIdentity() {
     importFromBackup,
     signInWithExtension,
     signInWithRemoteSigner,
+    adoptIdentity,
     isNostrExtensionAvailable,
     signOut,
   };

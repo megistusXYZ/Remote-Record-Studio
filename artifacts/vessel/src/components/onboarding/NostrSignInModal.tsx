@@ -19,7 +19,6 @@ import {
   type NostrConnectInvite,
   type VesselIdentity,
 } from "../../lib/identity";
-import { useIdentityStore } from "../../store/identityStore";
 
 interface NostrSignInModalProps {
   open: boolean;
@@ -39,8 +38,12 @@ type Mode = "choose" | "extension" | "remote-paste" | "remote-invite";
  *     keypair baked in) for the user to scan/paste in their signer.
  */
 export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInModalProps) {
-  const { signInWithExtension, signInWithRemoteSigner, isNostrExtensionAvailable } = useIdentity();
-  const setIdentity = useIdentityStore((s) => s.setIdentity);
+  const {
+    signInWithExtension,
+    signInWithRemoteSigner,
+    adoptIdentity,
+    isNostrExtensionAvailable,
+  } = useIdentity();
   const [mode, setMode] = useState<Mode>("choose");
   const [displayName, setDisplayName] = useState("");
   const [bunkerUri, setBunkerUri] = useState("");
@@ -154,9 +157,10 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       // Block until the signer connects. This won't block the UI — the modal
       // shows a "waiting…" indicator and a Cancel button.
       const identity: VesselIdentity = await i.awaitConnection(displayName.trim());
-      // We bypass useIdentity().signInWithRemoteSigner here since we've already
-      // got the identity; just hand it to the store and notify the server.
-      setIdentity(identity);
+      // Route through useIdentity().adoptIdentity so the post-sign-in side
+      // effects (Zustand store + best-effort backend register) match the other
+      // sign-in paths.
+      await adoptIdentity(identity);
       inviteRef.current = null;
       setInvite(null);
       onSuccess();
