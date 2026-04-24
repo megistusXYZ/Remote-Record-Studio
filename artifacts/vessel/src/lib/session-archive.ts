@@ -1,4 +1,4 @@
-import { finalizeEvent, type Event } from "nostr-tools/pure";
+import type { Event } from "nostr-tools/pure";
 import { nip19 } from "nostr-tools";
 import type { VesselIdentity } from "./identity";
 
@@ -48,12 +48,12 @@ export type SessionArchiveResult = {
 const KIND_FILE_METADATA = 1063;
 const KIND_SESSION_MANIFEST = 30563;
 
-function buildTrackEvent(
+async function buildTrackEvent(
   identity: VesselIdentity,
   session: SessionArchiveInput,
   track: TrackDescriptor,
   createdAt: number
-): Event {
+): Promise<Event> {
   const tags: string[][] = [
     ["d", `vessel-track-${track.recordingId}`],
     ["m", track.mimeType],
@@ -78,16 +78,16 @@ function buildTrackEvent(
     content: `${track.participantName} — ${session.sessionTitle}`,
   };
 
-  return finalizeEvent(template, identity._secretKey);
+  return identity._signer.signEvent(template) as Promise<Event>;
 }
 
-function buildManifestEvent(
+async function buildManifestEvent(
   identity: VesselIdentity,
   session: SessionArchiveInput,
   trackEvents: Event[],
   trackDescriptors: TrackDescriptor[],
   createdAt: number
-): Event {
+): Promise<Event> {
   const tags: string[][] = [
     ["d", session.sessionId],
     ["title", session.sessionTitle],
@@ -123,7 +123,7 @@ function buildManifestEvent(
     content,
   };
 
-  return finalizeEvent(template, identity._secretKey);
+  return identity._signer.signEvent(template) as Promise<Event>;
 }
 
 function buildAppShareUrl(archiveId: string, sessionId: string): string {
@@ -156,7 +156,7 @@ export async function publishSessionArchive(
   session: SessionArchiveInput,
   tracks: TrackDescriptor[]
 ): Promise<SessionArchiveResult> {
-  if (!identity._secretKey) {
+  if (!identity._signer) {
     throw new Error("Identity is not ready to sign archive events");
   }
   if (!tracks.length) {
@@ -165,8 +165,10 @@ export async function publishSessionArchive(
 
   const createdAt = Math.floor(Date.now() / 1000);
 
-  const trackEvents = tracks.map((t) => buildTrackEvent(identity, session, t, createdAt));
-  const manifestEvent = buildManifestEvent(
+  const trackEvents = await Promise.all(
+    tracks.map((t) => buildTrackEvent(identity, session, t, createdAt))
+  );
+  const manifestEvent = await buildManifestEvent(
     identity,
     session,
     trackEvents,

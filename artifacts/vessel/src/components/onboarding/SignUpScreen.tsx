@@ -4,6 +4,7 @@ import { useIdentity } from "../../hooks/use-identity";
 import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
+import { NostrSignInModal } from "./NostrSignInModal";
 
 export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const { createNewIdentity, displayName: storedName } = useIdentity();
@@ -13,6 +14,7 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showNostrModal, setShowNostrModal] = useState(false);
   const submitLockRef = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,12 +37,11 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   };
 
   useEffect(() => {
-    if (step === 2) {
-      const timer = setTimeout(() => {
-        onComplete();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+    if (step !== 2) return undefined;
+    const timer = setTimeout(() => {
+      onComplete();
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [step, onComplete]);
 
   return (
@@ -110,6 +111,24 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
                 Create My Studio &rarr;
               </VesselButton>
 
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-vessel-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase tracking-wider">
+                  <span className="bg-vessel-bg-base px-3 text-vessel-text-muted">or</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowNostrModal(true)}
+                className="w-full h-12 rounded-xl bg-vessel-bg-surface border border-vessel-border hover:border-vessel-accent/40 transition-colors text-vessel-text-primary text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
+                data-testid="button-sign-in-nostr"
+              >
+                Sign in with Nostr
+              </button>
+
               <div className="mt-6 text-center text-sm text-vessel-text-muted">
                 Already have a studio?{" "}
                 <button
@@ -176,6 +195,12 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
       <BackupKeySignInModal
         open={showBackupModal}
         onOpenChange={setShowBackupModal}
+        onSuccess={onComplete}
+      />
+
+      <NostrSignInModal
+        open={showNostrModal}
+        onOpenChange={setShowNostrModal}
         onSuccess={onComplete}
       />
     </div>

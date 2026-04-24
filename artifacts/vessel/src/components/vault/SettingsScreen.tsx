@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Settings, ChevronDown, Copy } from "lucide-react";
+import { Settings, ChevronDown, Copy, Chrome, KeyRound, ShieldCheck } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useToast } from "../../hooks/use-toast";
 import { clearAllLocalRecordings } from "../../lib/recordings-storage";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import {
+  deriveAvatarColorFromPubkey,
+  describeSignerType,
+  exportIdentityBackup,
+  getInitials,
+} from "../../lib/identity";
 import { VaultSidebar } from "./VaultSidebar";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
@@ -19,7 +24,7 @@ const SWATCH_COLORS = ["#00d4aa", "#ff4757", "#ffa502", "#5352ed", "#ff6b9d", "#
 
 export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [, setLocation] = useLocation();
-  const { displayName, setDisplayName, signOut, avatarColor } = useIdentity();
+  const { identity, displayName, setDisplayName, signOut, signerType } = useIdentity();
   const { toast } = useToast();
 
   const [nameInput, setNameInput] = useState(displayName || "");
@@ -33,6 +38,11 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
+  const [backupValue, setBackupValue] = useState<string | null>(null);
+
+  const isLocalSigner = signerType === "local";
+  const signerLabel = signerType ? describeSignerType(signerType) : "—";
+  const SignerIcon = signerType === "extension" ? Chrome : signerType === "remote" ? KeyRound : ShieldCheck;
 
   useEffect(() => {
     localStorage.setItem("vessel_avatar_color", selectedColor);
@@ -75,8 +85,27 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
     }
   };
 
+  const handleSwitchSignIn = () => {
+    if (window.confirm("Sign out so you can sign in a different way? Your local recordings stay safe.")) {
+      signOut();
+      setLocation("/");
+    }
+  };
+
+  const handleShowBackup = () => {
+    if (!identity) return;
+    try {
+      const nsec = exportIdentityBackup(identity);
+      setBackupValue(nsec);
+      setShowBackup(true);
+    } catch (err: any) {
+      toast({ title: "Not available", description: err.message, variant: "destructive" });
+    }
+  };
+
   const handleCopyBackup = () => {
-    navigator.clipboard.writeText(pubkey);
+    if (!backupValue) return;
+    navigator.clipboard.writeText(backupValue);
     toast({ title: "Copied", description: "Backup key copied to clipboard." });
   };
 
@@ -131,6 +160,30 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                       />
                     ))}
                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Sign-in method</label>
+                <div className="flex items-center justify-between gap-3 mt-2 p-3 rounded-lg bg-vessel-bg-base border border-vessel-border">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-vessel-bg-elevated border border-vessel-border flex items-center justify-center shrink-0">
+                      <SignerIcon className="w-4 h-4 text-vessel-accent" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-vessel-text-primary truncate" data-testid="text-signer-type">{signerLabel}</div>
+                      <div className="text-xs text-vessel-text-muted truncate">
+                        {signerType === "local"
+                          ? "Encrypted on this device only."
+                          : signerType === "extension"
+                          ? "Signing happens inside your browser extension."
+                          : "Signing happens in your remote signer app."}
+                      </div>
+                    </div>
+                  </div>
+                  <VesselButton variant="ghost" size="sm" onClick={handleSwitchSignIn} data-testid="button-switch-signin" className="shrink-0">
+                    Switch
+                  </VesselButton>
                 </div>
               </div>
 
@@ -197,26 +250,35 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Export backup key</label>
-                    <p className="text-xs text-vessel-text-muted">This key is your account. Keep it somewhere safe &mdash; it lets you restore your studio on any device.</p>
-                    <div className="mt-2">
-                      {!showBackup ? (
-                        <VesselButton variant="ghost" size="sm" onClick={() => setShowBackup(true)} data-testid="button-show-backup">
-                          Show backup key
-                        </VesselButton>
-                      ) : (
-                        <div className="flex gap-2 items-center">
-                          <code className="flex-1 font-mono-vessel text-xs select-all break-all p-3 rounded-lg bg-vessel-bg-base border border-vessel-border-strong text-vessel-text-secondary">
-                            {pubkey}
-                          </code>
-                          <VesselButton variant="ghost" size="sm" onClick={handleCopyBackup} data-testid="button-copy-backup" className="shrink-0">
-                            <Copy className="w-4 h-4 mr-2" /> Copy
+                  {isLocalSigner ? (
+                    <div className="space-y-1.5">
+                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Export backup key</label>
+                      <p className="text-xs text-vessel-text-muted">This key is your account. Keep it somewhere safe &mdash; it lets you restore your studio on any device.</p>
+                      <div className="mt-2">
+                        {!showBackup ? (
+                          <VesselButton variant="ghost" size="sm" onClick={handleShowBackup} data-testid="button-show-backup">
+                            Show backup key
                           </VesselButton>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="flex gap-2 items-center">
+                            <code className="flex-1 font-mono-vessel text-xs select-all break-all p-3 rounded-lg bg-vessel-bg-base border border-vessel-border-strong text-vessel-text-secondary">
+                              {backupValue}
+                            </code>
+                            <VesselButton variant="ghost" size="sm" onClick={handleCopyBackup} data-testid="button-copy-backup" className="shrink-0">
+                              <Copy className="w-4 h-4 mr-2" /> Copy
+                            </VesselButton>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Backup key</label>
+                      <p className="text-xs text-vessel-text-muted">
+                        Your key lives in your {signerType === "extension" ? "browser extension" : "signer app"}, not in Vessel. Use that app to back it up or move it to a new device.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="border border-vessel-red/20 rounded-xl p-4 space-y-3 bg-vessel-red/5 mt-8">
                     <h3 className="font-display text-base font-bold text-vessel-red">Danger zone</h3>

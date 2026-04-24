@@ -1,18 +1,53 @@
 import { generateSecretKey, getPublicKey } from "nostr-tools/pure";
 import { nip19 } from "nostr-tools";
+import {
+  ExtensionSigner,
+  ExtensionMissingError,
+  NostrConnectSigner,
+  PrivateKeySigner,
+  type ISigner,
+} from "applesauce-signers";
+import { parseBunkerURI } from "applesauce-signers/helpers/nostr-connect";
+import { ensureNostrConnectWired } from "./relay-pool";
+
+/** Public alias so other modules don't have to depend on applesauce types directly. */
+export type Signer = ISigner;
+
+export type SignerType = "local" | "extension" | "remote";
 
 export interface VesselIdentity {
   displayName: string;
   avatarColor: string;
   isGuest: boolean;
   email?: string;
+  /** Which kind of signer is backing this identity. */
+  signerType: SignerType;
+  /** Cached public key. Populated at sign-in / restore time. */
   _pubkey: string;
-  _secretKey: Uint8Array;
-  _signer: unknown;
+  /** Only present when signerType === "local" — needed for backup-key export. */
+  _secretKey?: Uint8Array;
+  /** Canonical signer for all event signing. Always present. */
+  _signer: Signer;
+  /** Reconnect metadata for remote signers. Only present when signerType === "remote". */
+  _remoteMeta?: RemoteSignerMeta;
 }
 
-const STORAGE_KEY = "vessel_identity_v2";
+export interface RemoteSignerMeta {
+  /** Original bunker:// URI, kept so we can show the user where they're signed in. */
+  bunkerUri: string;
+  /** Relays the bunker listens on. */
+  relays: string[];
+  /** Pubkey of the remote signer app. */
+  remotePubkey: string;
+  /** Hex-encoded secret key for our local NIP-46 client. */
+  clientSecretKeyHex: string;
+}
+
+const STORAGE_KEY_V3 = "vessel_identity_v3";
+const STORAGE_KEY_LEGACY = "vessel_identity_v2";
 const PBKDF2_ITERATIONS = 100_000;
+
+/* ----------------------------- byte helpers ------------------------------ */
 
 function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
@@ -25,6 +60,14 @@ function base64ToBytes(b64: string): Uint8Array {
   const bytes = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
   return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) {
+    s += bytes[i].toString(16).padStart(2, "0");
+  }
+  return s;
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -49,6 +92,8 @@ function deriveAvatarColor(pubkey: string): string {
   return `hsl(${hue}, 65%, 55%)`;
 }
 
+/* --------------------------- crypto envelope ----------------------------- */
+
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -56,14 +101,14 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
     enc.encode(passphrase),
     "PBKDF2",
     false,
-    ["deriveKey"]
+    ["deriveKey"],
   );
   return crypto.subtle.deriveKey(
     { name: "PBKDF2", salt: salt as BufferSource, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
-    ["encrypt", "decrypt"]
+    ["encrypt", "decrypt"],
   );
 }
 
@@ -71,65 +116,87 @@ interface EncryptedBlob {
   iv: string;
   salt: string;
   ciphertext: string;
-  displayName: string;
-  email?: string;
 }
 
-async function encryptSecret(
-  secretKey: Uint8Array,
-  displayName: string,
-  email: string | undefined
+async function encryptBytes(
+  data: Uint8Array,
+  passphraseSeed: string,
 ): Promise<EncryptedBlob> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const passphrase = displayName + "::" + getDeviceFingerprint();
+  const passphrase = passphraseSeed + "::" + getDeviceFingerprint();
   const key = await deriveKey(passphrase, salt);
   const ct = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv as BufferSource },
     key,
-    secretKey as BufferSource
+    data as BufferSource,
   );
   return {
     iv: bytesToBase64(iv),
     salt: bytesToBase64(salt),
     ciphertext: bytesToBase64(new Uint8Array(ct)),
-    displayName,
-    email,
   };
 }
 
-async function decryptSecret(blob: EncryptedBlob): Promise<Uint8Array> {
+async function decryptBytes(blob: EncryptedBlob, passphraseSeed: string): Promise<Uint8Array> {
   const iv = base64ToBytes(blob.iv);
   const salt = base64ToBytes(blob.salt);
   const ciphertext = base64ToBytes(blob.ciphertext);
-  const passphrase = blob.displayName + "::" + getDeviceFingerprint();
+  const passphrase = passphraseSeed + "::" + getDeviceFingerprint();
   const key = await deriveKey(passphrase, salt);
   const pt = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv as BufferSource },
     key,
-    ciphertext as BufferSource
+    ciphertext as BufferSource,
   );
   return new Uint8Array(pt);
 }
 
-async function tryCreateSigner(secretKey: Uint8Array): Promise<unknown> {
-  try {
-    const mod = (await import("applesauce-signers")) as unknown as {
-      SimpleSigner?: new (sk: Uint8Array) => unknown;
-    };
-    if (mod.SimpleSigner) return new mod.SimpleSigner(secretKey);
-  } catch {
-    // Signer is optional for Module 1 — relays come in Module 2
-  }
-  return null;
+/* ---------------------------- stored shapes ------------------------------ */
+
+interface StoredLocalV3 {
+  v: 3;
+  signerType: "local";
+  displayName: string;
+  email?: string;
+  encrypted: EncryptedBlob; // encrypts the secretKey bytes
 }
 
-function buildIdentity(
+interface StoredExtensionV3 {
+  v: 3;
+  signerType: "extension";
+  displayName: string;
+  pubkey: string;
+}
+
+interface StoredRemoteV3 {
+  v: 3;
+  signerType: "remote";
+  displayName: string;
+  pubkey: string;
+  bunkerUri: string;
+  relays: string[];
+  remotePubkey: string;
+  clientSecret: EncryptedBlob; // encrypts the local NIP-46 client secret key bytes
+}
+
+type StoredV3 = StoredLocalV3 | StoredExtensionV3 | StoredRemoteV3;
+
+interface StoredV2Legacy {
+  iv: string;
+  salt: string;
+  ciphertext: string;
+  displayName: string;
+  email?: string;
+}
+
+/* ------------------------------ build helpers ---------------------------- */
+
+function buildLocalIdentity(
   displayName: string,
   secretKey: Uint8Array,
   email: string | undefined,
   isGuest: boolean,
-  signer: unknown
 ): VesselIdentity {
   const pubkey = getPublicKey(secretKey);
   return {
@@ -137,71 +204,314 @@ function buildIdentity(
     avatarColor: deriveAvatarColor(pubkey),
     isGuest,
     email,
+    signerType: "local",
     _pubkey: pubkey,
     _secretKey: secretKey,
+    _signer: new PrivateKeySigner(secretKey),
+  };
+}
+
+function buildExtensionIdentity(
+  displayName: string,
+  pubkey: string,
+  signer: ExtensionSigner,
+): VesselIdentity {
+  return {
+    displayName,
+    avatarColor: deriveAvatarColor(pubkey),
+    isGuest: false,
+    signerType: "extension",
+    _pubkey: pubkey,
     _signer: signer,
   };
 }
 
+function buildRemoteIdentity(
+  displayName: string,
+  pubkey: string,
+  signer: NostrConnectSigner,
+  meta: RemoteSignerMeta,
+): VesselIdentity {
+  return {
+    displayName,
+    avatarColor: deriveAvatarColor(pubkey),
+    isGuest: false,
+    signerType: "remote",
+    _pubkey: pubkey,
+    _signer: signer,
+    _remoteMeta: meta,
+  };
+}
+
+function persist(stored: StoredV3, isGuest: boolean): void {
+  const json = JSON.stringify(stored);
+  if (isGuest) sessionStorage.setItem(STORAGE_KEY_V3, json);
+  else localStorage.setItem(STORAGE_KEY_V3, json);
+}
+
+/* ----------------------- local-key sign-in & guest ----------------------- */
+
 export async function createNewIdentity(
   displayName: string,
-  email?: string
+  email?: string,
 ): Promise<VesselIdentity> {
   const secretKey = generateSecretKey();
-  const signer = await tryCreateSigner(secretKey);
-  const identity = buildIdentity(displayName, secretKey, email, false, signer);
-  const blob = await encryptSecret(secretKey, displayName, email);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(blob));
-  // Kind 0 (profile) publishing happens in Module 2 once relays are wired up.
+  const identity = buildLocalIdentity(displayName, secretKey, email, false);
+  const encrypted = await encryptBytes(secretKey, displayName);
+  persist({ v: 3, signerType: "local", displayName, email, encrypted }, false);
   return identity;
 }
 
 export async function createGuestIdentity(displayName: string): Promise<VesselIdentity> {
   const secretKey = generateSecretKey();
-  const signer = await tryCreateSigner(secretKey);
-  const identity = buildIdentity(displayName, secretKey, undefined, true, signer);
-  const blob = await encryptSecret(secretKey, displayName, undefined);
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(blob));
+  const identity = buildLocalIdentity(displayName, secretKey, undefined, true);
+  const encrypted = await encryptBytes(secretKey, displayName);
+  persist({ v: 3, signerType: "local", displayName, encrypted }, true);
   return identity;
-}
-
-export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
-  const stored = localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
-  if (!stored) return null;
-  try {
-    const blob = JSON.parse(stored) as EncryptedBlob;
-    const secretKey = await decryptSecret(blob);
-    const signer = await tryCreateSigner(secretKey);
-    const isGuest = !localStorage.getItem(STORAGE_KEY);
-    return buildIdentity(blob.displayName, secretKey, blob.email, isGuest, signer);
-  } catch {
-    return null;
-  }
 }
 
 export async function importIdentityFromBackup(
   nsec: string,
-  displayName: string
+  displayName: string,
 ): Promise<VesselIdentity> {
   const decoded = nip19.decode(nsec.trim());
   if (decoded.type !== "nsec") {
     throw new Error("That backup key doesn't look right. Make sure it starts with nsec1.");
   }
   const secretKey = decoded.data as Uint8Array;
-  const signer = await tryCreateSigner(secretKey);
-  const identity = buildIdentity(displayName, secretKey, undefined, false, signer);
-  const blob = await encryptSecret(secretKey, displayName, undefined);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(blob));
+  const identity = buildLocalIdentity(displayName, secretKey, undefined, false);
+  const encrypted = await encryptBytes(secretKey, displayName);
+  persist({ v: 3, signerType: "local", displayName, encrypted }, false);
   return identity;
 }
 
+/* ------------------------- Nostr extension sign-in ----------------------- */
+
+export function isNostrExtensionAvailable(): boolean {
+  return typeof window !== "undefined" && !!(window as any).nostr;
+}
+
+export async function signInWithExtension(displayName: string): Promise<VesselIdentity> {
+  if (!isNostrExtensionAvailable()) {
+    throw new ExtensionMissingError(
+      "No Nostr browser extension detected. Install one (Alby, nos2x, etc.) and reload.",
+    );
+  }
+  const signer = new ExtensionSigner();
+  const pubkey = await signer.getPublicKey();
+  const identity = buildExtensionIdentity(displayName, pubkey, signer);
+  persist({ v: 3, signerType: "extension", displayName, pubkey }, false);
+  return identity;
+}
+
+/* -------------------------- NIP-46 remote sign-in ------------------------ */
+
+export async function signInWithRemoteSigner(
+  bunkerUri: string,
+  displayName: string,
+): Promise<VesselIdentity> {
+  ensureNostrConnectWired();
+  let parsed;
+  try {
+    parsed = parseBunkerURI(bunkerUri.trim());
+  } catch {
+    throw new Error(
+      "That doesn't look like a valid bunker connection URL. It should start with 'bunker://'.",
+    );
+  }
+  if (!parsed.relays || parsed.relays.length === 0) {
+    throw new Error("This connection URL is missing a relay. Ask your signer for a complete URL.");
+  }
+
+  const clientSecretKey = generateSecretKey();
+  const clientSigner = new PrivateKeySigner(clientSecretKey);
+
+  const signer = new NostrConnectSigner({
+    relays: parsed.relays,
+    remote: parsed.remote,
+    signer: clientSigner,
+  });
+
+  // Run the handshake with the bunker. Uses the secret from the URI if present.
+  await signer.connect(parsed.secret, [
+    "get_public_key",
+    "sign_event",
+    "nip04_encrypt",
+    "nip04_decrypt",
+    "nip44_encrypt",
+    "nip44_decrypt",
+  ]);
+  const pubkey = await signer.getPublicKey();
+
+  const meta: RemoteSignerMeta = {
+    bunkerUri: bunkerUri.trim(),
+    relays: parsed.relays,
+    remotePubkey: parsed.remote,
+    clientSecretKeyHex: bytesToHex(clientSecretKey),
+  };
+  const identity = buildRemoteIdentity(displayName, pubkey, signer, meta);
+
+  const encryptedClientSecret = await encryptBytes(clientSecretKey, displayName);
+  persist(
+    {
+      v: 3,
+      signerType: "remote",
+      displayName,
+      pubkey,
+      bunkerUri: meta.bunkerUri,
+      relays: meta.relays,
+      remotePubkey: meta.remotePubkey,
+      clientSecret: encryptedClientSecret,
+    },
+    false,
+  );
+  return identity;
+}
+
+/* ----------------------------- restore on load --------------------------- */
+
+export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
+  const v3Local = localStorage.getItem(STORAGE_KEY_V3);
+  const v3Session = sessionStorage.getItem(STORAGE_KEY_V3);
+  const stored = v3Local ?? v3Session;
+  const isGuest = !v3Local && !!v3Session;
+
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored) as StoredV3;
+      return await restoreV3(parsed, isGuest);
+    } catch (err) {
+      console.error("Failed to restore identity:", err);
+      return null;
+    }
+  }
+
+  // Fall back to legacy v2 (always local-key)
+  const legacyLocal = localStorage.getItem(STORAGE_KEY_LEGACY);
+  const legacySession = sessionStorage.getItem(STORAGE_KEY_LEGACY);
+  const legacy = legacyLocal ?? legacySession;
+  if (!legacy) return null;
+  try {
+    const blob = JSON.parse(legacy) as StoredV2Legacy;
+    const secretKey = await decryptBytes(
+      { iv: blob.iv, salt: blob.salt, ciphertext: blob.ciphertext },
+      blob.displayName,
+    );
+    const identity = buildLocalIdentity(
+      blob.displayName,
+      secretKey,
+      blob.email,
+      !legacyLocal && !!legacySession,
+    );
+    // Migrate forward — write v3 and remove v2.
+    const encrypted = await encryptBytes(secretKey, blob.displayName);
+    persist(
+      { v: 3, signerType: "local", displayName: blob.displayName, email: blob.email, encrypted },
+      identity.isGuest,
+    );
+    localStorage.removeItem(STORAGE_KEY_LEGACY);
+    sessionStorage.removeItem(STORAGE_KEY_LEGACY);
+    return identity;
+  } catch {
+    return null;
+  }
+}
+
+async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIdentity | null> {
+  if (stored.signerType === "local") {
+    const secretKey = await decryptBytes(stored.encrypted, stored.displayName);
+    return buildLocalIdentity(stored.displayName, secretKey, stored.email, isGuest);
+  }
+  if (stored.signerType === "extension") {
+    if (!isNostrExtensionAvailable()) {
+      // Extension was uninstalled — clear and force re-sign-in.
+      console.warn("Saved Nostr extension identity but no extension is installed.");
+      return null;
+    }
+    const signer = new ExtensionSigner();
+    return buildExtensionIdentity(stored.displayName, stored.pubkey, signer);
+  }
+  if (stored.signerType === "remote") {
+    ensureNostrConnectWired();
+    const clientSecretKey = await decryptBytes(stored.clientSecret, stored.displayName);
+    const clientSigner = new PrivateKeySigner(clientSecretKey);
+    const signer = new NostrConnectSigner({
+      relays: stored.relays,
+      remote: stored.remotePubkey,
+      signer: clientSigner,
+      pubkey: stored.pubkey,
+    });
+    const meta: RemoteSignerMeta = {
+      bunkerUri: stored.bunkerUri,
+      relays: stored.relays,
+      remotePubkey: stored.remotePubkey,
+      clientSecretKeyHex: bytesToHex(clientSecretKey),
+    };
+    return buildRemoteIdentity(stored.displayName, stored.pubkey, signer, meta);
+  }
+  return null;
+}
+
+/* ------------------------------ utilities -------------------------------- */
+
 export function exportIdentityBackup(identity: VesselIdentity): string {
+  if (identity.signerType !== "local" || !identity._secretKey) {
+    throw new Error(
+      "Backup keys are only available for studios secured by a local key. " +
+        "When you sign in with a Nostr extension or remote signer, your key stays in that app.",
+    );
+  }
   return nip19.nsecEncode(identity._secretKey);
 }
 
 export function clearStoredIdentity(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  sessionStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_KEY_V3);
+  sessionStorage.removeItem(STORAGE_KEY_V3);
+  localStorage.removeItem(STORAGE_KEY_LEGACY);
+  sessionStorage.removeItem(STORAGE_KEY_LEGACY);
+}
+
+/**
+ * Update stored displayName for the current identity.
+ *
+ * The encryption envelope around any persisted secret material uses the
+ * displayName as part of the passphrase seed (see {@link encryptBytes}), so a
+ * rename must re-encrypt those blobs in the same atomic write — otherwise the
+ * next reload tries to decrypt with the new name and fails.
+ */
+export async function persistDisplayNameChange(identity: VesselIdentity): Promise<void> {
+  const v3 = localStorage.getItem(STORAGE_KEY_V3) ?? sessionStorage.getItem(STORAGE_KEY_V3);
+  if (!v3) return;
+  try {
+    const parsed = JSON.parse(v3) as StoredV3;
+    const newName = identity.displayName;
+
+    if (parsed.signerType === "local") {
+      if (!identity._secretKey) return;
+      const reEncrypted = await encryptBytes(identity._secretKey, newName);
+      persist(
+        { ...parsed, displayName: newName, encrypted: reEncrypted },
+        identity.isGuest,
+      );
+      return;
+    }
+
+    if (parsed.signerType === "remote") {
+      if (!identity._remoteMeta) return;
+      const clientSecretKey = hexToBytes(identity._remoteMeta.clientSecretKeyHex);
+      const reEncrypted = await encryptBytes(clientSecretKey, newName);
+      persist(
+        { ...parsed, displayName: newName, clientSecret: reEncrypted },
+        identity.isGuest,
+      );
+      return;
+    }
+
+    // Extension identities have no encrypted blob — just update the name.
+    persist({ ...parsed, displayName: newName }, identity.isGuest);
+  } catch (err) {
+    console.error("Failed to persist display name change:", err);
+  }
 }
 
 export function deriveAvatarColorFromPubkey(pubkey: string): string {
@@ -214,3 +524,15 @@ export function getInitials(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+export function describeSignerType(type: SignerType): string {
+  switch (type) {
+    case "local":
+      return "Local studio key";
+    case "extension":
+      return "Browser extension";
+    case "remote":
+      return "Remote signer";
+  }
+}
+
