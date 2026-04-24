@@ -102,6 +102,21 @@ router.post("/sessions", async (req, res): Promise<void> => {
   res.status(201).json(GetSessionResponse.parse(full));
 });
 
+async function findSessionByIdOrInvite(idOrInvite: string) {
+  const [byInvite] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.inviteCode, idOrInvite))
+    .limit(1);
+  if (byInvite) return byInvite;
+  const [byId] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, idOrInvite))
+    .limit(1);
+  return byId ?? null;
+}
+
 router.get("/sessions/:sessionId", async (req, res): Promise<void> => {
   const params = GetSessionParams.safeParse(req.params);
   if (!params.success) {
@@ -109,7 +124,13 @@ router.get("/sessions/:sessionId", async (req, res): Promise<void> => {
     return;
   }
 
-  const full = await buildSessionResponse(params.data.sessionId);
+  const session = await findSessionByIdOrInvite(params.data.sessionId);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+
+  const full = await buildSessionResponse(session.id);
   if (!full) {
     res.status(404).json({ error: "Session not found" });
     return;
@@ -185,21 +206,7 @@ router.post("/sessions/:sessionId/join", async (req, res): Promise<void> => {
   }
 
   // Resolve invite code → real session UUID (guests join via invite code in the URL)
-  const [byInvite] = await db
-    .select()
-    .from(sessionsTable)
-    .where(eq(sessionsTable.inviteCode, params.data.sessionId))
-    .limit(1);
-
-  const [byId] = !byInvite
-    ? await db
-        .select()
-        .from(sessionsTable)
-        .where(eq(sessionsTable.id, params.data.sessionId))
-        .limit(1)
-    : [undefined];
-
-  const targetSession = byInvite ?? byId;
+  const targetSession = await findSessionByIdOrInvite(params.data.sessionId);
   if (!targetSession) {
     res.status(404).json({ error: "Session not found" });
     return;
