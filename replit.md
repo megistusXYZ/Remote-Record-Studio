@@ -40,8 +40,8 @@
 - `/session/new` — Create a new recording session
 - `/session/:id` — Studio room (recording controls, participants, invite link)
 - `/join/:inviteCode` — Guest join flow (invite code is resolved to real session UUID on the backend)
-- `/vault` — Recordings list
-- `/settings` — Profile settings + Advanced (identity export)
+- `/vault` — Vault home (sidebar nav + session-grouped recordings + per-track download)
+- `/settings` — General settings + collapsible Advanced (storage URL, relay URL, backup key, danger zone)
 
 ## Key Files
 
@@ -69,7 +69,22 @@
 - `artifacts/vessel/src/components/studio/VideoTile.tsx` — Tile with `<video muted>` (local only, prevents echo) OR avatar fallback OR shimmer placeholder. Bottom-left name pill + bottom-right AudioMeter + top-left LOCAL badge + red border + mic-off icon when muted.
 - `artifacts/vessel/src/components/studio/ControlBar.tsx` — Fixed-bottom bar (h-20). Three groups: settings (DevicePickerPopover trigger), center (mic + cam 56px round buttons + framer-motion morphing record button visible to host only — animates green→red on record), right (Invite + Leave with confirm). Timer label "Stop · MM:SS" or "HH:MM:SS" below record button.
 - `artifacts/vessel/src/components/studio/DevicePickerPopover.tsx` — shadcn Popover content with camera list + mic list + live preview thumbnail.
-- `artifacts/vessel/src/components/studio/SavingOverlay.tsx` — "Saving your session..." overlay with per-participant progress bars (component built; not yet wired into the flow — pending real upload integration in a future module).
+- `artifacts/vessel/src/components/studio/SavingOverlay.tsx` — "Saving your session..." overlay with per-participant progress bars (component built; superseded by SessionComplete in Module 4).
+
+### Recording Engine + Vault Redesign (Module 4)
+- `artifacts/vessel/src/lib/recorder.ts` — `ChunkedRecorder` class wrapping `MediaRecorder`. Picks best supported MIME type (vp9/vp8/webm fallback chain), accumulates `Blob` chunks via 5s timeslices, emits friendly events (`recording-started`, `chunk-saved-locally`, `recording-complete`). Returns final `Blob` from `stop()`.
+- `artifacts/vessel/src/lib/blossom.ts` — `BlossomUploadQueue` STUB. Simulates chunked upload to a storage server (~220ms per chunk, ~12 chunks per file), emits `sync-started`/`chunk-synced`/`sync-complete` events with `{ synced, total, percent, failed }` progress. Computes SHA-256 of the final blob via `crypto.subtle`. Real Blossom HTTP upload comes in a later module.
+- `artifacts/vessel/src/lib/recordings-storage.ts` — IndexedDB persistence for final recording blobs. `saveRecordingBlob(id, blob)`, `loadRecordingBlob(id)`, `deleteRecordingBlob(id)`, `clearAllLocalRecordings()`, `downloadBlob(blob, filename)`, `downloadRecordingById(id, filename)`. Uses URL scheme `idb://<recordingId>` to mark blobs that live only locally (vs. real remote URLs).
+- `artifacts/vessel/src/hooks/use-recording.ts` — React hook orchestrating the full recording lifecycle: owns one `ChunkedRecorder` + one `BlossomUploadQueue` per recording. Returns `{ start, stop, isRecording, isFinalizing, isSyncing, syncProgress, syncStatus, result, error, isSupported, reset }`. On `stop()`: finalizes blob → saves to IndexedDB → triggers simulated sync → returns `RecordingResult { recordingId, blob, meta, blobHash, blobUrl, syncStatus }`.
+- `artifacts/vessel/src/components/studio/SessionComplete.tsx` — Full-screen overlay with two phases. Phase 1 (syncing): pulsing waveform SVG + per-track progress bars (avatar + name + percent + spinner→checkmark). Phase 2 (complete): animated checkmark SVG + canvas-based confetti burst (no external lib) + per-track download cards (Download Track / Copy Link buttons) + View Vault / Start New CTAs. Guest variant: smaller "Thanks for recording with X" card with optional download + Close.
+- `artifacts/vessel/src/components/vault/VaultSidebar.tsx` — Left rail nav with three items (My Vault, Shared with Me, Settings) + sticky "+ New Session" CTA at the bottom. Used by both VaultScreen and SettingsScreen.
+- `artifacts/vessel/src/components/vault/EmptyState.tsx` — Reusable empty state with mic+sparkle SVG illustration.
+- `artifacts/vessel/src/components/vault/VaultScreen.tsx` — Owns the full-screen layout (sidebar + main). Fetches via `useListRecordings({ pubkey })`, groups recordings by `sessionId` into session cards. Each card: title + date + total size + participant chips + "Download All" + "View Tracks" expand. Expanded state lists individual track rows with per-track download (calls `downloadRecordingById`).
+- `artifacts/vessel/src/components/vault/SettingsScreen.tsx` — General section (display name save, 8-color avatar swatch picker persisted in `localStorage` key `vessel_avatar_color`, default invite message in `vessel_invite_message`) + collapsible Advanced section (storage URL `vessel_storage_url`, live preview relay URL `vessel_relay_url`, Show/Copy backup key, danger zone with `clearAllLocalRecordings()` + `signOut()`).
+- `artifacts/vessel/src/pages/vault.tsx` + `pages/settings.tsx` — Thin wrappers that gate on identity then render the new screens (no Layout wrapper since the screens own the full viewport).
+- **Integration in StudioScreen**: Auto-starts the recorder when `session.status === "live"` and a localStream is ready (with retry on failure — ref clears on catch). On Stop click (host), shows SessionComplete overlay, awaits sync completion, POSTs metadata via `useCreateRecording` (guarded by `recordingPersistedRef`, promise tracked on `persistPromiseRef`). When the host clicks "View in Vault" / "Start New Session", awaits the persistence promise BEFORE calling `onStopRecording` (PATCH ended) and navigating — so we never lose track records on unmount. Guests are auto-shown the SessionComplete (guest variant) when `session.status` flips to "ended" while they're recording, ensuring their track is finalized + persisted before they navigate away.
+- **Forbidden-term audit**: identifier names (e.g., `participantPubkey`, `deriveAvatarColorFromPubkey`) may contain forbidden words; rendered UI strings must not. The terms `Nostr / nsec / npub / keypair / pubkey / Blossom / MoQ / WebTransport / MediaRecorder / getUserMedia / IndexedDB / QUIC` never appear in user-visible text in any Module 4 file.
+- **Known limitations**: (1) Recorder is locked to the initial localStream — switching camera/mic mid-recording does not rebind the active recorder. (2) IndexedDB is unbounded — no quota check yet; future module should add retention limits. (3) Real Blossom upload is still simulated — chunks aren't actually sent to a remote server.
 
 ### Landing & UI Primitives (Module 0)
 - `artifacts/vessel/src/pages/landing.tsx` — Marketing landing page (hero, features, how-it-works, comparison, footer). Handles `?session=XXX` query → redirect to `/join/XXX`.

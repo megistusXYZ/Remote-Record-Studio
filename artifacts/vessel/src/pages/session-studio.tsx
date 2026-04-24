@@ -21,6 +21,9 @@ export default function SessionStudio() {
 
   const [isStartingRecording, setIsStartingRecording] = useState(false);
   const [isStoppingRecording, setIsStoppingRecording] = useState(false);
+  // Set by StudioScreen (host or guest) when it owns the post-session UI flow,
+  // suppresses the auto-redirect-to-vault below.
+  const [studioInEndingFlow, setStudioInEndingFlow] = useState(false);
 
   const { data: session, isLoading, error } = useGetSession(
     sessionId || "",
@@ -42,10 +45,12 @@ export default function SessionStudio() {
   }, [error, setLocation]);
 
   useEffect(() => {
-    if (session?.status === "ended" && !isStoppingRecording) {
+    // Auto-redirect when the session has ended — but skip while the StudioScreen
+    // is mid-finalization (showing SessionComplete + persisting the local track).
+    if (session?.status === "ended" && !isStoppingRecording && !studioInEndingFlow) {
       setLocation("/vault");
     }
-  }, [session?.status, isStoppingRecording, setLocation]);
+  }, [session?.status, isStoppingRecording, studioInEndingFlow, setLocation]);
 
   if (!isLoaded || !pubkey) return null;
   if (isLoading || !session) {
@@ -149,8 +154,14 @@ export default function SessionStudio() {
       }}
       isHost={isHost}
       onStartRecording={handleStartRecording}
-      onStopRecording={handleStopRecording}
+      onStopRecording={async () => {
+        setStudioInEndingFlow(true);
+        await handleStopRecording();
+      }}
       onLeave={handleLeave}
+      onViewVault={() => setLocation("/vault")}
+      onStartNewSession={() => setLocation("/home")}
+      onEnterEndingFlow={() => setStudioInEndingFlow(true)}
       isStartingRecording={isStartingRecording}
       isStoppingRecording={isStoppingRecording}
     />
