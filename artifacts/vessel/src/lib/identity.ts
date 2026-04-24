@@ -19,7 +19,6 @@ export interface VesselIdentity {
   displayName: string;
   avatarColor: string;
   isGuest: boolean;
-  email?: string;
   /** Which kind of signer is backing this identity. */
   signerType: SignerType;
   /** Cached public key. Populated at sign-in / restore time. */
@@ -152,7 +151,6 @@ interface StoredLocalV3 {
   v: 3;
   signerType: "local";
   displayName: string;
-  email?: string;
   encrypted: EncryptedBlob; // encrypts the secretKey bytes
 }
 
@@ -184,13 +182,11 @@ interface StoredV2Legacy {
   salt: string;
   ciphertext: string;
   displayName: string;
-  email?: string;
 }
 
 function buildLocalIdentity(
   displayName: string,
   secretKey: Uint8Array,
-  email: string | undefined,
   isGuest: boolean,
 ): VesselIdentity {
   const pubkey = getPublicKey(secretKey);
@@ -198,7 +194,6 @@ function buildLocalIdentity(
     displayName,
     avatarColor: deriveAvatarColor(pubkey),
     isGuest,
-    email,
     signerType: "local",
     _pubkey: pubkey,
     _secretKey: secretKey,
@@ -250,18 +245,17 @@ function persist(stored: StoredV3, isGuest: boolean): void {
 
 export async function createNewIdentity(
   displayName: string,
-  email?: string,
 ): Promise<VesselIdentity> {
   const secretKey = generateSecretKey();
-  const identity = buildLocalIdentity(displayName, secretKey, email, false);
+  const identity = buildLocalIdentity(displayName, secretKey, false);
   const encrypted = await encryptBytes(secretKey, displayName);
-  persist({ v: 3, signerType: "local", displayName, email, encrypted }, false);
+  persist({ v: 3, signerType: "local", displayName, encrypted }, false);
   return identity;
 }
 
 export async function createGuestIdentity(displayName: string): Promise<VesselIdentity> {
   const secretKey = generateSecretKey();
-  const identity = buildLocalIdentity(displayName, secretKey, undefined, true);
+  const identity = buildLocalIdentity(displayName, secretKey, true);
   const encrypted = await encryptBytes(secretKey, displayName);
   persist({ v: 3, signerType: "local", displayName, encrypted }, true);
   return identity;
@@ -276,7 +270,7 @@ export async function importIdentityFromBackup(
     throw new Error("That backup key doesn't look right. Make sure it starts with nsec1.");
   }
   const secretKey = decoded.data as Uint8Array;
-  const identity = buildLocalIdentity(displayName, secretKey, undefined, false);
+  const identity = buildLocalIdentity(displayName, secretKey, false);
   const encrypted = await encryptBytes(secretKey, displayName);
   persist({ v: 3, signerType: "local", displayName, encrypted }, false);
   return identity;
@@ -511,13 +505,14 @@ export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
     const identity = buildLocalIdentity(
       blob.displayName,
       secretKey,
-      blob.email,
       !legacyLocal && !!legacySession,
     );
-    // Migrate forward — write v3 and remove v2.
+    // Migrate forward — write v3 and remove v2. Any legacy `email` field is
+    // intentionally dropped: Vessel doesn't email anyone and there is no
+    // recovery flow that uses it, so we don't carry it across the migration.
     const encrypted = await encryptBytes(secretKey, blob.displayName);
     persist(
-      { v: 3, signerType: "local", displayName: blob.displayName, email: blob.email, encrypted },
+      { v: 3, signerType: "local", displayName: blob.displayName, encrypted },
       identity.isGuest,
     );
     localStorage.removeItem(STORAGE_KEY_LEGACY);
@@ -531,7 +526,7 @@ export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
 async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIdentity | null> {
   if (stored.signerType === "local") {
     const secretKey = await decryptBytes(stored.encrypted, stored.displayName);
-    return buildLocalIdentity(stored.displayName, secretKey, stored.email, isGuest);
+    return buildLocalIdentity(stored.displayName, secretKey, isGuest);
   }
   if (stored.signerType === "extension") {
     if (!isNostrExtensionAvailable()) {

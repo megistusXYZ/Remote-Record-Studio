@@ -9,20 +9,6 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface Identity {
-  id: string;
-  pubkey: string;
-  displayName: string;
-  email?: string | null;
-  createdAt: string;
-}
-
-export interface CreateIdentityBody {
-  pubkey: string;
-  displayName: string;
-  email?: string | null;
-}
-
 export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];
 
 export const SessionStatus = {

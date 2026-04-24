@@ -10,8 +10,6 @@ servers:
 tags:
   - name: health
     description: Health operations
-  - name: identity
-    description: User identity management
   - name: sessions
     description: Recording sessions
   - name: recordings
@@ -33,25 +31,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-
-  /identity:
-    post:
-      operationId: createIdentity
-      tags: [identity]
-      summary: Register or retrieve user identity
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateIdentityBody"
-      responses:
-        "200":
-          description: Identity created or fetched
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Identity"
 
   /sessions:
     get:
@@ -303,41 +282,6 @@ components:
           type: string
       required:
         - status
-
-    Identity:
-      type: object
-      properties:
-        id:
-          type: string
-        pubkey:
-          type: string
-        displayName:
-          type: string
-        email:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - pubkey
-        - displayName
-        - createdAt
-
-    CreateIdentityBody:
-      type: object
-      properties:
-        pubkey:
-          type: string
-        displayName:
-          type: string
-        email:
-          type: string
-          nullable: true
-      required:
-        - pubkey
-        - displayName
 
     Session:
       type: object
