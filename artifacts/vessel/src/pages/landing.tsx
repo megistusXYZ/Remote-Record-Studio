@@ -11,6 +11,7 @@ import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInMo
 import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-react";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
+import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -222,7 +223,7 @@ export default function LandingPage() {
             
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} transition={{ delay: 0.2 }}>
               <VesselCard variant="interactive" className="p-8 h-full">
-                <Shield className="w-12 h-12 text-vessel-accent mb-6" strokeWidth={1.5} />
+                <LaptopPersonIcon className="w-12 h-12 text-vessel-accent mb-6" />
                 <h3 className="font-display font-bold text-xl mb-3">Permanently Yours</h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
                   Files are distributed directly to you, not stored on our servers. Your media stays yours even if Vessel disappeared tomorrow.
