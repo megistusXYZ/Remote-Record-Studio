@@ -206,8 +206,25 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 <CopyButton value={archive.shareUrl} label="Copy Link" />
               </div>
               <p className="text-xs text-vessel-text-muted leading-relaxed">
-                The link contains everything an editor needs to work on your session.
+                Only people with this link can open it. The reading code lives
+                in the link itself — never on a server.
               </p>
+              {archive.publish.successCount === 0 ? (
+                <p
+                  className="text-xs text-vessel-red leading-relaxed"
+                  data-testid="text-publish-failed"
+                >
+                  We couldn't reach any sharing servers. The link won't work yet — try again in a moment.
+                </p>
+              ) : archive.publish.successCount < archive.publish.totalCount ? (
+                <p
+                  className="text-xs text-vessel-text-muted leading-relaxed"
+                  data-testid="text-publish-partial"
+                >
+                  Saved to {archive.publish.successCount} of {archive.publish.totalCount} sharing servers.
+                  Recipients can still open the link.
+                </p>
+              ) : null}
             </TabsContent>
 
             {/* Tab 2: Per-track */}
@@ -269,8 +286,9 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 </div>
               </div>
               <p className="text-xs text-vessel-text-secondary leading-relaxed">
-                This ID permanently identifies your session. It can be used to verify
-                the authenticity of your recordings.
+                A short fingerprint that uniquely identifies this archive. Anyone
+                with the share link can confirm they're opening the same archive
+                by checking this matches.
               </p>
               <div className="pt-2 text-xs text-vessel-text-muted">
                 <div>Archived: {new Date(archive.archivedAt).toLocaleString()}</div>
