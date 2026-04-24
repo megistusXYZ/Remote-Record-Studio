@@ -10,6 +10,7 @@ import {
   generateShareKey,
   generateRandomIdentifier,
 } from "./share-crypto";
+import { rememberShareForRevoke, encodeEphemeralSecret } from "./share-revoke";
 
 /**
  * Session archive publishing.
@@ -312,6 +313,23 @@ export async function publishSessionArchive(
 
   const archivedAt = new Date(createdAt * 1000).toISOString();
   const shareUrl = buildShareUrl(pointer, shareKeyEncoded);
+
+  // Persist material needed to later sign a kind-5 deletion event under the
+  // SAME ephemeral pubkey. We only do this when at least one relay accepted
+  // the manifest — otherwise there's nothing to revoke.
+  if (successCount > 0) {
+    rememberShareForRevoke({
+      archiveId,
+      pointer,
+      manifestEventId: manifestEvent.id,
+      ephemeralPubkey,
+      ephemeralSecretB64: encodeEphemeralSecret(ephemeralSecret),
+      identifier,
+      kind: KIND_SESSION_MANIFEST,
+      relays,
+      publishedAt: archivedAt,
+    });
+  }
 
   const perTrackUrls = tracks.map((t, i) => ({
     recordingId: t.recordingId,
