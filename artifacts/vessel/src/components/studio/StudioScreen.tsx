@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { AlertTriangle, X, Users, Settings } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
+import { useKeyboardShortcuts, type Shortcut } from "../../hooks/use-keyboard-shortcuts";
 import { isWebTransportAvailable, useConnectionQuality, getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
@@ -205,6 +206,40 @@ export function StudioScreen({
       void onStopRecording();
     }
   };
+
+  // Keyboard shortcuts: M = mic, V = camera, Space = record (host).
+  // Skip when an input is focused, when the SessionComplete overlay is shown,
+  // or when the invite modal is open (Escape handles modal close natively).
+  const shortcutsEnabled = !showSessionComplete && !showInviteModal;
+  const shortcuts = useMemo<Shortcut[]>(
+    () => [
+      {
+        key: "m",
+        handler: () => setMicEnabled((v) => !v),
+      },
+      {
+        key: "v",
+        handler: () => setCameraEnabled((v) => !v),
+      },
+      {
+        key: " ",
+        preventDefault: true,
+        handler: () => {
+          if (!isHost) return;
+          if (session.status === "live") {
+            void handleStopRecording();
+          } else if (session.status === "waiting") {
+            handleStartRecording();
+          }
+        },
+      },
+    ],
+    // handleStopRecording / handleStartRecording are stable enough — re-binding on
+    // every render is fine because the hook strips and re-attaches the listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isHost, session.status]
+  );
+  useKeyboardShortcuts(shortcuts, shortcutsEnabled);
 
   // Wait for the metadata POST to complete (or fail) before navigating away,
   // so we don't lose track records on unmount.

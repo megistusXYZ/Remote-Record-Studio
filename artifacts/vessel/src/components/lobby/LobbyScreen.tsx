@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, ArrowRight, Copy, QrCode, Users, Check } from "lucide-react";
+import { LobbyEmptyState } from "./LobbyEmptyState";
+import { WaitingForGuestsEmpty } from "./WaitingForGuestsEmpty";
 import { useGetRecentActivity, getGetRecentActivityQueryKey } from "@workspace/api-client-react";
 
 import { useIdentity } from "../../hooks/use-identity";
@@ -174,17 +176,7 @@ export function LobbyScreen({
                     <div className="h-16 rounded-xl bg-vessel-bg-surface animate-pulse" />
                   </>
                 ) : !activity?.recentSessions?.length ? (
-                  <VesselCard className="p-8 text-center">
-                    <div className="w-[60px] h-[60px] rounded-full bg-vessel-bg-surface flex items-center justify-center mx-auto mb-4">
-                      <Mic className="w-10 h-10 text-vessel-text-muted" />
-                    </div>
-                    <h4 className="font-display text-base font-bold text-vessel-text-primary mb-1">
-                      No sessions yet
-                    </h4>
-                    <p className="text-vessel-text-muted text-sm">
-                      Your past sessions will appear here.
-                    </p>
-                  </VesselCard>
+                  <LobbyEmptyState />
                 ) : (
                   activity.recentSessions.map(s => (
                     <VesselCard
@@ -286,9 +278,7 @@ export function LobbyScreen({
 
             <div className="mt-8 text-center">
               {session.participants.length <= 1 ? (
-                <p className="text-vessel-text-secondary text-base animate-pulse">
-                  Waiting for guests...
-                </p>
+                <WaitingForGuestsEmpty />
               ) : (
                 <p className="text-vessel-accent text-base font-medium">
                   Everyone's here — let's go!
