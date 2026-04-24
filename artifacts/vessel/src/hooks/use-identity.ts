@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useRef } from "react";
-import { useCreateIdentity } from "@workspace/api-client-react";
 import { useIdentityStore } from "../store/identityStore";
 import {
   createNewIdentity as createNewIdentityLib,
@@ -32,7 +31,6 @@ export function useIdentity() {
   const setIdentity = useIdentityStore((s) => s.setIdentity);
   const clearIdentity = useIdentityStore((s) => s.clearIdentity);
   const hydrate = useIdentityStore((s) => s.hydrate);
-  const createIdentityMutation = useCreateIdentity();
 
   useEffect(() => {
     void hydrate();
@@ -53,28 +51,13 @@ export function useIdentity() {
     });
   }, [identity]);
 
-  const persistOnServer = useCallback(
-    async (id: VesselIdentity) => {
-      if (id.isGuest) return;
-      try {
-        await createIdentityMutation.mutateAsync({
-          data: { pubkey: id._pubkey, displayName: id.displayName },
-        });
-      } catch (err) {
-        console.error("Failed to register identity with server:", err);
-      }
-    },
-    [createIdentityMutation]
-  );
-
   const createNewIdentity = useCallback(
-    async (displayName: string, email?: string) => {
-      const id = await createNewIdentityLib(displayName, email);
+    async (displayName: string) => {
+      const id = await createNewIdentityLib(displayName);
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
   );
 
   const createGuestIdentity = useCallback(
@@ -90,46 +73,41 @@ export function useIdentity() {
     async (nsec: string, displayName: string) => {
       const id = await importIdentityFromBackupLib(nsec, displayName);
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
   );
 
   const signInWithExtension = useCallback(
     async (displayName: string) => {
       const id = await signInWithExtensionLib(displayName);
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
   );
 
   const signInWithRemoteSigner = useCallback(
     async (bunkerUri: string, displayName: string) => {
       const id = await signInWithRemoteSignerLib(bunkerUri, displayName);
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
   );
 
   /**
    * Adopt an identity that the caller has already constructed (e.g. via
-   * `startNostrConnectInvite()` → `awaitConnection()`). Performs the same
-   * post-sign-in side effects as the dedicated sign-in helpers above:
-   * stores the identity in the Zustand store and best-effort registers
-   * the pubkey with the backend.
+   * `startNostrConnectInvite()` → `awaitConnection()`). Stores the identity
+   * in the Zustand store. Vessel does not register identities with any
+   * backend — there's no central account directory by design.
    */
   const adoptIdentity = useCallback(
     async (id: VesselIdentity) => {
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
   );
 
   const setDisplayName = useCallback(
@@ -141,9 +119,8 @@ export function useIdentity() {
       const updated: VesselIdentity = { ...identity, displayName: name };
       setIdentity(updated);
       await persistDisplayNameChange(updated);
-      await persistOnServer(updated);
     },
-    [identity, createNewIdentity, setIdentity, persistOnServer]
+    [identity, createNewIdentity, setIdentity]
   );
 
   const signOut = useCallback(async () => {

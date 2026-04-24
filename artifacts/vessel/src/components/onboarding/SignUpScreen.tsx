@@ -22,7 +22,6 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const { createNewIdentity, displayName: storedName } = useIdentity();
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -46,7 +45,7 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
     setError(null);
 
     try {
-      const id = await createNewIdentity(name.trim(), email.trim() || undefined);
+      const id = await createNewIdentity(name.trim());
       setCreatedIdentity(id);
       setStep("storage");
     } catch (err) {
@@ -132,20 +131,6 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
                 autoFocus
                 data-testid="input-display-name"
               />
-
-              <div className="mt-4">
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email (optional, for account recovery)"
-                  className="h-12 bg-vessel-bg-surface border-vessel-border focus-visible:ring-vessel-accent rounded-xl px-5"
-                  data-testid="input-email"
-                />
-                <p className="text-xs text-vessel-text-muted mt-2 ml-1">
-                  Optional. We'll never spam you.
-                </p>
-              </div>
 
               <VesselButton
                 type="submit"

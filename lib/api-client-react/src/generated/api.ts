@@ -17,13 +17,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  CreateIdentityBody,
   CreateRecordingBody,
   CreateSessionBody,
   GetRecentActivityParams,
   GetVaultSummaryParams,
   HealthStatus,
-  Identity,
   JoinSessionBody,
   ListRecordingsParams,
   ListSessionsParams,
@@ -118,92 +116,6 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Register or retrieve user identity
- */
-export const getCreateIdentityUrl = () => {
-  return `/api/identity`;
-};
-
-export const createIdentity = async (
-  createIdentityBody: CreateIdentityBody,
-  options?: RequestInit,
-): Promise<Identity> => {
-  return customFetch<Identity>(getCreateIdentityUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createIdentityBody),
-  });
-};
-
-export const getCreateIdentityMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createIdentity>>,
-    TError,
-    { data: BodyType<CreateIdentityBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof createIdentity>>,
-  TError,
-  { data: BodyType<CreateIdentityBody> },
-  TContext
-> => {
-  const mutationKey = ["createIdentity"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createIdentity>>,
-    { data: BodyType<CreateIdentityBody> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return createIdentity(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type CreateIdentityMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createIdentity>>
->;
-export type CreateIdentityMutationBody = BodyType<CreateIdentityBody>;
-export type CreateIdentityMutationError = ErrorType<unknown>;
-
-/**
- * @summary Register or retrieve user identity
- */
-export const useCreateIdentity = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createIdentity>>,
-    TError,
-    { data: BodyType<CreateIdentityBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof createIdentity>>,
-  TError,
-  { data: BodyType<CreateIdentityBody> },
-  TContext
-> => {
-  return useMutation(getCreateIdentityMutationOptions(options));
-};
 
 /**
  * @summary List all sessions for the current user

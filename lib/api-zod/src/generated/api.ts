@@ -16,23 +16,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Register or retrieve user identity
- */
-export const CreateIdentityBody = zod.object({
-  pubkey: zod.string(),
-  displayName: zod.string(),
-  email: zod.string().nullish(),
-});
-
-export const CreateIdentityResponse = zod.object({
-  id: zod.string(),
-  pubkey: zod.string(),
-  displayName: zod.string(),
-  email: zod.string().nullish(),
-  createdAt: zod.coerce.date(),
-});
-
-/**
  * @summary List all sessions for the current user
  */
 export const ListSessionsQueryParams = zod.object({
