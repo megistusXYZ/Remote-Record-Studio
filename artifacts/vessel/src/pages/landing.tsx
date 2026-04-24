@@ -15,6 +15,7 @@ import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
+import { SketchLine } from "../components/icons/SketchLine";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -248,8 +249,9 @@ export default function LandingPage() {
           </motion.div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
-            {/* Connecting line for desktop */}
-            <div className="hidden md:block absolute top-12 left-1/6 right-1/6 h-[1px] border-t-2 border-dashed border-vessel-border-strong z-0" />
+            {/* Hand-sketched connecting lines for desktop */}
+            <SketchLine className="hidden md:block absolute top-[44px] left-[24%] w-[18%] h-2 text-vessel-text-muted/40 z-0" />
+            <SketchLine className="hidden md:block absolute top-[44px] left-[58%] w-[18%] h-2 text-vessel-text-muted/40 z-0" />
             
             {[
               { num: "1", title: "Create your studio", desc: "Sign up in 10 seconds. Just a name — no credit card, no app download." },
