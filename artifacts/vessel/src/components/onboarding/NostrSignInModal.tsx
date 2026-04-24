@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { useIdentity } from "../../hooks/use-identity";
+import { isSupportedRemoteSignerUri } from "../../lib/identity";
 
 interface NostrSignInModalProps {
   open: boolean;
@@ -67,8 +68,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       setError("Choose a name guests will see in the studio.");
       return;
     }
-    if (!bunkerUri.trim().startsWith("bunker://")) {
-      setError("Paste a connection URL that starts with 'bunker://'.");
+    if (!isSupportedRemoteSignerUri(bunkerUri)) {
+      setError("Paste a connection URL that starts with 'bunker://' or 'nostrconnect://'.");
       return;
     }
     setIsLoading(true);
@@ -186,13 +187,14 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
                 id="bunker-uri"
                 value={bunkerUri}
                 onChange={(e) => setBunkerUri(e.target.value)}
-                placeholder="bunker://..."
+                placeholder="bunker://… or nostrconnect://…"
                 className="font-mono-vessel resize-none bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
                 rows={3}
                 data-testid="input-bunker-uri"
               />
               <p className="text-xs text-vessel-text-muted">
-                Find this in your signer app under "Connect to client" or similar.
+                Paste a <code className="font-mono-vessel">bunker://</code> or{" "}
+                <code className="font-mono-vessel">nostrconnect://</code> URL from your signer app.
               </p>
             </div>
           </div>
