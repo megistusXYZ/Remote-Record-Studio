@@ -184,18 +184,40 @@ router.post("/sessions/:sessionId/join", async (req, res): Promise<void> => {
     return;
   }
 
+  // Resolve invite code → real session UUID (guests join via invite code in the URL)
+  const [byInvite] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.inviteCode, params.data.sessionId))
+    .limit(1);
+
+  const [byId] = !byInvite
+    ? await db
+        .select()
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, params.data.sessionId))
+        .limit(1)
+    : [undefined];
+
+  const targetSession = byInvite ?? byId;
+  if (!targetSession) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  const realSessionId = targetSession.id;
+
   const existing = await db
     .select()
     .from(participantsTable)
     .where(and(
-      eq(participantsTable.sessionId, params.data.sessionId),
+      eq(participantsTable.sessionId, realSessionId),
       eq(participantsTable.pubkey, parsed.data.guestPubkey)
     ))
     .limit(1);
 
   if (existing.length === 0) {
     await db.insert(participantsTable).values({
-      sessionId: params.data.sessionId,
+      sessionId: realSessionId,
       pubkey: parsed.data.guestPubkey,
       displayName: parsed.data.guestName,
       role: "guest",
@@ -204,15 +226,15 @@ router.post("/sessions/:sessionId/join", async (req, res): Promise<void> => {
     const participants = await db
       .select()
       .from(participantsTable)
-      .where(eq(participantsTable.sessionId, params.data.sessionId));
+      .where(eq(participantsTable.sessionId, realSessionId));
 
     await db
       .update(sessionsTable)
       .set({ participantCount: participants.length })
-      .where(eq(sessionsTable.id, params.data.sessionId));
+      .where(eq(sessionsTable.id, realSessionId));
   }
 
-  const full = await buildSessionResponse(params.data.sessionId);
+  const full = await buildSessionResponse(realSessionId);
   if (!full) {
     res.status(404).json({ error: "Session not found" });
     return;
