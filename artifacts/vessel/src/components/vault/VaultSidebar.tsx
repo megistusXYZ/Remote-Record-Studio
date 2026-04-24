@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { Archive, Users, Settings } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VesselButton } from "../vessel-ui/VesselButton";
+import { AccountMenu } from "../account/AccountMenu";
 
 export type VaultSidebarProps = {
   active: "my-vault" | "shared" | "settings";
@@ -77,15 +78,16 @@ export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebar
         </button>
       </nav>
 
-      <div className="mt-auto p-4 border-t border-vessel-border">
-        <VesselButton 
-          variant="primary" 
-          className="w-full" 
-          onClick={() => setLocation("/home")} 
+      <div className="mt-auto p-4 border-t border-vessel-border space-y-3">
+        <VesselButton
+          variant="primary"
+          className="w-full"
+          onClick={() => setLocation("/home")}
           data-testid="button-sidebar-new-session"
         >
           + New Session
         </VesselButton>
+        <AccountMenu variant="sidebar" />
       </div>
     </aside>
   );
