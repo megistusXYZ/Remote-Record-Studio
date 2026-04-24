@@ -4,7 +4,8 @@ import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
 import { useKeyboardShortcuts, type Shortcut } from "../../hooks/use-keyboard-shortcuts";
-import { isWebTransportAvailable, useConnectionQuality, getConnectionQualityLabel } from "../../lib/moq";
+import { useLiveTransport } from "../../hooks/use-live-transport";
+import { getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
 import { RecordingDot } from "../vessel-ui/RecordingDot";
@@ -64,11 +65,9 @@ export function StudioScreen({
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showWebTransportBanner, setShowWebTransportBanner] = useState(!isWebTransportAvailable());
   const [showSessionComplete, setShowSessionComplete] = useState(false);
 
   const { pubkey: currentPubkey, displayName } = useIdentity();
-  const connQuality = useConnectionQuality();
   const recording = useRecording();
   const createRecordingMutation = useCreateRecording();
   const recordingStartedRef = useRef(false);
@@ -91,6 +90,21 @@ export function StudioScreen({
     cameraEnabled,
     micEnabled,
   });
+
+  // Real WebTransport-backed live preview. Drives both the connection-quality
+  // dot in the header and the per-tile remote video for other participants.
+  const liveTransport = useLiveTransport({
+    sessionId: session.id,
+    selfPubkey: currentPubkey,
+    localStream,
+    enabled: session.status === "live" || session.status === "waiting",
+  });
+  const connQuality = liveTransport.quality;
+  const [showLivePreviewBanner, setShowLivePreviewBanner] = useState(!liveTransport.isSupported);
+  useEffect(() => {
+    setShowLivePreviewBanner(!liveTransport.isSupported);
+  }, [liveTransport.isSupported]);
+
   const [showMediaErrorBanner, setShowMediaErrorBanner] = useState(true);
   useEffect(() => {
     if (localStreamError) setShowMediaErrorBanner(true);
@@ -420,15 +434,16 @@ export function StudioScreen({
           </div>
         )}
 
-        {/* WebTransport Degradation Banner */}
-        {showWebTransportBanner && (
+        {/* Live preview unavailable banner (browser doesn't support the
+            transport / codec stack — recording still works) */}
+        {showLivePreviewBanner && (
           <div className="bg-vessel-amber/10 border-b border-vessel-amber/20 px-4 py-2 flex items-center justify-between shrink-0 z-10">
             <div className="flex items-center gap-2 text-sm text-vessel-amber">
               <AlertTriangle className="w-4 h-4" />
-              <span>Live preview is limited in this browser. Your recording will still be full quality.</span>
+              <span>Live preview is unavailable in this browser. Your recording will still be full quality.</span>
             </div>
             <button
-              onClick={() => setShowWebTransportBanner(false)}
+              onClick={() => setShowLivePreviewBanner(false)}
               className="text-vessel-amber/70 hover:text-vessel-amber p-1 rounded-md transition-colors"
             >
               <X className="w-4 h-4" />
@@ -441,15 +456,21 @@ export function StudioScreen({
           <VideoGrid participantCount={session.participants.length}>
             {session.participants.map((p) => {
               const isLocal = p.pubkey === currentPubkey;
+              const remoteStream = isLocal ? undefined : liveTransport.remoteStreams.get(p.pubkey);
+              // Only flip to "live" once a frame has actually been decoded —
+              // a stream object is created the moment the publisher's header
+              // arrives, well before any payload bytes flow.
+              const remoteIsLive = !isLocal && liveTransport.remoteReady.has(p.pubkey);
               return (
                 <VideoTile
                   key={p.id}
                   participant={p}
-                  stream={isLocal ? localStream : undefined}
+                  stream={isLocal ? localStream : (remoteIsLive ? remoteStream : undefined)}
                   isLocal={isLocal}
-                  micEnabled={isLocal ? micEnabled : true} // remote participants default true for now
-                  cameraEnabled={isLocal ? cameraEnabled : true}
-                  audioLevel={isLocal ? (micEnabled ? 0.5 : 0) : 0.5} // mocked audio level for now
+                  isConnecting={!isLocal && liveTransport.isConnected && !remoteIsLive}
+                  micEnabled={isLocal ? micEnabled : true}
+                  cameraEnabled={isLocal ? cameraEnabled : remoteIsLive}
+                  audioLevel={isLocal ? (micEnabled ? 0.5 : 0) : 0.5}
                 />
               );
             })}
