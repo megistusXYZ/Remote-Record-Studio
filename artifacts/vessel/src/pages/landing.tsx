@@ -7,6 +7,7 @@ import { VesselCard } from "../components/vessel-ui/VesselCard";
 import { VesselBadge } from "../components/vessel-ui/VesselBadge";
 import { AudioMeter } from "../components/vessel-ui/AudioMeter";
 import { RecordingDot } from "../components/vessel-ui/RecordingDot";
+import { SketchHost, SketchGuest } from "../components/vessel-ui/SketchConversation";
 import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
 import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-react";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
@@ -157,21 +158,17 @@ export default function LandingPage() {
           </div>
           
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="relative aspect-video bg-vessel-bg-base rounded-xl border border-vessel-border overflow-hidden flex items-center justify-center group">
-              <div className="w-20 h-20 rounded-full bg-vessel-bg-surface flex items-center justify-center text-vessel-text-muted text-2xl font-medium border border-vessel-border group-hover:border-vessel-accent/50 transition-colors">
-                ME
-              </div>
-              <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3">
+            <div className="relative aspect-video rounded-xl border border-vessel-border overflow-hidden group">
+              <SketchHost />
+              <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3">
                 <span className="text-sm font-medium">Host</span>
                 <AudioMeter active barCount={8} />
               </div>
             </div>
             
-            <div className="relative aspect-video bg-vessel-bg-base rounded-xl border border-vessel-border overflow-hidden flex items-center justify-center">
-              <div className="w-20 h-20 rounded-full bg-vessel-bg-surface flex items-center justify-center text-vessel-text-muted text-2xl font-medium border border-vessel-border">
-                GS
-              </div>
-              <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3">
+            <div className="relative aspect-video rounded-xl border border-vessel-border overflow-hidden">
+              <SketchGuest />
+              <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3">
                 <span className="text-sm font-medium">Guest</span>
                 <AudioMeter active barCount={8} />
               </div>
