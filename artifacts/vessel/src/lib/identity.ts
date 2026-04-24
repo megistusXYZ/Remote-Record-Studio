@@ -511,6 +511,24 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
       return null;
     }
     const signer = new ExtensionSigner();
+    // Verify the extension is still serving the same account it was when this
+    // identity was first stored. If the user switched accounts inside their
+    // extension, the stored pubkey is stale and we must force a fresh sign-in
+    // rather than silently signing under a different identity.
+    let livePubkey: string;
+    try {
+      livePubkey = await signer.getPublicKey();
+    } catch (err) {
+      console.warn("Couldn't read extension public key on restore:", err);
+      return null;
+    }
+    if (livePubkey !== stored.pubkey) {
+      console.warn(
+        "Extension account changed since last sign-in (stored vs current pubkey differ); discarding stored identity.",
+      );
+      clearStoredIdentity();
+      return null;
+    }
     return buildExtensionIdentity(stored.displayName, stored.pubkey, signer);
   }
   if (stored.signerType === "remote") {

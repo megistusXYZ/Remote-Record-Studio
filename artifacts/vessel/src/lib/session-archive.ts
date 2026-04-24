@@ -78,7 +78,7 @@ async function buildTrackEvent(
     content: `${track.participantName} — ${session.sessionTitle}`,
   };
 
-  return identity._signer.signEvent(template) as Promise<Event>;
+  return identity._signer.signEvent(template);
 }
 
 async function buildManifestEvent(
@@ -123,7 +123,7 @@ async function buildManifestEvent(
     content,
   };
 
-  return identity._signer.signEvent(template) as Promise<Event>;
+  return identity._signer.signEvent(template);
 }
 
 function buildAppShareUrl(archiveId: string, sessionId: string): string {
