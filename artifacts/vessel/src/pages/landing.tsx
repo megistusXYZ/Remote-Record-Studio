@@ -13,6 +13,7 @@ import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
+import { SketchCircle } from "../components/icons/SketchCircle";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -268,9 +269,18 @@ export default function LandingPage() {
                 className="relative z-10 flex flex-col items-center text-center"
               >
                 <div className="bg-vessel-bg-base px-6 mb-6">
-                  <span className="font-display font-bold text-6xl text-vessel-accent/20 select-none">
-                    0{step.num}
-                  </span>
+                  <div
+                    className="relative w-24 h-24 flex items-center justify-center select-none"
+                    style={{ transform: `rotate(${(i - 1) * 3}deg)` }}
+                  >
+                    <SketchCircle className="absolute inset-0 w-full h-full text-vessel-accent" />
+                    <span
+                      className="font-display font-bold text-4xl text-vessel-accent relative"
+                      style={{ transform: `rotate(${-(i - 1) * 3}deg)` }}
+                    >
+                      0{step.num}
+                    </span>
+                  </div>
                 </div>
                 <h3 className="font-display font-bold text-xl mb-3">{step.title}</h3>
                 <p className="text-sm text-vessel-text-secondary">{step.desc}</p>
