@@ -44,6 +44,21 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
   const [invite, setInvite] = useState<NostrConnectInvite | null>(null);
   const [waitingForSigner, setWaitingForSigner] = useState(false);
   const inviteRef = useRef<NostrConnectInvite | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Single teardown helper used by every cancel path so we never miss aborting
+  // an in-flight `awaitConnection` (which would otherwise leak the success/
+  // failure callback after the UI has already moved on).
+  const tearDownInvite = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    if (inviteRef.current) {
+      void inviteRef.current.cancel();
+      inviteRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -54,28 +69,14 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       setBunkerUri("");
       setWaitingForSigner(false);
       setInvite(null);
+    } else {
+      tearDownInvite();
     }
   }, [open, isNostrExtensionAvailable]);
 
-  // Tear down any open invite subscription when the modal closes (open flips
-  // false) or the component unmounts (covers ESC, backdrop click, parent
-  // unmount, navigation, hot-reload).
-  useEffect(() => {
-    if (!open) {
-      const i = inviteRef.current;
-      if (i) {
-        void i.cancel();
-        inviteRef.current = null;
-      }
-    }
-  }, [open]);
   useEffect(() => {
     return () => {
-      const i = inviteRef.current;
-      if (i) {
-        void i.cancel();
-        inviteRef.current = null;
-      }
+      tearDownInvite();
     };
   }, []);
 
@@ -84,11 +85,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
   }, [invite]);
 
   const cancelInvite = async () => {
-    if (inviteRef.current) {
-      await inviteRef.current.cancel();
-      inviteRef.current = null;
-      setInvite(null);
-    }
+    tearDownInvite();
+    setInvite(null);
     setWaitingForSigner(false);
   };
 
@@ -140,14 +138,20 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       return;
     }
     setError(null);
+    const abort = new AbortController();
+    abortRef.current = abort;
     try {
       const i = startNostrConnectInvite();
       setInvite(i);
       inviteRef.current = i;
       setWaitingForSigner(true);
-      // Block until the signer connects. This won't block the UI — the modal
-      // shows a "waiting…" indicator and a Cancel button.
-      const identity: VesselIdentity = await i.awaitConnection(displayName.trim());
+      // Block until the signer connects. The AbortController is wired into
+      // both `awaitConnection` and the modal teardown path (cancelInvite,
+      // handleOpenChange, the [open] effect, the unmount cleanup) so a
+      // user-triggered cancel/close deterministically rejects this await
+      // before the post-await UI side-effects can race.
+      const identity: VesselIdentity = await i.awaitConnection(displayName.trim(), abort.signal);
+      if (abort.signal.aborted) return;
       // Route through useIdentity().adoptIdentity so the post-sign-in side
       // effects (Zustand store + best-effort backend register) match the other
       // sign-in paths.
@@ -157,10 +161,12 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
       onSuccess();
       onOpenChange(false);
     } catch (err) {
+      if (abort.signal.aborted) return;
       console.error(err);
       setError((err instanceof Error && err.message) || "Couldn't complete the connection.");
       await cancelInvite();
     } finally {
+      if (abortRef.current === abort) abortRef.current = null;
       setWaitingForSigner(false);
     }
   };
@@ -177,9 +183,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess }: NostrSignInM
   // Wrap the dialog's onOpenChange so any in-flight invite is torn down before
   // the parent unmounts the dialog content (ESC, backdrop click, X button).
   const handleOpenChange = (next: boolean) => {
-    if (!next && inviteRef.current) {
-      void inviteRef.current.cancel();
-      inviteRef.current = null;
+    if (!next) {
+      tearDownInvite();
       setInvite(null);
       setWaitingForSigner(false);
     }
