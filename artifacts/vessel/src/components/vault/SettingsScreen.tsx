@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { Settings, ChevronDown, Copy, Chrome, KeyRound, ShieldCheck } from "lucide-react";
+import { Settings, ChevronDown, Copy, Chrome, KeyRound, ShieldCheck, Loader2, CheckCircle2, AlertCircle, RotateCcw } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useToast } from "../../hooks/use-toast";
 import { clearAllLocalRecordings } from "../../lib/recordings-storage";
@@ -10,6 +10,16 @@ import {
   exportIdentityBackup,
   getInitials,
 } from "../../lib/identity";
+import {
+  DEFAULT_STORAGE_URL,
+  checkStorageReachability,
+  getStorageUrl,
+  isValidStorageUrl,
+  normalizeStorageUrl,
+  publishStorageServerList,
+  setStorageUrl as persistStorageUrl,
+  type ReachabilityResult,
+} from "../../lib/storage-config";
 import { VaultSidebar } from "./VaultSidebar";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
@@ -22,6 +32,12 @@ export type SettingsScreenProps = {
 
 const SWATCH_COLORS = ["#00d4aa", "#ff4757", "#ffa502", "#5352ed", "#ff6b9d", "#7bed9f", "#70a1ff", "#ffaa7b"];
 
+type ReachabilityState =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "ok"; latencyMs: number }
+  | { kind: "error"; reason: string };
+
 export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [, setLocation] = useLocation();
   const { identity, displayName, setDisplayName, signOut, signerType } = useIdentity();
@@ -29,13 +45,15 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 
   const [nameInput, setNameInput] = useState(displayName || "");
   const [isSavingName, setIsSavingName] = useState(false);
-  
+
   const [selectedColor, setSelectedColor] = useState(() => localStorage.getItem("vessel_avatar_color") || deriveAvatarColorFromPubkey(pubkey));
   const [inviteMessage, setInviteMessage] = useState(() => localStorage.getItem("vessel_invite_message") || "");
-  
-  const [storageUrl, setStorageUrl] = useState(() => localStorage.getItem("vessel_storage_url") || "https://storage.vessel.local");
+
+  const [storageUrl, setStorageUrlInput] = useState(() => getStorageUrl());
+  const [savedStorageUrl, setSavedStorageUrl] = useState(() => getStorageUrl());
+  const [reachability, setReachability] = useState<ReachabilityState>({ kind: "idle" });
   const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem("vessel_relay_url") || "wss://relay.vessel.local");
-  
+
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [backupValue, setBackupValue] = useState<string | null>(null);
@@ -47,6 +65,40 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   useEffect(() => {
     localStorage.setItem("vessel_avatar_color", selectedColor);
   }, [selectedColor]);
+
+  // Live reachability check, debounced. Aborts on unmount or when the URL
+  // changes again so we don't race overlapping probes.
+  const reachabilityAbortRef = useRef<AbortController | null>(null);
+  const runReachabilityCheck = useCallback((url: string) => {
+    if (!isValidStorageUrl(url)) {
+      setReachability({ kind: "error", reason: "Enter a valid https:// URL." });
+      return;
+    }
+    setReachability({ kind: "checking" });
+    reachabilityAbortRef.current?.abort();
+    const ctl = new AbortController();
+    reachabilityAbortRef.current = ctl;
+    void (async () => {
+      const result: ReachabilityResult = await checkStorageReachability(url, ctl.signal);
+      if (ctl.signal.aborted) return;
+      if (result.state === "ok") {
+        setReachability({ kind: "ok", latencyMs: result.latencyMs });
+      } else {
+        setReachability({ kind: "error", reason: result.reason });
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => runReachabilityCheck(storageUrl), 400);
+    return () => clearTimeout(t);
+  }, [storageUrl, runReachabilityCheck]);
+
+  useEffect(() => {
+    return () => {
+      reachabilityAbortRef.current?.abort();
+    };
+  }, []);
 
   const handleSaveName = async () => {
     if (!nameInput.trim() || nameInput === displayName) return;
@@ -61,9 +113,33 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
     toast({ title: "Saved", description: "Default invite message updated." });
   };
 
-  const handleSaveStorageUrl = () => {
-    localStorage.setItem("vessel_storage_url", storageUrl);
+  const handleSaveStorageUrl = async () => {
+    const normalized = normalizeStorageUrl(storageUrl);
+    if (!isValidStorageUrl(normalized)) {
+      toast({ title: "Can't save", description: "Enter a valid https:// URL.", variant: "destructive" });
+      return;
+    }
+    persistStorageUrl(normalized);
+    setSavedStorageUrl(normalized);
+    setStorageUrlInput(normalized);
     toast({ title: "Saved", description: "Storage location updated." });
+    // Best-effort: mirror the choice as a portable server list event so it
+    // follows the user across devices when they sign in with the same key.
+    if (identity) {
+      publishStorageServerList(identity, [normalized])
+        .then(({ published }) => {
+          if (published) {
+            toast({ description: "Synced your storage choice across devices." });
+          }
+        })
+        .catch((err) => {
+          console.warn("Server list publish failed:", err);
+        });
+    }
+  };
+
+  const handleRestoreDefaultStorage = () => {
+    setStorageUrlInput(DEFAULT_STORAGE_URL);
   };
 
   const handleSaveRelayUrl = () => {
@@ -110,6 +186,9 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
     navigator.clipboard.writeText(backupValue);
     toast({ title: "Copied", description: "Backup key copied to clipboard." });
   };
+
+  const isStorageDirty = normalizeStorageUrl(storageUrl) !== savedStorageUrl;
+  const isAtDefault = normalizeStorageUrl(storageUrl) === DEFAULT_STORAGE_URL;
 
   return (
     <div className="flex h-[100dvh] bg-vessel-bg-base text-vessel-text-primary">
@@ -223,18 +302,61 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="px-6 pb-6 pt-2 border-t border-vessel-border space-y-6">
-                  
-                  <div className="space-y-1.5">
+
+                  <div className="space-y-2">
                     <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Storage location</label>
-                    <p className="text-xs text-vessel-text-muted">Where your files are saved. The default server is provided for free.</p>
+                    <p className="text-xs text-vessel-text-muted">
+                      Where your recordings are saved. The default community server is provided for free
+                      and isn't operated by Vessel — point to your own server any time.
+                    </p>
                     <div className="flex gap-2 mt-2">
-                      <Input 
-                        value={storageUrl} 
-                        onChange={e => setStorageUrl(e.target.value)} 
+                      <Input
+                        value={storageUrl}
+                        onChange={e => setStorageUrlInput(e.target.value)}
                         className="bg-vessel-bg-base border-vessel-border text-vessel-text-primary"
                         data-testid="input-storage-url"
                       />
-                      <VesselButton variant="primary" size="sm" onClick={handleSaveStorageUrl}>Save</VesselButton>
+                      <VesselButton
+                        variant="primary"
+                        size="sm"
+                        onClick={handleSaveStorageUrl}
+                        disabled={!isStorageDirty || !isValidStorageUrl(storageUrl)}
+                        data-testid="button-save-storage-url"
+                      >
+                        Save
+                      </VesselButton>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <div className="text-xs flex items-center gap-1.5 min-w-0" data-testid="text-storage-reachability">
+                        {reachability.kind === "checking" && (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-vessel-text-muted shrink-0" />
+                            <span className="text-vessel-text-muted truncate">Checking…</span>
+                          </>
+                        )}
+                        {reachability.kind === "ok" && (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-vessel-green shrink-0" />
+                            <span className="text-vessel-green truncate">Reachable · {reachability.latencyMs} ms</span>
+                          </>
+                        )}
+                        {reachability.kind === "error" && (
+                          <>
+                            <AlertCircle className="w-3.5 h-3.5 text-vessel-red shrink-0" />
+                            <span className="text-vessel-red truncate">{reachability.reason}</span>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRestoreDefaultStorage}
+                        disabled={isAtDefault}
+                        className="text-xs flex items-center gap-1 text-vessel-text-secondary hover:text-vessel-text-primary disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        data-testid="button-restore-default-storage"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Restore default
+                      </button>
                     </div>
                   </div>
 

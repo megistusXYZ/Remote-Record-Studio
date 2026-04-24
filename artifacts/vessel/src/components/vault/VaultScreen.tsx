@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Share2, Download, AlertTriangle, Check, Loader2 } from "lucide-react";
 import { useListRecordings, getListRecordingsQueryKey } from "@workspace/api-client-react";
-import { downloadRecordingById, isLocalBlobUrl } from "../../lib/recordings-storage";
+import { downloadRecordingById, extractRecordingIdFromLocalUrl, isLocalBlobUrl } from "../../lib/recordings-storage";
 import { useToast } from "../../hooks/use-toast";
 import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
 import { VaultSidebar } from "./VaultSidebar";
@@ -27,6 +27,29 @@ function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function triggerRemoteDownload(url: string, filename: string) {
+  // Open in a new tab — same-origin downloads can use the `download` attribute,
+  // but cross-origin storage servers will simply navigate. New tab keeps the
+  // user's session intact either way.
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+type TrackSyncState = "synced" | "local-only" | "failed" | "processing";
+
+function getTrackSyncState(r: { blobUrl?: string | null; status?: string }): TrackSyncState {
+  if (r.status === "processing") return "processing";
+  if (r.status === "failed") return "failed";
+  if (r.blobUrl && !isLocalBlobUrl(r.blobUrl)) return "synced";
+  return "local-only";
 }
 
 export function VaultScreen({ pubkey }: VaultScreenProps) {
@@ -78,8 +101,17 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
     let downloaded = 0;
     let missing = 0;
     for (const r of session.recordings) {
-      if (isLocalBlobUrl(r.blobUrl)) {
-        await downloadRecordingById(r.id, `${r.participantName}_track.webm`);
+      // The DB row id is a server-side UUID; the local blob is keyed by the
+      // client-side recordingId encoded inside the idb:// URL. Always extract
+      // from the URL — never use r.id as an IndexedDB key.
+      const localId = extractRecordingIdFromLocalUrl(r.blobUrl);
+      if (localId) {
+        await downloadRecordingById(localId, `${r.participantName}_track.webm`);
+        downloaded++;
+      } else if (r.blobUrl) {
+        // Recording is on a remote storage server — kick off a regular
+        // browser download via the canonical URL.
+        triggerRemoteDownload(r.blobUrl, `${r.participantName}_track.webm`);
         downloaded++;
       } else {
         missing++;
@@ -115,11 +147,16 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   };
 
   const handleDownloadTrack = async (r: any) => {
-    if (isLocalBlobUrl(r.blobUrl)) {
-      await downloadRecordingById(r.id, `${r.participantName}_track.webm`);
-    } else {
-      toast({ description: "Local copy not available — was this recording made on a different device?" });
+    const localId = extractRecordingIdFromLocalUrl(r.blobUrl);
+    if (localId) {
+      await downloadRecordingById(localId, `${r.participantName}_track.webm`);
+      return;
     }
+    if (r.blobUrl) {
+      triggerRemoteDownload(r.blobUrl, `${r.participantName}_track.webm`);
+      return;
+    }
+    toast({ description: "This track isn't available for download." });
   };
 
   return (
@@ -218,29 +255,45 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                         className="overflow-hidden"
                       >
                         <div className="border-t border-vessel-border mt-4 pt-4 space-y-2">
-                          {session.recordings.map(r => (
-                            <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-vessel-bg-base transition-colors">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: deriveAvatarColorFromPubkey(r.ownerPubkey) }}>
-                                <span className="text-white text-xs font-bold">{getInitials(r.participantName)}</span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-vessel-text-primary truncate">{r.participantName}</div>
-                                <div className="text-xs text-vessel-text-muted font-mono-vessel">
-                                  {formatDuration(r.durationSeconds)} &middot; {formatSize(r.sizeBytes)} &middot; {r.mimeType.includes('video') ? 'Video + Audio' : 'Audio'}
+                          {session.recordings.map(r => {
+                            const syncState = getTrackSyncState(r);
+                            const chip =
+                              syncState === "synced"
+                                ? { label: "Saved to your storage", className: "text-vessel-green bg-vessel-green/10 border-vessel-green/20", Icon: Check }
+                                : syncState === "processing"
+                                ? { label: "Saving…", className: "text-vessel-accent bg-vessel-accent/10 border-vessel-accent/20", Icon: Loader2 }
+                                : syncState === "failed"
+                                ? { label: "Save failed", className: "text-vessel-red bg-vessel-red/10 border-vessel-red/20", Icon: AlertTriangle }
+                                : { label: "On this device only", className: "text-vessel-text-muted bg-vessel-bg-base border-vessel-border", Icon: AlertTriangle };
+                            return (
+                              <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-vessel-bg-base transition-colors" data-testid={`row-track-${r.id}`}>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: deriveAvatarColorFromPubkey(r.ownerPubkey) }}>
+                                  <span className="text-white text-xs font-bold">{getInitials(r.participantName)}</span>
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-vessel-text-primary truncate">{r.participantName}</div>
+                                  <div className="text-xs text-vessel-text-muted font-mono-vessel">
+                                    {formatDuration(r.durationSeconds)} &middot; {formatSize(r.sizeBytes)} &middot; {r.mimeType.includes('video') ? 'Video + Audio' : 'Audio'}
+                                  </div>
+                                </div>
+                                <div
+                                  className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] shrink-0 ${chip.className}`}
+                                  data-testid={`chip-track-sync-${r.id}`}
+                                  data-state={syncState}
+                                >
+                                  <chip.Icon className={`w-3 h-3 ${syncState === "processing" ? "animate-spin" : ""}`} />
+                                  <span>{chip.label}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleDownloadTrack(r)}
+                                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-vessel-bg-elevated transition-colors shrink-0"
+                                  data-testid={`button-download-track-${r.id}`}
+                                >
+                                  <Download className="w-4 h-4 text-vessel-text-secondary" />
+                                </button>
                               </div>
-                              <div className="w-6 flex items-center justify-center shrink-0">
-                                {r.status === "ready" ? <Check className="w-4 h-4 text-vessel-green" /> : r.status === "processing" ? <Loader2 className="w-4 h-4 text-vessel-accent animate-spin" /> : <AlertTriangle className="w-4 h-4 text-vessel-red" />}
-                              </div>
-                              <button 
-                                onClick={() => handleDownloadTrack(r)}
-                                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-vessel-bg-elevated transition-colors shrink-0"
-                                data-testid={`button-download-track-${r.id}`}
-                              >
-                                <Download className="w-4 h-4 text-vessel-text-secondary" />
-                              </button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}

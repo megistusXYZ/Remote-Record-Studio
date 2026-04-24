@@ -1,14 +1,26 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { HardDrive } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
 import { NostrSignInModal } from "./NostrSignInModal";
+import {
+  DEFAULT_STORAGE_URL,
+  getStorageUrl,
+  isValidStorageUrl,
+  normalizeStorageUrl,
+  publishStorageServerList,
+  setStorageUrl as persistStorageUrl,
+} from "../../lib/storage-config";
+import type { VesselIdentity } from "../../lib/identity";
+
+type Step = "name" | "storage" | "welcome";
 
 export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const { createNewIdentity, displayName: storedName } = useIdentity();
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -16,6 +28,14 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showNostrModal, setShowNostrModal] = useState(false);
   const submitLockRef = useRef(false);
+
+  // Storage step state. Defaults to whatever the user has saved (or the
+  // community default) so first-time users can keep tapping "Continue".
+  const [storageMode, setStorageMode] = useState<"default" | "custom">(
+    () => (getStorageUrl() === DEFAULT_STORAGE_URL ? "default" : "custom"),
+  );
+  const [storageUrlInput, setStorageUrlInput] = useState<string>(() => getStorageUrl());
+  const [createdIdentity, setCreatedIdentity] = useState<VesselIdentity | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,18 +46,43 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
     setError(null);
 
     try {
-      await createNewIdentity(name.trim(), email.trim() || undefined);
-      setStep(2);
-    } catch (err: any) {
+      const id = await createNewIdentity(name.trim(), email.trim() || undefined);
+      setCreatedIdentity(id);
+      setStep("storage");
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to create studio.");
+      const message =
+        err instanceof Error ? err.message : "Failed to create studio.";
+      setError(message);
+    } finally {
       setIsSubmitting(false);
       submitLockRef.current = false;
     }
   };
 
+  const handleStorageContinue = () => {
+    const chosen =
+      storageMode === "default"
+        ? DEFAULT_STORAGE_URL
+        : normalizeStorageUrl(storageUrlInput);
+
+    if (storageMode === "custom" && !isValidStorageUrl(chosen)) {
+      setError("Enter a valid https:// URL for your storage server.");
+      return;
+    }
+    setError(null);
+    persistStorageUrl(chosen);
+    if (createdIdentity) {
+      // Best-effort: mirror the choice across devices for portable signers.
+      publishStorageServerList(createdIdentity, [chosen]).catch((err) => {
+        console.warn("Server list publish failed:", err);
+      });
+    }
+    setStep("welcome");
+  };
+
   useEffect(() => {
-    if (step !== 2) return undefined;
+    if (step !== "welcome") return undefined;
     const timer = setTimeout(() => {
       onComplete();
     }, 2000);
@@ -53,7 +98,7 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
       </div>
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        {step === 1 ? (
+        {step === "name" ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -140,6 +185,110 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
                 </button>
               </div>
             </form>
+          </motion.div>
+        ) : step === "storage" ? (
+          <motion.div
+            key="storage"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full flex flex-col"
+          >
+            <div className="flex items-center self-center font-display font-bold text-2xl tracking-tight mb-12">
+              Vessel<span className="text-vessel-accent">.</span>
+            </div>
+
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 rounded-full bg-vessel-accent/10 border border-vessel-accent/20 flex items-center justify-center mx-auto mb-5">
+                <HardDrive className="w-6 h-6 text-vessel-accent" />
+              </div>
+              <h1 className="font-display text-3xl font-bold mb-3">Where do your recordings live?</h1>
+              <p className="text-vessel-text-secondary text-sm leading-relaxed">
+                Vessel never holds your media. Each recording streams straight to a storage server you choose &mdash;
+                you can change this any time in Settings.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 rounded-xl bg-vessel-red/10 border border-vessel-red/20 text-vessel-red text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setStorageMode("default")}
+                className={`w-full text-left p-4 rounded-xl border transition-colors ${
+                  storageMode === "default"
+                    ? "border-vessel-accent bg-vessel-accent/5"
+                    : "border-vessel-border bg-vessel-bg-surface hover:border-vessel-border-strong"
+                }`}
+                data-testid="option-storage-default"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-vessel-text-primary text-sm">Use the community default</div>
+                    <div className="text-xs text-vessel-text-muted mt-1">
+                      Free public server. Quick to start. Not run by Vessel.
+                    </div>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 shrink-0 ${
+                      storageMode === "default"
+                        ? "border-vessel-accent bg-vessel-accent"
+                        : "border-vessel-border"
+                    }`}
+                  />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStorageMode("custom")}
+                className={`w-full text-left p-4 rounded-xl border transition-colors ${
+                  storageMode === "custom"
+                    ? "border-vessel-accent bg-vessel-accent/5"
+                    : "border-vessel-border bg-vessel-bg-surface hover:border-vessel-border-strong"
+                }`}
+                data-testid="option-storage-custom"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-vessel-text-primary text-sm">I have my own server</div>
+                    <div className="text-xs text-vessel-text-muted mt-1">
+                      Point Vessel at any storage server you control.
+                    </div>
+                  </div>
+                  <div
+                    className={`w-4 h-4 rounded-full border-2 shrink-0 ${
+                      storageMode === "custom"
+                        ? "border-vessel-accent bg-vessel-accent"
+                        : "border-vessel-border"
+                    }`}
+                  />
+                </div>
+                {storageMode === "custom" && (
+                  <Input
+                    value={storageUrlInput}
+                    onChange={(e) => setStorageUrlInput(e.target.value)}
+                    placeholder="https://your-server.example"
+                    className="mt-3 h-11 bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
+                    onClick={(e) => e.stopPropagation()}
+                    data-testid="input-storage-url"
+                  />
+                )}
+              </button>
+            </div>
+
+            <VesselButton
+              type="button"
+              size="lg"
+              className="w-full mt-8"
+              onClick={handleStorageContinue}
+              data-testid="button-storage-continue"
+            >
+              Continue &rarr;
+            </VesselButton>
           </motion.div>
         ) : (
           <motion.div
