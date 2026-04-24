@@ -8,6 +8,9 @@ import {
 } from "@workspace/api-client-react";
 import { Mic, MicOff, Video, VideoOff, MonitorUp, Settings, Copy, Check, Users, Radio, Circle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Layout } from "../components/layout";
+import { LobbyScreen } from "../components/lobby/LobbyScreen";
+import { cancelSession } from "../lib/session";
 
 export default function SessionStudio() {
   const params = useParams();
@@ -19,10 +22,17 @@ export default function SessionStudio() {
   const [copied, setCopied] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isStartingRecording, setIsStartingRecording] = useState(false);
   
   const { data: session, isLoading, error } = useGetSession(
     sessionId || "",
-    { query: { enabled: !!sessionId && !!pubkey, queryKey: getGetSessionQueryKey(sessionId || "") } }
+    { 
+      query: { 
+        enabled: !!sessionId && !!pubkey, 
+        queryKey: getGetSessionQueryKey(sessionId || ""),
+        refetchInterval: (query) => query.state.data?.status === "waiting" ? 3000 : false,
+      } 
+    }
   );
 
   const updateSessionMutation = useUpdateSession();
@@ -41,6 +51,59 @@ export default function SessionStudio() {
   );
 
   const isHost = session.hostPubkey === pubkey;
+
+  const handleStartRecording = async () => {
+    if (!isHost || !sessionId) return;
+    setIsStartingRecording(true);
+    try {
+      await updateSessionMutation.mutateAsync({
+        sessionId,
+        data: { status: "live" }
+      });
+      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsStartingRecording(false);
+    }
+  };
+
+  const handleCancelSession = async () => {
+    if (!sessionId) return;
+    try {
+      await cancelSession(sessionId);
+      setLocation("/home");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (session.status === "waiting") {
+    return (
+      <Layout>
+        <LobbyScreen
+          state="waitingRoom"
+          session={{
+            id: session.id,
+            title: session.title,
+            inviteCode: session.inviteCode,
+            hostPubkey: session.hostPubkey,
+            hostName: session.hostName,
+            participants: session.participants.map(p => ({
+              id: p.id,
+              displayName: p.displayName,
+              pubkey: p.pubkey,
+              role: p.role as "host" | "guest",
+            })),
+          }}
+          onStartRecording={isHost ? handleStartRecording : undefined}
+          onCancelSession={isHost ? handleCancelSession : undefined}
+          isStarting={isStartingRecording}
+        />
+      </Layout>
+    );
+  }
+
   const inviteUrl = `${window.location.origin}/join/${session.inviteCode}`;
 
   const copyInvite = () => {
