@@ -1,0 +1,100 @@
+You are building "Vessel" — a studio-quality remote recording platform that is secretly
+decentralized. To users, it looks and feels like a polished SaaS product (think Riverside.fm
+meets Linear). Under the hood, every identity is a Nostr keypair and every recording is a
+Blossom blob. Users should NEVER need to know this unless they actively want to.
+
+CORE PHILOSOPHY — "Sovereign by default, simple by design":
+- Users sign up with a display name and optional email. We generate a Nostr keypair silently.
+- Guests click a link and type their name. That's it. No accounts, no passwords.
+- The word "Nostr", "QUIC", "Blossom", "keypair", "relay" NEVER appear in any user-facing text.
+- Power users can access their keys in Settings > Export Identity.
+- The platform is free forever (peer-to-peer storage), but never explains why.
+
+PRODUCT NAME: Vessel
+TAGLINE: "Your voice. Your studio. Your files."
+SUB-TAGLINE: "Studio-quality recordings, delivered straight to you — no subscriptions, no middlemen."
+
+CORE TECH STACK:
+- Frontend: React + Vite + TypeScript (single Replit web app)
+- Nostr identity & signaling: applesauce-core, applesauce-react, applesauce-relay, applesauce-signers
+- Real-time A/V transport: moq-js (@kixelated/moq) via WebTransport to external relay
+- Local recording: MediaRecorder API + IndexedDB buffering (5-second chunks)
+- Sovereign storage: Blossom protocol (BUD-02 + BUD-11) — SHA-256 addressed blobs
+- Styling: Tailwind CSS + custom CSS variables. NO component libraries (build everything custom).
+
+KEY CONSTRAINTS:
+- Replit cannot run QUIC/UDP. MoQ relay is ALWAYS external (default: relay.quic.video).
+- Replit app handles: UI, Nostr signaling, recording, Blossom uploads. NOT the relay.
+- Default Blossom server: https://blossom.primal.net
+- All signing is client-side. Private keys never leave the browser.
+
+DESIGN SYSTEM — "Broadcast Dark":
+  Fonts:
+    - Display/Headlines: 'Syne' (Google Fonts) — bold, geometric, editorial
+    - Body/UI: 'DM Sans' (Google Fonts) — clean, legible, friendly
+    - Mono/Technical: 'JetBrains Mono' — for timestamps, IDs, technical info
+
+  Colors (CSS variables):
+    --bg-base: #080b0f          /* near-black, slight blue tint */
+    --bg-surface: #0f1318       /* card/panel backgrounds */
+    --bg-elevated: #161c23      /* hover states, elevated elements */
+    --bg-overlay: #1d252f       /* modals, drawers */
+    --border: rgba(255,255,255,0.07)
+    --border-strong: rgba(255,255,255,0.13)
+    --text-primary: #f0f4f8     /* near-white */
+    --text-secondary: #8a9ab0   /* muted labels */
+    --text-muted: #4a5568       /* very muted, hints */
+    --accent: #00d4aa           /* mint/teal — the signature color */
+    --accent-glow: rgba(0,212,170,0.15)
+    --accent-dim: #00a886
+    --red: #ff4757
+    --amber: #ffa502
+    --green: #2ed573
+
+  UI Principles:
+    - Generous whitespace, slow-reveal animations, no clutter
+    - Buttons: pill-shaped, accent color for primary, ghost for secondary
+    - Cards: subtle border + very slight bg-elevated background. NO heavy shadows.
+    - Recording indicator: pulsing red dot (never a square)
+    - Audio meters: thin vertical bars, accent color, smooth animation
+    - Status indicators: small colored circles with a subtle glow
+    - Transitions: 200ms ease-out for most, 400ms for page transitions (fade+slide)
+    - Microinteractions: button press scale(0.97), hover scale(1.02) on cards
+    - Every empty state has an illustration and helpful copy — no raw empty divs
+
+  Tone of voice:
+    - Warm, confident, never technical
+    - "Your studio is ready" not "WebTransport connection established"
+    - "Saved to your vault" not "Uploaded to Blossom server"
+    - "Recording synced" not "Chunk 7 uploaded SHA-256 abc123"
+    - Error messages: empathetic + actionable ("Couldn't connect to the room — check your wifi and try again")
+    - Empty states: encouraging ("Your recordings will appear here after your first session")
+
+DIRECTORY STRUCTURE:
+vessel/
+  src/
+    components/
+      ui/            # Design system primitives (Button, Card, Badge, Input, Modal, Avatar, Meter)
+      layout/        # AppShell, Sidebar, TopBar
+      onboarding/    # Landing, SignUp, GuestJoin screens
+      lobby/         # Lobby, ParticipantCard, InviteModal
+      studio/        # Studio, VideoTile, AudioMeter, ControlBar
+      vault/         # Vault (recordings list), RecordingCard, ManifestView
+    hooks/
+    lib/
+      nostr.ts       # Applesauce setup (NEVER exported to UI layer directly)
+      blossom.ts     # Blossom client
+      recorder.ts    # ChunkedRecorder
+      moq.ts         # MoQ transport
+      identity.ts    # User identity abstraction (hides keypair details)
+      session.ts     # Session create/join/signal
+    store/           # Zustand global state
+    types.ts
+    App.tsx
+    main.tsx
+  public/
+    fonts/           # Self-hosted fonts (or Google Fonts import)
+    icons/
+  .env.example
+  vite.config.ts
+  package.json

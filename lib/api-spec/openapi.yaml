@@ -3,13 +3,22 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Vessel API - studio-quality remote recording platform
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: identity
+    description: User identity management
+  - name: sessions
+    description: Recording sessions
+  - name: recordings
+    description: Saved recordings in the vault
+  - name: vault
+    description: Vault summary and stats
+
 paths:
   /healthz:
     get:
@@ -24,6 +33,267 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /identity:
+    post:
+      operationId: createIdentity
+      tags: [identity]
+      summary: Register or retrieve user identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIdentityBody"
+      responses:
+        "200":
+          description: Identity created or fetched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List all sessions for the current user
+      parameters:
+        - name: pubkey
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new recording session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionBody"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get a session by ID
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Session not found
+    patch:
+      operationId: updateSession
+      tags: [sessions]
+      summary: Update session (start/stop recording, change status)
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionBody"
+      responses:
+        "200":
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    delete:
+      operationId: deleteSession
+      tags: [sessions]
+      summary: Delete a session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session deleted
+
+  /sessions/{sessionId}/join:
+    post:
+      operationId: joinSession
+      tags: [sessions]
+      summary: Join a session as a guest
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinSessionBody"
+      responses:
+        "200":
+          description: Joined session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /recordings:
+    get:
+      operationId: listRecordings
+      tags: [recordings]
+      summary: List all recordings in the vault
+      parameters:
+        - name: pubkey
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of recordings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recording"
+    post:
+      operationId: createRecording
+      tags: [recordings]
+      summary: Save a recording to the vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecordingBody"
+      responses:
+        "201":
+          description: Recording saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recording"
+
+  /recordings/{recordingId}:
+    get:
+      operationId: getRecording
+      tags: [recordings]
+      summary: Get a recording by ID
+      parameters:
+        - name: recordingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Recording details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recording"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteRecording
+      tags: [recordings]
+      summary: Delete a recording
+      parameters:
+        - name: recordingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Recording deleted
+
+  /vault/summary:
+    get:
+      operationId: getVaultSummary
+      tags: [vault]
+      summary: Get vault summary stats for a user
+      parameters:
+        - name: pubkey
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vault summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultSummary"
+
+  /vault/recent:
+    get:
+      operationId: getRecentActivity
+      tags: [vault]
+      summary: Get recent recordings and sessions
+      parameters:
+        - name: pubkey
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecentActivity"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +304,251 @@ components:
       required:
         - status
 
+    Identity:
+      type: object
+      properties:
+        id:
+          type: string
+        pubkey:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - pubkey
+        - displayName
+        - createdAt
+
+    CreateIdentityBody:
+      type: object
+      properties:
+        pubkey:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+          nullable: true
+      required:
+        - pubkey
+        - displayName
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        hostPubkey:
+          type: string
+        hostName:
+          type: string
+        status:
+          type: string
+          enum: [waiting, live, ended]
+        inviteCode:
+          type: string
+        participantCount:
+          type: integer
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Participant"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - title
+        - hostPubkey
+        - hostName
+        - status
+        - inviteCode
+        - participantCount
+        - participants
+        - createdAt
+
+    CreateSessionBody:
+      type: object
+      properties:
+        title:
+          type: string
+        hostPubkey:
+          type: string
+        hostName:
+          type: string
+      required:
+        - title
+        - hostPubkey
+        - hostName
+
+    UpdateSessionBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [waiting, live, ended]
+        title:
+          type: string
+
+    JoinSessionBody:
+      type: object
+      properties:
+        guestName:
+          type: string
+        guestPubkey:
+          type: string
+      required:
+        - guestName
+        - guestPubkey
+
+    Participant:
+      type: object
+      properties:
+        id:
+          type: string
+        pubkey:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum: [host, guest]
+        joinedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - pubkey
+        - displayName
+        - role
+        - joinedAt
+
+    Recording:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+          nullable: true
+        sessionTitle:
+          type: string
+          nullable: true
+        ownerPubkey:
+          type: string
+        participantName:
+          type: string
+        durationSeconds:
+          type: integer
+        sizeBytes:
+          type: integer
+        mimeType:
+          type: string
+        blobHash:
+          type: string
+          nullable: true
+        blobUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [processing, ready, error]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - ownerPubkey
+        - participantName
+        - durationSeconds
+        - sizeBytes
+        - mimeType
+        - status
+        - createdAt
+
+    CreateRecordingBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          nullable: true
+        sessionTitle:
+          type: string
+          nullable: true
+        ownerPubkey:
+          type: string
+        participantName:
+          type: string
+        durationSeconds:
+          type: integer
+        sizeBytes:
+          type: integer
+        mimeType:
+          type: string
+        blobHash:
+          type: string
+          nullable: true
+        blobUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [processing, ready, error]
+      required:
+        - ownerPubkey
+        - participantName
+        - durationSeconds
+        - sizeBytes
+        - mimeType
+        - status
+
+    VaultSummary:
+      type: object
+      properties:
+        totalRecordings:
+          type: integer
+        totalDurationSeconds:
+          type: integer
+        totalSizeBytes:
+          type: integer
+        totalSessions:
+          type: integer
+        recordingsThisMonth:
+          type: integer
+      required:
+        - totalRecordings
+        - totalDurationSeconds
+        - totalSizeBytes
+        - totalSessions
+        - recordingsThisMonth
+
+    RecentActivity:
+      type: object
+      properties:
+        recentRecordings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Recording"
+        recentSessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+      required:
+        - recentRecordings
+        - recentSessions
