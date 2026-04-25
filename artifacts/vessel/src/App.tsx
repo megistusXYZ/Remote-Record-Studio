@@ -17,6 +17,7 @@ import ShareView from "./pages/share-view";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import HowItWorks from "./pages/how-it-works";
+import { MobileNavLayout } from "./components/MobileNavLayout";
 
 const queryClient = new QueryClient();
 
@@ -33,10 +34,10 @@ function Router() {
     <Switch>
       <Route path="/" component={LandingPage} />
       <Route path="/start" component={Onboarding} />
-      <Route path="/home" component={Home} />
-      <Route path="/vault" component={Vault} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/session/new" component={NewSession} />
+      <Route path="/home">{() => <MobileNavLayout><Home /></MobileNavLayout>}</Route>
+      <Route path="/vault">{() => <MobileNavLayout><Vault /></MobileNavLayout>}</Route>
+      <Route path="/settings">{() => <MobileNavLayout><Settings /></MobileNavLayout>}</Route>
+      <Route path="/session/new">{() => <MobileNavLayout><NewSession /></MobileNavLayout>}</Route>
       <Route path="/session/:id" component={SessionStudio} />
       <Route path="/join/:inviteCode" component={Join} />
       <Route path="/s/:pointer" component={ShareView} />
