@@ -83,6 +83,8 @@ Vessel is a studio-quality remote recording platform designed to offer a polishe
 
 **Key File Locations:**
 - `artifacts/vessel/src/index.css` — Broadcast Dark design system.
+- `artifacts/vessel/public/` — Branded PWA assets (favicon.svg, pwa-192/512, apple-touch-icon, maskable). Regenerate with `node scripts/generate-pwa-icons.mjs` after editing favicon.svg.
+- `artifacts/vessel/vite.config.ts` — VitePWA plugin config: manifest icons, workbox precache (excludes oversized hero art), iOS-friendly standalone display.
 - `artifacts/api-server/src/routes/` — API route handlers.
 - `lib/db/src/schema/` — Database schema (identities, sessions, participants, recordings).
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (source of truth).
