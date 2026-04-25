@@ -338,15 +338,23 @@ export default function HowItWorks() {
             muted!&rdquo; type messages between participants.
           </li>
           <li>
-            Logs basic security stuff (IP addresses, for abuse prevention) for
-            about a month, then forgets.
+            Writes a tiny log line for each request: the request id, the
+            method, and the path. That is the entire log entry &mdash; no IP
+            address, no user agent, no header, no body. (The CDN and hosting
+            provider in front of us see standard connection info the way they
+            would for any website; that is not something Vessel collects.)
           </li>
         </ul>
         <p>
           That is it. The interesting work &mdash; capturing your voice,
           encoding the audio, storing the file &mdash; all happens inside the
           browsers of the people in the room. Vessel just opens the door and
-          gets out of the way.
+          gets out of the way. If you want the literal field-by-field list of
+          what we store, the{" "}
+          <a href="/privacy" className="text-vessel-accent hover:underline">
+            Privacy notice
+          </a>{" "}
+          spells it out.
         </p>
       </ContentSection>
 
