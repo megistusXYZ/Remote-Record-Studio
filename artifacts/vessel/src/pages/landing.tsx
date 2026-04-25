@@ -585,9 +585,29 @@ export default function LandingPage() {
           </div>
           
           <div className="flex flex-wrap justify-center gap-6 text-sm text-vessel-text-muted font-medium">
-            <a href="#" className="hover:text-vessel-accent transition-colors">Privacy</a>
-            <a href="#" className="hover:text-vessel-accent transition-colors">Terms</a>
-            <a href="#" className="hover:text-vessel-accent transition-colors">GitHub</a>
+            <a
+              href={`${import.meta.env.BASE_URL}privacy`}
+              className="hover:text-vessel-accent transition-colors"
+              data-testid="footer-link-privacy"
+            >
+              Privacy
+            </a>
+            <a
+              href={`${import.meta.env.BASE_URL}terms`}
+              className="hover:text-vessel-accent transition-colors"
+              data-testid="footer-link-terms"
+            >
+              Terms
+            </a>
+            <a
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-vessel-accent transition-colors"
+              data-testid="footer-link-github"
+            >
+              GitHub
+            </a>
           </div>
         </div>
         

@@ -13,6 +13,8 @@ import NewSession from "./pages/session-new";
 import SessionStudio from "./pages/session-studio";
 import Join from "./pages/join";
 import ShareView from "./pages/share-view";
+import Privacy from "./pages/privacy";
+import Terms from "./pages/terms";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +30,8 @@ function Router() {
       <Route path="/session/:id" component={SessionStudio} />
       <Route path="/join/:inviteCode" component={Join} />
       <Route path="/s/:pointer" component={ShareView} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route component={NotFound} />
     </Switch>
   );
