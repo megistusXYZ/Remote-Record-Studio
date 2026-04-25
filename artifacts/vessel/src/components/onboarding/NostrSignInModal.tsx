@@ -12,7 +12,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { VesselButton } from "../vessel-ui/VesselButton";
-import { NostrOstrich } from "../vessel-ui/NostrOstrich";
 import { useIdentity } from "../../hooks/use-identity";
 import {
   isSupportedRemoteSignerUri,
@@ -197,9 +196,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="bg-vessel-bg-surface border-vessel-border text-vessel-text-primary max-w-md">
         <DialogHeader className="mb-2">
-          <DialogTitle className="font-display text-xl flex items-center gap-3 justify-center sm:justify-start w-full">
-            <NostrOstrich className="w-12 h-8 rounded-md" />
-            <span>Sign in with Nostr</span>
+          <DialogTitle className="font-display text-xl text-center sm:text-left w-full">
+            Sign in with Nostr
           </DialogTitle>
           <DialogDescription className="text-vessel-text-secondary mt-2">
             {mode === "choose"
