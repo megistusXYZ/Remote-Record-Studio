@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useGetSession, useJoinSession } from "@workspace/api-client-react";
 import { useIdentity } from "../../hooks/use-identity";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useAvatarColor } from "../../hooks/use-avatar-color";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ export function GuestJoinScreen({
   const { data: session, isLoading: isSessionLoading, isError: isSessionError } = useGetSession(inviteCode);
   const joinSessionMutation = useJoinSession();
   const { displayName, createGuestIdentity } = useIdentity();
+  const avatarColor = useAvatarColor(session?.hostPubkey ?? null);
 
   const [name, setName] = useState("");
   const [consent, setConsent] = useState(false);
@@ -87,7 +89,6 @@ export function GuestJoinScreen({
   }
 
   const hostFirstName = session.hostName.split(" ")[0];
-  const avatarColor = deriveAvatarColorFromPubkey(session.hostPubkey);
   const initials = getInitials(session.hostName);
 
   return (

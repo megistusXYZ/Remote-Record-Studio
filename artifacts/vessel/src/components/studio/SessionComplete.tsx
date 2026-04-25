@@ -1,7 +1,12 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2, Download, Link as LinkIcon, Cloud, CloudOff, AlertCircle } from "lucide-react";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useIdentity } from "../../hooks/use-identity";
+import {
+  resolveAvatarColor,
+  useStoredAvatarColor,
+} from "../../hooks/use-avatar-color";
 import { downloadBlob } from "../../lib/recordings-storage";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { useToast } from "../../hooks/use-toast";
@@ -85,6 +90,8 @@ export function SessionComplete({
 }: SessionCompleteProps) {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { pubkey: selfPubkey } = useIdentity();
+  const storedColor = useStoredAvatarColor();
 
   // Confetti effect
   useEffect(() => {
@@ -196,7 +203,7 @@ export function SessionComplete({
                     >
                       <div 
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: deriveAvatarColorFromPubkey(track.participantPubkey) }}
+                        style={{ backgroundColor: resolveAvatarColor(track.participantPubkey, selfPubkey, storedColor) }}
                       >
                         <span className="text-white text-xs font-bold">{getInitials(track.participantName)}</span>
                       </div>
@@ -250,7 +257,7 @@ export function SessionComplete({
                           <div className="flex items-center gap-3 mb-3">
                             <div 
                               className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                              style={{ backgroundColor: deriveAvatarColorFromPubkey(track.participantPubkey) }}
+                              style={{ backgroundColor: resolveAvatarColor(track.participantPubkey, selfPubkey, storedColor) }}
                             >
                               <span className="text-white text-sm font-bold">{getInitials(track.participantName)}</span>
                             </div>

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { MicOff } from "lucide-react";
 import { AudioMeter } from "../vessel-ui/AudioMeter";
-import { getInitials, deriveAvatarColorFromPubkey } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useAvatarColor } from "../../hooks/use-avatar-color";
 import { cn } from "@/lib/utils";
 
 export type VideoTileProps = {
@@ -36,7 +37,7 @@ export function VideoTile({
     }
   }, [stream]);
 
-  const avatarColor = deriveAvatarColorFromPubkey(participant.pubkey);
+  const avatarColor = useAvatarColor(participant.pubkey);
   const initials = getInitials(participant.displayName);
 
   return (

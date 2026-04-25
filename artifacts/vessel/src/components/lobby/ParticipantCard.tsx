@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useAvatarColor } from "../../hooks/use-avatar-color";
 import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { Mic, Video, MicOff, VideoOff } from "lucide-react";
 
@@ -25,7 +26,7 @@ export function ParticipantCard({
   micActive = true,
   cameraActive = true,
 }: ParticipantCardProps) {
-  const avatarColor = deriveAvatarColorFromPubkey(participant.pubkey);
+  const avatarColor = useAvatarColor(participant.pubkey);
   const initials = getInitials(participant.displayName);
 
   let statusDotClass = "bg-vessel-accent";

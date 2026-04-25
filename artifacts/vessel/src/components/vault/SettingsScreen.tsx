@@ -9,6 +9,7 @@ import {
   describeSignerType,
   getInitials,
 } from "../../lib/identity";
+import { setStoredAvatarColor } from "../../hooks/use-avatar-color";
 import { BackupKeyModal } from "./BackupKeyModal";
 import {
   DEFAULT_STORAGE_URL,
@@ -69,7 +70,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const SignerIcon = signerType === "extension" ? Chrome : signerType === "remote" ? KeyRound : ShieldCheck;
 
   useEffect(() => {
-    localStorage.setItem("vessel_avatar_color", selectedColor);
+    setStoredAvatarColor(selectedColor);
   }, [selectedColor]);
 
   // Live reachability check, debounced. Aborts on unmount or when the URL
