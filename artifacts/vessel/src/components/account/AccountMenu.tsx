@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { LogOut, User } from "lucide-react";
+import { Download, LogOut, User } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
-import { getInitials } from "../../lib/identity";
+import {
+  downloadBackupFile,
+  exportIdentityBackup,
+  getInitials,
+} from "../../lib/identity";
 import { useAvatarColor } from "../../hooks/use-avatar-color";
+import { useToast } from "../../hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,14 +34,18 @@ export type AccountMenuProps = {
 
 export function AccountMenu({ variant = "header" }: AccountMenuProps) {
   const [, setLocation] = useLocation();
-  const { displayName, pubkey, signOut } = useIdentity();
+  const { identity, displayName, pubkey, signerType, signOut } = useIdentity();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [savingBackup, setSavingBackup] = useState(false);
+  const [backupSaved, setBackupSaved] = useState(false);
   const avatarColor = useAvatarColor(pubkey);
+  const { toast } = useToast();
 
   if (!displayName || !pubkey) return null;
 
   const initials = getInitials(displayName);
+  const canDownloadBackup = signerType === "local" && !!identity;
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -46,8 +55,93 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
     } finally {
       setSigningOut(false);
       setConfirmOpen(false);
+      setBackupSaved(false);
     }
   };
+
+  const handleSaveBackup = () => {
+    if (!identity || !canDownloadBackup) return;
+    setSavingBackup(true);
+    try {
+      const backupKey = exportIdentityBackup(identity);
+      const filename = downloadBackupFile(identity, backupKey);
+      setBackupSaved(true);
+      toast({ title: "Backup saved", description: `Saved as ${filename}.` });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Couldn't save your backup key.";
+      toast({
+        title: "Couldn't save backup",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setSavingBackup(false);
+    }
+  };
+
+  const dialog = (
+    <AlertDialog
+      open={confirmOpen}
+      onOpenChange={(o) => {
+        if (!signingOut) {
+          setConfirmOpen(o);
+          if (!o) setBackupSaved(false);
+        }
+      }}
+    >
+      <AlertDialogContent data-testid="dialog-sign-out">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sign out of Vessel?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You'll be sent back to the welcome screen. Your local recordings stay
+            on this device — they're not deleted.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {canDownloadBackup && (
+          <button
+            type="button"
+            onClick={handleSaveBackup}
+            disabled={savingBackup || signingOut}
+            className="group -mx-1 mt-1 flex w-[calc(100%+0.5rem)] items-center gap-2.5 rounded-lg border border-vessel-border/60 bg-vessel-bg-base/40 px-3 py-2.5 text-left text-sm text-vessel-text-secondary transition-colors hover:border-vessel-accent/40 hover:bg-vessel-accent/5 hover:text-vessel-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid="button-sign-out-save-backup"
+          >
+            <Download
+              className={`w-4 h-4 shrink-0 transition-colors ${
+                backupSaved
+                  ? "text-vessel-green"
+                  : "text-vessel-text-muted group-hover:text-vessel-accent"
+              }`}
+            />
+            <span className="flex-1">
+              {savingBackup
+                ? "Saving backup key…"
+                : backupSaved
+                  ? "Backup key saved to your downloads."
+                  : "Save a copy of your backup key first"}
+            </span>
+            {!savingBackup && !backupSaved && (
+              <span className="text-[11px] uppercase tracking-wider text-vessel-text-muted/80 group-hover:text-vessel-accent/80">
+                Optional
+              </span>
+            )}
+          </button>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={signingOut} data-testid="button-sign-out-cancel">
+            Stay signed in
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleSignOut}
+            disabled={signingOut}
+            data-testid="button-sign-out-confirm"
+          >
+            {signingOut ? "Signing out…" : "Sign out"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
   if (variant === "sidebar") {
     return (
@@ -80,7 +174,7 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             <LogOut className="w-4 h-4" />
           </button>
         </div>
-        {renderDialog(confirmOpen, setConfirmOpen, handleSignOut, signingOut)}
+        {dialog}
       </>
     );
   }
@@ -134,40 +228,7 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {renderDialog(confirmOpen, setConfirmOpen, handleSignOut, signingOut)}
+      {dialog}
     </>
-  );
-}
-
-function renderDialog(
-  open: boolean,
-  setOpen: (v: boolean) => void,
-  onConfirm: () => void,
-  busy: boolean,
-) {
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogContent data-testid="dialog-sign-out">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Sign out of Vessel?</AlertDialogTitle>
-          <AlertDialogDescription>
-            You'll be sent back to the welcome screen. Your local recordings stay
-            on this device — they're not deleted.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy} data-testid="button-sign-out-cancel">
-            Stay signed in
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onConfirm}
-            disabled={busy}
-            data-testid="button-sign-out-confirm"
-          >
-            {busy ? "Signing out…" : "Sign out"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }
