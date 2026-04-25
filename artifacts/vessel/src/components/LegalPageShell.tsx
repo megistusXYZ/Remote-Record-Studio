@@ -63,7 +63,7 @@ export function LegalPageShell({ title, lastUpdated, children }: LegalPageShellP
               Terms
             </Link>
             <a
-              href="https://github.com"
+              href="https://github.com/megistusXYZ/Remote-Record-Studio"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-vessel-accent transition-colors"
