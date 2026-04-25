@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
 import { NostrSignInModal } from "./NostrSignInModal";
+import { BackupKeyStep } from "./BackupKeyStep";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import {
   DEFAULT_STORAGE_URL,
@@ -17,7 +18,7 @@ import {
 } from "../../lib/storage-config";
 import type { VesselIdentity } from "../../lib/identity";
 
-type Step = "name" | "storage" | "welcome";
+type Step = "name" | "storage" | "backup" | "welcome";
 
 export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const { createNewIdentity, displayName: storedName } = useIdentity();
@@ -80,6 +81,13 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
         console.warn("Server list publish failed:", err);
       });
     }
+    // Force the user through the backup-key step before entering the studio
+    // so they can never end up in a state where they have a studio but no
+    // way to sign in on another device.
+    setStep("backup");
+  };
+
+  const handleBackupContinue = () => {
     setStep("welcome");
   };
 
@@ -286,6 +294,21 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
               Continue &rarr;
             </VesselButton>
           </motion.div>
+        ) : step === "backup" ? (
+          createdIdentity ? (
+            <BackupKeyStep
+              identity={createdIdentity}
+              onContinue={handleBackupContinue}
+            />
+          ) : (
+            <div
+              className="w-full p-5 rounded-xl bg-vessel-red/10 border border-vessel-red/20 text-vessel-red text-sm text-center"
+              data-testid="text-onboarding-missing-identity"
+            >
+              We lost track of your studio mid-setup. Please refresh the page
+              and try creating it again.
+            </div>
+          )
         ) : (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}

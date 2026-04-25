@@ -600,6 +600,116 @@ export function exportIdentityBackup(identity: VesselIdentity): string {
   return nip19.nsecEncode(identity._secretKey);
 }
 
+/**
+ * Encode the identity's pubkey to its public bech32 form (npub1...).
+ * Safe to share publicly — this is how guests find the studio and how
+ * recordings are tagged as the user's. Stable across devices and apps.
+ */
+export function getStudioIdBech32(identity: VesselIdentity): string {
+  return nip19.npubEncode(identity._pubkey);
+}
+
+/**
+ * Build the contents of the .txt backup file. Used both by the onboarding
+ * step and the Settings → Reveal backup key flow so the file is identical
+ * everywhere — same headings, same instructions, same learn-more URL.
+ *
+ * Plain-English copy by design. We surface the literal `npub1.../nsec1...`
+ * strings (users need them verbatim to paste back in or use in other apps),
+ * but call them "Studio ID" and "Backup Key" in body copy so the file
+ * matches Vessel's ownership-first voice.
+ */
+export function buildBackupFileContent(
+  identity: VesselIdentity,
+  backupKey: string,
+): string {
+  const studioId = getStudioIdBech32(identity);
+  const created = new Date().toISOString().slice(0, 10);
+  const display = identity.displayName || "(no name set)";
+  const sep = "────────────────────────────────────────";
+
+  return [
+    "Vessel — Studio Backup",
+    "=======================",
+    "",
+    `Created:      ${created}`,
+    `Display name: ${display}`,
+    "",
+    "This file holds the two pieces of your studio identity.",
+    "Keep this file somewhere private — a password manager works well.",
+    "",
+    sep,
+    "YOUR STUDIO ID  (public — safe to share)",
+    sep,
+    studioId,
+    "",
+    "This is your public studio address. Share it anywhere —",
+    "on a podcast page, business card, email signature. Guests",
+    "use it to find your sessions and your recordings carry it",
+    "as proof they're yours.",
+    "",
+    sep,
+    "YOUR BACKUP KEY  (private — never share)",
+    sep,
+    backupKey,
+    "",
+    "This signs you in to your studio. Anyone who has it becomes",
+    "you. If you lose it, no one can recover it for you — not even",
+    "Vessel. Vessel never sees this key; it never leaves your device",
+    "unless you choose to back it up (this file is one such backup).",
+    "",
+    sep,
+    "HOW TO SIGN BACK IN ON ANOTHER DEVICE",
+    sep,
+    "1. Open vessel.fm in any browser.",
+    "2. On the home page, choose \"Sign in with backup key\".",
+    "3. Paste the backup key from above.",
+    "4. You're in — your past sessions and recordings reappear,",
+    "   tied to your Studio ID.",
+    "",
+    sep,
+    "HOW IT WORKS",
+    sep,
+    "Vessel is built on an open identity protocol. Your studio is",
+    "not stored in any central account database — your identity",
+    "lives in this file and on the devices you sign in on, and",
+    "only you control it.",
+    "",
+    "The same backup key works in any other app built on the same",
+    "protocol. Your Studio ID stays the same everywhere, so people",
+    "who know it can always find you across apps.",
+    "",
+    sep,
+    "LEARN MORE",
+    sep,
+    "https://vessel.fm",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Trigger a browser download of the rich backup .txt for an identity.
+ * Filename includes the date so multiple backups don't clobber each other.
+ */
+export function downloadBackupFile(
+  identity: VesselIdentity,
+  backupKey: string,
+): string {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = `vessel-studio-backup-${stamp}.txt`;
+  const body = buildBackupFileContent(identity, backupKey);
+  const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return filename;
+}
+
 export function clearStoredIdentity(): void {
   localStorage.removeItem(STORAGE_KEY_V3);
   sessionStorage.removeItem(STORAGE_KEY_V3);
