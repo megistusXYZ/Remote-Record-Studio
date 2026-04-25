@@ -17,6 +17,7 @@ import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { AimIcon } from "../components/icons/AimIcon";
 import { PresentationIcon } from "../components/icons/PresentationIcon";
+import { LampIcon } from "../components/icons/LampIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
@@ -397,6 +398,12 @@ export default function LandingPage() {
             variants={fadeInUp}
             className="text-center mb-16"
           >
+            <div className="flex justify-center mb-6">
+              <LampIcon
+                className="w-14 h-14 text-vessel-accent"
+                aria-hidden="true"
+              />
+            </div>
             <h2 className="font-display text-3xl md:text-4xl font-bold">
               Everything your studio needs.<br />Nothing it doesn't.
             </h2>
