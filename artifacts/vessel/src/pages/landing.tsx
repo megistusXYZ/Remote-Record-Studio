@@ -87,12 +87,13 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="relative z-10 flex flex-col items-center justify-center pt-12 pb-32 px-6 overflow-hidden">
         <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.06]"
+          className="absolute inset-x-0 top-0 h-[55%] pointer-events-none bg-no-repeat bg-contain opacity-[0.06]"
           style={{
             backgroundImage: `url(${podcastSketch})`,
+            backgroundPosition: "center top",
             filter: "invert(1) grayscale(1)",
-            maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
-            WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+            maskImage: "radial-gradient(ellipse at 50% 35%, black 30%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(ellipse at 50% 35%, black 30%, transparent 75%)",
           }}
           aria-hidden="true"
         />
