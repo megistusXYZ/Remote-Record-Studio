@@ -4,6 +4,7 @@ import { HardDrive } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
+import { NostrOstrich } from "../vessel-ui/NostrOstrich";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
 import { NostrSignInModal } from "./NostrSignInModal";
 import { BackupKeyStep } from "./BackupKeyStep";
@@ -168,10 +169,11 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
               <button
                 type="button"
                 onClick={() => setShowNostrModal(true)}
-                className="w-full h-12 rounded-xl bg-vessel-bg-surface border border-vessel-border hover:border-vessel-accent/40 transition-colors text-vessel-text-primary text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
+                className="w-full h-12 rounded-xl bg-vessel-bg-surface border border-vessel-border hover:border-vessel-accent/40 transition-colors text-vessel-text-primary text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent inline-flex items-center justify-center gap-3"
                 data-testid="button-sign-in-nostr"
               >
-                Sign in with Nostr
+                <NostrOstrich className="w-10 h-7 rounded-md" />
+                <span>Sign in with Nostr</span>
               </button>
 
               <div className="mt-6 text-center text-sm text-vessel-text-muted">
