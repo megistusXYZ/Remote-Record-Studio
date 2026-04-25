@@ -3,6 +3,7 @@ import { Archive, Users, Settings } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { AccountMenu } from "../account/AccountMenu";
+import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 
 export type VaultSidebarProps = {
   active: "my-vault" | "shared" | "settings";
@@ -16,12 +17,18 @@ export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebar
   return (
     <aside className="hidden sm:flex flex-col w-60 shrink-0 border-r border-vessel-border bg-vessel-bg-base/40 backdrop-blur-sm h-full">
       <div className="px-3 pb-4 pt-4 mb-2 border-b border-vessel-border">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-vessel-accent/10 flex items-center justify-center">
-            <div className="w-[2.5px] h-[2.5px] rounded-full bg-vessel-accent" />
-          </div>
-          <span className="font-display font-bold tracking-tight text-vessel-text-primary">Vessel</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => setLocation("/home")}
+          aria-label="Go to home"
+          className="group flex items-center gap-2 -mx-1 px-1 py-1 rounded-lg hover:bg-vessel-bg-surface/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent/40 transition-colors"
+          data-testid="nav-vault-home"
+        >
+          <VesselBrandIcon className="w-6 h-6 text-vessel-accent shrink-0 transition-transform group-hover:-translate-y-px" />
+          <span className="font-display font-bold tracking-tight text-vessel-text-primary group-hover:text-vessel-accent transition-colors">
+            Vessel
+          </span>
+        </button>
       </div>
 
       <nav className="p-4 space-y-1">
