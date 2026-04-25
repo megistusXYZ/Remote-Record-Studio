@@ -437,7 +437,7 @@ export default function LandingPage() {
       {/* How it Works */}
       <section id="how-it-works" className="relative z-10 py-32 px-6 overflow-hidden">
         <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.04]"
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.015]"
           style={{
             backgroundImage: `url(${pirateCrewSketch})`,
             filter: "invert(1) grayscale(1)",
