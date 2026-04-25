@@ -478,6 +478,21 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
+
+          <motion.div
+            initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-80px" }} variants={fadeInUp}
+            className="mt-20 text-center"
+          >
+            <p className="text-sm text-vessel-text-muted mb-5">Want the deeper version, in plain English?</p>
+            <Link
+              href="/how-it-works"
+              className="group inline-flex items-center gap-2 px-6 py-3 rounded-full bg-vessel-bg-surface border border-vessel-border text-sm font-medium text-vessel-text-primary hover:border-vessel-accent hover:text-vessel-accent hover:shadow-lg hover:shadow-vessel-accent/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
+              data-testid="link-how-it-works"
+            >
+              <span>Read the deeper version</span>
+              <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+            </Link>
+          </motion.div>
         </div>
       </section>
 

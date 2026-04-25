@@ -1,15 +1,15 @@
-import { LegalPageShell, LegalSection } from "../components/LegalPageShell";
+import { ContentPageShell, ContentSection } from "../components/ContentPageShell";
 
 export default function Privacy() {
   return (
-    <LegalPageShell title="Privacy Notice" lastUpdated="Last updated · April 25, 2026">
+    <ContentPageShell title="Privacy Notice" eyebrow="Last updated · April 25, 2026">
       <p>
         Vessel is open-source software for studio-quality remote recording. We have designed it
         to collect as little about you as possible. Most of what makes Vessel work happens on
         your device, not on our servers.
       </p>
 
-      <LegalSection heading="What we collect">
+      <ContentSection heading="What we collect">
         <ul className="list-disc pl-5 space-y-2">
           <li>
             <strong className="text-vessel-text-primary">No account credentials.</strong>{" "}
@@ -31,9 +31,9 @@ export default function Privacy() {
             Retained for up to thirty days, then deleted.
           </li>
         </ul>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="What we do not collect">
+      <ContentSection heading="What we do not collect">
         <ul className="list-disc pl-5 space-y-2">
           <li>
             Recordings, audio, or video. These are captured on each participant&rsquo;s device
@@ -45,24 +45,24 @@ export default function Privacy() {
             microphone and camera that your browser explicitly grants for a session.
           </li>
         </ul>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Cookies and local storage">
+      <ContentSection heading="Cookies and local storage">
         <p>
           We use a single session cookie to keep you signed in across page loads. Your private
           sign-in key is stored locally in your browser and is never transmitted to us.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Sharing">
+      <ContentSection heading="Sharing">
         <p>
           We do not sell or rent any of the information above. We will share information only
           when required by valid legal process or when necessary to investigate abuse of the
           service.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Your choices">
+      <ContentSection heading="Your choices">
         <ul className="list-disc pl-5 space-y-2">
           <li>
             Sign out at any time. Your local data remains on your device until you clear it.
@@ -72,16 +72,16 @@ export default function Privacy() {
             live with you and your guests, not with us.
           </li>
         </ul>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Open source">
+      <ContentSection heading="Open source">
         <p>
           Vessel&rsquo;s source code is published on GitHub. If anything in this notice
           surprises you, you are free to read the code and verify it.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Contact">
+      <ContentSection heading="Contact">
         <p>
           Questions or requests:{" "}
           <a
@@ -92,7 +92,7 @@ export default function Privacy() {
           </a>
           , or open an issue on the GitHub repository.
         </p>
-      </LegalSection>
-    </LegalPageShell>
+      </ContentSection>
+    </ContentPageShell>
   );
 }
