@@ -456,10 +456,6 @@ export default function LandingPage() {
           </motion.div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
-            {/* Hand-sketched connecting lines for desktop */}
-            <SketchLine className="hidden md:block absolute top-[44px] left-[24%] w-[18%] h-2 text-vessel-text-muted/40 z-0" />
-            <SketchLine className="hidden md:block absolute top-[44px] left-[58%] w-[18%] h-2 text-vessel-text-muted/40 z-0" />
-            
             {[
               { num: "1", title: "Create your studio", desc: "Sign up in 10 seconds. Just a name — no credit card, no app download." },
               { num: "2", title: "Invite your guests", desc: "Share a link. They join in one click. Nothing to install on their end." },
