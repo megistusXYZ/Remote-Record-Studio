@@ -20,6 +20,7 @@ import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
 import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
+import pirateCrewSketch from "@assets/Gemini_Generated_Image_gmbfr2gmbfr2gmbf_1777083673836.png";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -387,8 +388,18 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="relative z-10 py-24 px-6 bg-vessel-bg-surface/30">
-        <div className="max-w-6xl mx-auto">
+      <section id="features" className="relative z-10 py-24 px-6 bg-vessel-bg-surface/30 overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${pirateCrewSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+          }}
+          aria-hidden="true"
+        />
+        <div className="relative z-10 max-w-6xl mx-auto">
           <motion.div 
             initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
             variants={fadeInUp}
