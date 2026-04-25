@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLocation } from "wouter";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
 import { useIdentity } from "../hooks/use-identity";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
@@ -145,9 +145,9 @@ export default function LandingPage() {
     document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const fadeInUp = {
+  const fadeInUp: Variants = {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
   };
 
   return (
@@ -520,7 +520,6 @@ export default function LandingPage() {
                       <td className="p-6 text-vessel-text-secondary">
                         <span className="flex items-center gap-2">
                           {row.zCross && <X size={16} className="text-vessel-red/70" />}
-                          {row.zCheck && <Check size={16} className="text-vessel-text-muted" />}
                           {row.z}
                         </span>
                       </td>
