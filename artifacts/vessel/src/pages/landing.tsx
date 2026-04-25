@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useIdentity } from "../hooks/use-identity";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
@@ -9,7 +9,7 @@ import { AudioMeter } from "../components/vessel-ui/AudioMeter";
 import { RecordingDot } from "../components/vessel-ui/RecordingDot";
 import { SketchHost, SketchGuest } from "../components/vessel-ui/SketchConversation";
 import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
-import { Mic, Video, PhoneOff, Zap, Shield, Check, X, KeyRound } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Check, X, KeyRound } from "lucide-react";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
@@ -24,6 +24,14 @@ export default function LandingPage() {
   const { displayName, isLoaded } = useIdentity();
   const [showBackupModal, setShowBackupModal] = React.useState(false);
 
+  // --- Interactive landing demo state (must run before any early return) ---
+  const reduceMotion = useReducedMotion();
+  const [cameraOn, setCameraOn] = React.useState(true);
+  const [micOn, setMicOn] = React.useState(true);
+  const [minimized, setMinimized] = React.useState(false);
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
+  const lastWahRef = React.useRef(0);
+
   React.useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const sessionInvite = searchParams.get("session");
@@ -36,6 +44,96 @@ export default function LandingPage() {
       setLocation("/home");
     }
   }, [isLoaded, displayName, setLocation]);
+
+  React.useEffect(() => {
+    return () => {
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
+    };
+  }, []);
+
+  // Play a brief Charlie-Brown-teacher style "wah-wah" — two pitched sweeps
+  // through a low-pass filter. Generated from oscillators so we don't ship
+  // any audio file and only fires on a real user click (autoplay-safe).
+  const playWahWah = React.useCallback(() => {
+    const now = Date.now();
+    if (now - lastWahRef.current < 700) return;
+    lastWahRef.current = now;
+
+    try {
+      if (!audioCtxRef.current) {
+        const Ctx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!Ctx) return;
+        audioCtxRef.current = new Ctx();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+
+      const t0 = ctx.currentTime;
+      const playNote = (
+        startOffset: number,
+        freqStart: number,
+        freqEnd: number,
+        duration: number,
+      ) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(freqStart, t0 + startOffset);
+        osc.frequency.linearRampToValueAtTime(
+          freqEnd,
+          t0 + startOffset + duration,
+        );
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.Q.value = 6;
+        filter.frequency.setValueAtTime(820, t0 + startOffset);
+        filter.frequency.linearRampToValueAtTime(
+          440,
+          t0 + startOffset + duration,
+        );
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, t0 + startOffset);
+        gain.gain.exponentialRampToValueAtTime(
+          0.16,
+          t0 + startOffset + 0.04,
+        );
+        gain.gain.exponentialRampToValueAtTime(
+          0.0001,
+          t0 + startOffset + duration,
+        );
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(t0 + startOffset);
+        osc.stop(t0 + startOffset + duration + 0.05);
+      };
+
+      // "Wah" then "wah" — second slightly higher, like the teacher's cadence.
+      playNote(0, 196, 156, 0.26);
+      playNote(0.3, 175, 220, 0.3);
+    } catch {
+      // Playful sound; failure must never block UI.
+    }
+  }, []);
+
+  const handleMicToggle = () => {
+    setMicOn((prev) => !prev);
+    playWahWah();
+  };
+  const handleCameraToggle = () => setCameraOn((prev) => !prev);
+  const handleHangUp = () => setMinimized(true);
+  const handleRejoin = () => setMinimized(false);
 
   if (!isLoaded || displayName) {
     return null;
@@ -155,51 +253,133 @@ export default function LandingPage() {
           </motion.p>
         </motion.div>
 
-        {/* Fake Studio Preview */}
-        <motion.div 
+        {/* Fake Studio Preview — interactive demo */}
+        <motion.div
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-          className="mt-20 w-full max-w-[900px] bg-vessel-bg-surface border border-vessel-border rounded-2xl shadow-2xl overflow-hidden"
+          className="mt-20 w-full max-w-[900px]"
         >
-          <div className="flex justify-between items-center px-4 py-3 border-b border-vessel-border bg-vessel-bg-elevated/50">
-            <div className="flex gap-2">
-              <div className="w-3 h-3 rounded-full bg-vessel-border-strong" />
-              <div className="w-3 h-3 rounded-full bg-vessel-border-strong" />
-              <div className="w-3 h-3 rounded-full bg-vessel-border-strong" />
-            </div>
-            <RecordingDot showLabel />
-          </div>
-          
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="relative aspect-video rounded-xl border border-vessel-border overflow-hidden group">
-              <SketchHost />
-              <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3">
-                <span className="text-sm font-medium">Host</span>
-                <AudioMeter active barCount={8} />
-              </div>
-            </div>
-            
-            <div className="relative aspect-video rounded-xl border border-vessel-border overflow-hidden">
-              <SketchGuest />
-              <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3">
-                <span className="text-sm font-medium">Guest</span>
-                <AudioMeter active barCount={8} />
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-4 flex justify-center gap-4 border-t border-vessel-border bg-vessel-bg-elevated/30">
-            <button className="w-12 h-12 rounded-full bg-vessel-bg-surface border border-vessel-border flex items-center justify-center text-vessel-text-primary hover:bg-vessel-bg-elevated">
-              <Mic size={20} />
-            </button>
-            <button className="w-12 h-12 rounded-full bg-vessel-bg-surface border border-vessel-border flex items-center justify-center text-vessel-text-primary hover:bg-vessel-bg-elevated">
-              <Video size={20} />
-            </button>
-            <button className="w-12 h-12 rounded-full bg-vessel-red hover:bg-red-500 flex items-center justify-center text-white shadow-lg shadow-vessel-red/20">
-              <PhoneOff size={20} />
-            </button>
-          </div>
+          <AnimatePresence initial={false} mode="wait">
+            {!minimized ? (
+              <motion.div
+                key="studio-card"
+                layout={!reduceMotion}
+                initial={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.96, y: 8 }
+                }
+                animate={
+                  reduceMotion
+                    ? { opacity: 1 }
+                    : { opacity: 1, scale: 1, y: 0 }
+                }
+                exit={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.92, y: -6 }
+                }
+                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-vessel-bg-surface border border-vessel-border rounded-2xl shadow-2xl overflow-hidden origin-top"
+              >
+                <div className="flex justify-between items-center px-4 py-3 border-b border-vessel-border bg-vessel-bg-elevated/50">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-vessel-border-strong" />
+                    <div className="w-3 h-3 rounded-full bg-vessel-border-strong" />
+                    <div className="w-3 h-3 rounded-full bg-vessel-border-strong" />
+                  </div>
+                  <RecordingDot showLabel animated={!reduceMotion} />
+                </div>
+
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <ParticipantTile
+                    role="Host"
+                    initial="H"
+                    cameraOn={cameraOn}
+                    micOn={micOn}
+                    reduceMotion={reduceMotion}
+                  />
+                  <ParticipantTile
+                    role="Guest"
+                    initial="G"
+                    cameraOn={cameraOn}
+                    micOn={micOn}
+                    reduceMotion={reduceMotion}
+                  />
+                </div>
+
+                <div className="p-4 flex justify-center gap-4 border-t border-vessel-border bg-vessel-bg-elevated/30">
+                  <DemoControlButton
+                    label={micOn ? "Mute microphone" : "Unmute microphone"}
+                    pressed={!micOn}
+                    onClick={handleMicToggle}
+                    variant={micOn ? "neutral" : "off"}
+                    testId="demo-mic"
+                  >
+                    {micOn ? <Mic size={20} /> : <MicOff size={20} />}
+                  </DemoControlButton>
+                  <DemoControlButton
+                    label={cameraOn ? "Turn camera off" : "Turn camera on"}
+                    pressed={!cameraOn}
+                    onClick={handleCameraToggle}
+                    variant={cameraOn ? "neutral" : "off"}
+                    testId="demo-camera"
+                  >
+                    {cameraOn ? <Video size={20} /> : <VideoOff size={20} />}
+                  </DemoControlButton>
+                  <DemoControlButton
+                    label="Leave the studio"
+                    onClick={handleHangUp}
+                    variant="hangup"
+                    testId="demo-hangup"
+                  >
+                    <PhoneOff size={20} />
+                  </DemoControlButton>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="studio-pill"
+                initial={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.85, y: -8 }
+                }
+                animate={
+                  reduceMotion
+                    ? { opacity: 1 }
+                    : { opacity: 1, scale: 1, y: 0 }
+                }
+                exit={
+                  reduceMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, scale: 0.85, y: 8 }
+                }
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="flex justify-center py-6"
+              >
+                <button
+                  type="button"
+                  onClick={handleRejoin}
+                  className="group inline-flex items-center gap-3 px-5 py-3 rounded-full bg-vessel-bg-surface border border-vessel-border shadow-lg hover:border-vessel-accent hover:shadow-vessel-accent/20 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
+                  aria-label="Rejoin the studio preview"
+                  data-testid="demo-rejoin"
+                >
+                  <RecordingDot />
+                  <span className="text-sm font-medium text-vessel-text-primary">
+                    Rejoin studio
+                  </span>
+                  <span
+                    className="text-xs text-vessel-text-muted group-hover:text-vessel-accent transition-colors"
+                    aria-hidden="true"
+                  >
+                    ↺
+                  </span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </section>
 
@@ -422,5 +602,116 @@ export default function LandingPage() {
         onSuccess={() => setLocation("/home")}
       />
     </div>
+  );
+}
+
+// --- Landing demo helpers ---
+
+interface ParticipantTileProps {
+  role: "Host" | "Guest";
+  initial: string;
+  cameraOn: boolean;
+  micOn: boolean;
+  reduceMotion: boolean | null;
+}
+
+function ParticipantTile({
+  role,
+  initial,
+  cameraOn,
+  micOn,
+  reduceMotion,
+}: ParticipantTileProps) {
+  const isHost = role === "Host";
+  return (
+    <div className="relative aspect-video rounded-xl border border-vessel-border overflow-hidden bg-vessel-bg-elevated">
+      <AnimatePresence initial={false} mode="wait">
+        {cameraOn ? (
+          <motion.div
+            key="video"
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.02 }}
+            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="absolute inset-0"
+          >
+            {isHost ? <SketchHost /> : <SketchGuest />}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="avatar"
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92 }}
+            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-vessel-bg-elevated to-vessel-bg-base"
+          >
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-vessel-accent/15 border-2 border-vessel-accent/40 flex items-center justify-center shadow-lg shadow-vessel-accent/10">
+                <span
+                  className="font-display font-bold text-3xl sm:text-4xl text-vessel-accent"
+                  aria-hidden="true"
+                >
+                  {initial}
+                </span>
+              </div>
+              <span className="sr-only">{role}'s camera is off</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3 z-10">
+        <span className="text-sm font-medium">{role}</span>
+        {!micOn && (
+          <MicOff
+            size={14}
+            className="text-vessel-red"
+            aria-label="Microphone muted"
+          />
+        )}
+        <AudioMeter active={micOn} barCount={8} />
+      </div>
+    </div>
+  );
+}
+
+interface DemoControlButtonProps {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  pressed?: boolean;
+  variant?: "neutral" | "off" | "hangup";
+  testId?: string;
+}
+
+function DemoControlButton({
+  label,
+  onClick,
+  children,
+  pressed,
+  variant = "neutral",
+  testId,
+}: DemoControlButtonProps) {
+  const base =
+    "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent focus-visible:ring-offset-2 focus-visible:ring-offset-vessel-bg-elevated active:scale-95";
+  const styles =
+    variant === "hangup"
+      ? "bg-vessel-red hover:bg-red-500 text-white shadow-lg shadow-vessel-red/20"
+      : variant === "off"
+        ? "bg-vessel-red/15 border border-vessel-red/50 text-vessel-red hover:bg-vessel-red/25"
+        : "bg-vessel-bg-surface border border-vessel-border text-vessel-text-primary hover:bg-vessel-bg-elevated hover:border-vessel-border-strong";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      data-testid={testId}
+      className={`${base} ${styles}`}
+    >
+      {children}
+    </button>
   );
 }
