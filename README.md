@@ -71,8 +71,8 @@ Vessel is a [pnpm](https://pnpm.io/) monorepo. You'll need:
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/your-org/vessel.git
-cd vessel
+git clone https://github.com/megistusXYZ/Remote-Record-Studio.git
+cd Remote-Record-Studio
 pnpm install
 
 # 2. Configure your environment
@@ -126,7 +126,7 @@ Vessel is actively in development. Some big rocks on the horizon:
 - [ ] Mobile guest joining (iOS / Android)
 - [ ] Plugin SDK for custom export pipelines
 
-See the [open issues](https://github.com/your-org/vessel/issues) for the
+See the [open issues](https://github.com/megistusXYZ/Remote-Record-Studio/issues) for the
 weekly view.
 
 ## Contributing
@@ -140,7 +140,7 @@ Pull requests are welcome and encouraged.
   contributor you wish you had.
 
 If you're new to the codebase, look for issues tagged
-[`good first issue`](https://github.com/your-org/vessel/labels/good%20first%20issue).
+[`good first issue`](https://github.com/megistusXYZ/Remote-Record-Studio/labels/good%20first%20issue).
 
 ## Security
 
