@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { KeyRound } from "lucide-react";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
+import { NostrSignInModal } from "./NostrSignInModal";
 
 type SignedOutEmptyProps = {
   context: "home" | "vault";
@@ -23,7 +24,9 @@ const COPY: Record<SignedOutEmptyProps["context"], { headline: string; body: str
 export function SignedOutEmpty({ context }: SignedOutEmptyProps) {
   const [, setLocation] = useLocation();
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showNostrModal, setShowNostrModal] = useState(false);
   const { headline, body } = COPY[context];
+  const successPath = context === "vault" ? "/vault" : "/home";
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center relative overflow-hidden bg-vessel-bg-base text-vessel-text-primary px-6 selection:bg-vessel-accent/30 selection:text-vessel-accent">
@@ -78,7 +81,21 @@ export function SignedOutEmpty({ context }: SignedOutEmptyProps) {
       <BackupKeySignInModal
         open={showBackupModal}
         onOpenChange={setShowBackupModal}
-        onSuccess={() => setLocation(context === "vault" ? "/vault" : "/home")}
+        onSuccess={() => setLocation(successPath)}
+        onUseNostr={() => {
+          setShowBackupModal(false);
+          setShowNostrModal(true);
+        }}
+      />
+
+      <NostrSignInModal
+        open={showNostrModal}
+        onOpenChange={setShowNostrModal}
+        onSuccess={() => setLocation(successPath)}
+        onUseBackupKey={() => {
+          setShowNostrModal(false);
+          setShowBackupModal(true);
+        }}
       />
     </div>
   );

@@ -332,6 +332,10 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
         open={showBackupModal}
         onOpenChange={setShowBackupModal}
         onSuccess={onComplete}
+        onUseNostr={() => {
+          setShowBackupModal(false);
+          setShowNostrModal(true);
+        }}
       />
 
       <NostrSignInModal
