@@ -24,6 +24,7 @@ import {
 } from "../../lib/share-download";
 import { getInitials } from "../../lib/identity";
 import { useIdentity } from "../../hooks/use-identity";
+import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import {
   resolveAvatarColor,
   useStoredAvatarColor,
@@ -411,13 +412,13 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
         <header className="flex items-center justify-between mb-10">
           <a
             href="/"
-            className="flex items-center gap-2 text-vessel-text-primary"
+            className="group flex items-center gap-2 text-vessel-text-primary"
             data-testid="link-vessel-home"
           >
-            <div className="w-8 h-8 rounded-md bg-vessel-accent flex items-center justify-center text-vessel-bg-base font-bold">
-              V
-            </div>
-            <span className="font-display text-lg font-bold tracking-tight">Vessel</span>
+            <VesselBrandIcon className="w-7 h-7 text-vessel-accent shrink-0 transition-transform group-hover:-translate-y-px" />
+            <span className="font-display text-lg font-bold tracking-tight group-hover:text-vessel-accent transition-colors">
+              Vessel
+            </span>
           </a>
           <span className="text-xs text-vessel-text-muted font-mono-vessel uppercase tracking-wider">
             Shared session
