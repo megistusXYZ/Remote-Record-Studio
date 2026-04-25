@@ -20,7 +20,7 @@ import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
 import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
-import pirateCrewSketch from "@assets/Gemini_Generated_Image_p6rkq1p6rkq1p6rk_1777089239893.png";
+import pirateCrewSketch from "@assets/Gemini_Generated_Image_sctiuasctiuascti_1777089542804.png";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -437,10 +437,12 @@ export default function LandingPage() {
       {/* How it Works */}
       <section id="how-it-works" className="relative z-10 py-32 px-6 overflow-hidden">
         <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.015]"
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.07]"
           style={{
             backgroundImage: `url(${pirateCrewSketch})`,
             filter: "invert(1) grayscale(1)",
+            maskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
+            WebkitMaskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
           }}
           aria-hidden="true"
         />
