@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, useLocation } from "wouter";
-import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion, useInView, type Variants } from "framer-motion";
 import { useIdentity } from "../hooks/use-identity";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
@@ -36,6 +36,27 @@ export default function LandingPage() {
   const [minimized, setMinimized] = React.useState(false);
   const audioCtxRef = React.useRef<AudioContext | null>(null);
   const lastWahRef = React.useRef(0);
+
+  // Demo viewport tracking + active-speaker rotation. We only "kick on" the
+  // talking visuals while the demo is actually on screen so the page is calm
+  // when not being looked at, and so when a user scrolls back into it the
+  // animations feel alive.
+  const demoRef = React.useRef<HTMLDivElement | null>(null);
+  const demoInView = useInView(demoRef, { margin: "-15% 0px -15% 0px" });
+  const [activeSpeaker, setActiveSpeaker] = React.useState<"Host" | "Guest">("Host");
+
+  React.useEffect(() => {
+    if (!demoInView || !micOn || !cameraOn || minimized || reduceMotion) {
+      return undefined;
+    }
+    // Reset the cadence whenever the demo (re)enters view so it always opens
+    // with the host speaking, matching the SketchHost mouth keyframes.
+    setActiveSpeaker("Host");
+    const id = window.setInterval(() => {
+      setActiveSpeaker((prev) => (prev === "Host" ? "Guest" : "Host"));
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [demoInView, micOn, cameraOn, minimized, reduceMotion]);
 
   React.useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -260,6 +281,7 @@ export default function LandingPage() {
 
         {/* Fake Studio Preview — interactive demo */}
         <motion.div
+          ref={demoRef}
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
@@ -304,6 +326,7 @@ export default function LandingPage() {
                     cameraOn={cameraOn}
                     micOn={micOn}
                     reduceMotion={reduceMotion}
+                    isSpeaking={micOn && demoInView && activeSpeaker === "Host"}
                   />
                   <ParticipantTile
                     role="Guest"
@@ -311,6 +334,7 @@ export default function LandingPage() {
                     cameraOn={cameraOn}
                     micOn={micOn}
                     reduceMotion={reduceMotion}
+                    isSpeaking={micOn && demoInView && activeSpeaker === "Guest"}
                   />
                 </div>
 
@@ -675,6 +699,7 @@ interface ParticipantTileProps {
   cameraOn: boolean;
   micOn: boolean;
   reduceMotion: boolean | null;
+  isSpeaking?: boolean;
 }
 
 function ParticipantTile({
@@ -683,10 +708,32 @@ function ParticipantTile({
   cameraOn,
   micOn,
   reduceMotion,
+  isSpeaking = false,
 }: ParticipantTileProps) {
   const isHost = role === "Host";
   return (
-    <div className="relative aspect-video rounded-xl border border-vessel-border overflow-hidden bg-vessel-bg-elevated">
+    <motion.div
+      className={`relative aspect-video rounded-xl overflow-hidden bg-vessel-bg-elevated border ${
+        isSpeaking ? "border-vessel-accent/70" : "border-vessel-border"
+      } transition-colors duration-300`}
+      animate={
+        reduceMotion || !isSpeaking
+          ? { boxShadow: "0 0 0 0 rgba(0,212,170,0)" }
+          : {
+              boxShadow: [
+                "0 0 0 0 rgba(0,212,170,0.0)",
+                "0 0 22px 4px rgba(0,212,170,0.35)",
+                "0 0 0 0 rgba(0,212,170,0.0)",
+              ],
+            }
+      }
+      transition={
+        isSpeaking && !reduceMotion
+          ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
+          : { duration: 0.4, ease: "easeOut" }
+      }
+    >
+
       <AnimatePresence initial={false} mode="wait">
         {cameraOn ? (
           <motion.div
@@ -709,21 +756,65 @@ function ParticipantTile({
             className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-vessel-bg-elevated to-vessel-bg-base"
           >
             <div className="flex flex-col items-center gap-2">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-vessel-accent/15 border-2 border-vessel-accent/40 flex items-center justify-center shadow-lg shadow-vessel-accent/10">
+              <motion.div
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-vessel-accent/15 border-2 border-vessel-accent/40 flex items-center justify-center shadow-lg shadow-vessel-accent/10"
+                animate={
+                  isSpeaking && !reduceMotion
+                    ? { scale: [1, 1.06, 1] }
+                    : { scale: 1 }
+                }
+                transition={
+                  isSpeaking && !reduceMotion
+                    ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.3 }
+                }
+              >
                 <span
                   className="font-display font-bold text-3xl sm:text-4xl text-vessel-accent"
                   aria-hidden="true"
                 >
                   {initial}
                 </span>
-              </div>
+              </motion.div>
               <span className="sr-only">{role}'s camera is off</span>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-vessel-border flex items-center gap-3 z-10">
+      {/* "Speaking" pill — appears in the top-right of the active speaker. */}
+      <AnimatePresence>
+        {isSpeaking && (
+          <motion.div
+            key="speaking-badge"
+            initial={{ opacity: 0, y: -4, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.92 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="absolute top-3 right-3 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-vessel-accent/20 border border-vessel-accent/60 backdrop-blur-md text-[10px] font-medium text-vessel-accent z-10"
+            aria-hidden="true"
+          >
+            <motion.span
+              className="w-1.5 h-1.5 rounded-full bg-vessel-accent"
+              animate={
+                reduceMotion ? undefined : { opacity: [0.4, 1, 0.4] }
+              }
+              transition={
+                reduceMotion
+                  ? undefined
+                  : { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+              }
+            />
+            Speaking
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div
+        className={`absolute bottom-4 left-4 bg-vessel-bg-surface/85 backdrop-blur-md px-3 py-1.5 rounded-lg border flex items-center gap-3 z-10 transition-colors duration-300 ${
+          isSpeaking ? "border-vessel-accent/60" : "border-vessel-border"
+        }`}
+      >
         <span className="text-sm font-medium">{role}</span>
         {!micOn && (
           <MicOff
@@ -732,9 +823,9 @@ function ParticipantTile({
             aria-label="Microphone muted"
           />
         )}
-        <AudioMeter active={micOn} barCount={8} />
+        <AudioMeter active={micOn} barCount={isSpeaking ? 10 : 8} />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
