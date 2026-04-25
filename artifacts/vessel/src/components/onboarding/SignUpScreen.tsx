@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { HardDrive } from "lucide-react";
+import { ArrowLeft, HardDrive } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -22,6 +23,7 @@ type Step = "name" | "storage" | "backup" | "welcome";
 
 export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const { createNewIdentity, displayName: storedName } = useIdentity();
+  const [, setLocation] = useLocation();
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,6 +108,19 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
         <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-vessel-accent/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-vessel-accent/5 rounded-full blur-[100px] translate-x-1/3 translate-y-1/3" />
       </div>
+
+      {step === "name" && (
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          aria-label="Back"
+          className="absolute top-4 left-4 sm:top-6 sm:left-6 z-20 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-vessel-text-muted hover:text-vessel-text-primary hover:bg-vessel-bg-surface/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent/40 transition-colors"
+          data-testid="button-onboarding-back"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+      )}
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
         {step === "name" ? (
