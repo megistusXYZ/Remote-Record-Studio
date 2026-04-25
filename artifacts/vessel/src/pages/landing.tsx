@@ -437,12 +437,10 @@ export default function LandingPage() {
       {/* How it Works */}
       <section id="how-it-works" className="relative z-10 py-32 px-6 overflow-hidden">
         <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.06]"
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.12]"
           style={{
             backgroundImage: `url(${pirateCrewSketch})`,
             filter: "invert(1) grayscale(1)",
-            maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
-            WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
           }}
           aria-hidden="true"
         />
