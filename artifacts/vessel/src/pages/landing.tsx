@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
 import { useIdentity } from "../hooks/use-identity";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
@@ -585,20 +585,20 @@ export default function LandingPage() {
           </div>
           
           <div className="flex flex-wrap justify-center gap-6 text-sm text-vessel-text-muted font-medium">
-            <a
-              href={`${import.meta.env.BASE_URL}privacy`}
+            <Link
+              href="/privacy"
               className="hover:text-vessel-accent transition-colors"
               data-testid="footer-link-privacy"
             >
               Privacy
-            </a>
-            <a
-              href={`${import.meta.env.BASE_URL}terms`}
+            </Link>
+            <Link
+              href="/terms"
               className="hover:text-vessel-accent transition-colors"
               data-testid="footer-link-terms"
             >
               Terms
-            </a>
+            </Link>
             <a
               href="https://github.com"
               target="_blank"
