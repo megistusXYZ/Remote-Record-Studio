@@ -9,11 +9,12 @@ import { AudioMeter } from "../components/vessel-ui/AudioMeter";
 import { RecordingDot } from "../components/vessel-ui/RecordingDot";
 import { SketchHost, SketchGuest } from "../components/vessel-ui/SketchConversation";
 import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Check, X, KeyRound } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Check, X } from "lucide-react";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
+import { AimIcon } from "../components/icons/AimIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_qnqdd4qnqdd4qnqd_1777074939928.png";
@@ -177,8 +178,8 @@ export default function LandingPage() {
           className="inline-flex items-center gap-2 text-sm font-medium text-vessel-text-secondary hover:text-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent rounded-md px-2 py-1"
           data-testid="nav-cta-signin"
         >
-          <KeyRound size={14} />
-          <span>Sign in with backup key</span>
+          <AimIcon className="w-4 h-4" />
+          <span>Return to your studio</span>
         </button>
       </header>
 
@@ -248,7 +249,7 @@ export default function LandingPage() {
               className="text-vessel-accent hover:underline focus:outline-none font-medium"
               data-testid="hero-cta-signin"
             >
-              Sign in with your backup key
+              Return to it
             </button>
           </motion.p>
         </motion.div>
@@ -563,7 +564,7 @@ export default function LandingPage() {
               className="text-vessel-accent hover:underline focus:outline-none font-medium"
               data-testid="footer-cta-signin"
             >
-              Sign in with your backup key
+              Step back in
             </button>
           </p>
         </motion.div>
