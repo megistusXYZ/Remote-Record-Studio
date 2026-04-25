@@ -18,7 +18,7 @@ import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { AimIcon } from "../components/icons/AimIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
-import shipSketch from "@assets/Gemini_Generated_Image_qnqdd4qnqdd4qnqd_1777074939928.png";
+import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
 import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
 
 export default function LandingPage() {
