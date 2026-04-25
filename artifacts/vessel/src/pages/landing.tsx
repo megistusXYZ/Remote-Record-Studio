@@ -639,7 +639,7 @@ export default function LandingPage() {
         
         <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-vessel-border/30 text-center">
           <p className="text-xs text-vessel-text-muted/60">
-            Built on open protocols. Your voice. Your vessel.
+            Built on open protocols. Your content. Your vessel.
           </p>
         </div>
       </footer>
