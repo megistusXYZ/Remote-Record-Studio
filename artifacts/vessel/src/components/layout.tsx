@@ -17,7 +17,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </Link>
           
           <div className="flex items-center gap-6">
-            <nav className="flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-6">
               <Link
                 href="/home"
                 className={`text-sm font-medium transition-colors ${location === '/home' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}

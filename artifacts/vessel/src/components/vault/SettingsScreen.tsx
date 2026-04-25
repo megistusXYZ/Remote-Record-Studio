@@ -227,7 +227,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   return (
     <div className="flex h-[100dvh] bg-vessel-bg-base text-vessel-text-primary">
       <VaultSidebar active="settings" />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
         <header className="sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border z-10 px-8 py-6">
           <h1 className="font-display text-3xl font-bold text-vessel-text-primary">Settings</h1>
         </header>
