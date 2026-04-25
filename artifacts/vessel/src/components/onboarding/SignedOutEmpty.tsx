@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { KeyRound } from "lucide-react";
 import { VesselButton } from "../vessel-ui/VesselButton";
+import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
 import { NostrSignInModal } from "./NostrSignInModal";
 
@@ -38,43 +39,55 @@ export function SignedOutEmpty({ context }: SignedOutEmptyProps) {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 max-w-md w-full text-center flex flex-col items-center"
+        className="relative z-10 max-w-lg w-full text-center flex flex-col items-center"
       >
-        <div className="flex items-center font-display font-bold text-2xl tracking-tight mb-12">
-          Vessel<span className="text-vessel-accent">.</span>
+        <a
+          href="/"
+          className="group flex items-center gap-2 mb-12 text-vessel-text-primary"
+          data-testid="link-vessel-home"
+        >
+          <VesselBrandIcon className="w-7 h-7 text-vessel-accent shrink-0 transition-transform group-hover:-translate-y-px" />
+          <span className="font-display font-bold text-2xl tracking-tight">
+            Vessel<span className="text-vessel-accent">.</span>
+          </span>
+        </a>
+
+        <div className="relative mb-6">
+          <div className="absolute inset-0 rounded-full bg-vessel-accent/15 blur-xl" aria-hidden="true" />
+          <div className="relative w-16 h-16 rounded-full bg-vessel-accent/10 border border-vessel-accent/25 flex items-center justify-center">
+            <KeyRound className="w-7 h-7 text-vessel-accent" />
+          </div>
         </div>
 
-        <div className="w-14 h-14 rounded-full bg-vessel-accent/10 border border-vessel-accent/20 flex items-center justify-center mb-6">
-          <KeyRound className="w-6 h-6 text-vessel-accent" />
-        </div>
-
-        <h1 className="font-display text-3xl font-bold mb-3">{headline}</h1>
-        <p className="text-vessel-text-secondary text-sm leading-relaxed mb-8">{body}</p>
+        <h1 className="font-display text-3xl sm:text-4xl font-bold mb-3 tracking-tight">{headline}</h1>
+        <p className="text-vessel-text-secondary text-sm sm:text-base leading-relaxed mb-8 max-w-md">
+          {body}
+        </p>
 
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto sm:justify-center">
           <VesselButton
-            size="lg"
             onClick={() => setLocation("/start")}
             data-testid="signed-out-cta-create"
+            className="whitespace-nowrap sm:min-w-[180px]"
           >
             Create a studio
           </VesselButton>
           <VesselButton
             variant="ghost"
-            size="lg"
             onClick={() => setShowBackupModal(true)}
             data-testid="signed-out-cta-backup"
+            className="whitespace-nowrap sm:min-w-[180px]"
           >
-            Sign in with backup key
+            Use backup key
           </VesselButton>
         </div>
 
         <button
           type="button"
           onClick={() => setLocation("/")}
-          className="mt-8 text-xs text-vessel-text-muted hover:text-vessel-text-secondary transition-colors"
+          className="mt-8 inline-flex items-center gap-1 text-xs text-vessel-text-muted hover:text-vessel-accent transition-colors"
         >
-          &larr; Back to home page
+          <span aria-hidden="true">&larr;</span> Back to home page
         </button>
       </motion.div>
 
