@@ -41,23 +41,6 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-vessel-bg-surface border-vessel-border text-vessel-text-primary max-w-md">
-        {onUseNostr && (
-          <div className="flex justify-end -mt-1 mb-3 pr-8">
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false);
-                onUseNostr();
-              }}
-              className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-vessel-accent/10 border border-vessel-accent/30 text-vessel-accent hover:bg-vessel-accent/15 hover:border-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
-              data-testid="link-switch-to-nostr"
-            >
-              <span>Sign in with Nostr</span>
-              <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
-            </button>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit}>
           <DialogHeader className="mb-6">
             <DialogTitle className="font-display text-xl">Sign in with backup key</DialogTitle>
@@ -123,6 +106,26 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
             </VesselButton>
           </DialogFooter>
         </form>
+
+        {onUseNostr && (
+          <div className="mt-4 pt-5 border-t border-vessel-border flex items-center justify-between gap-4">
+            <span className="text-xs text-vessel-text-muted">
+              Have a Nostr extension instead?
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                onUseNostr();
+              }}
+              className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-vessel-accent/10 border border-vessel-accent/30 text-vessel-accent hover:bg-vessel-accent/15 hover:border-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent shrink-0"
+              data-testid="link-switch-to-nostr"
+            >
+              <span>Sign in with Nostr</span>
+              <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
