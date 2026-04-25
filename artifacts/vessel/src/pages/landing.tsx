@@ -16,6 +16,7 @@ import { FilePersonIcon } from "../components/icons/FilePersonIcon";
 import { LaptopPersonIcon } from "../components/icons/LaptopPersonIcon";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { AimIcon } from "../components/icons/AimIcon";
+import { PresentationIcon } from "../components/icons/PresentationIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
@@ -510,6 +511,12 @@ export default function LandingPage() {
       <section className="relative z-10 py-24 px-6 bg-vessel-bg-surface/30">
         <div className="max-w-4xl mx-auto">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}>
+            <div className="flex flex-col items-center mb-6">
+              <PresentationIcon
+                className="w-14 h-14 text-vessel-accent"
+                aria-hidden="true"
+              />
+            </div>
             <h2 className="font-display text-3xl font-bold mb-12 text-center">How Vessel stacks up.</h2>
             
             <div className="overflow-x-auto rounded-2xl border border-vessel-border bg-vessel-bg-elevated/50 backdrop-blur-sm">
