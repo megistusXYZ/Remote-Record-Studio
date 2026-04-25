@@ -16,6 +16,18 @@ import {
   JoinSessionResponse,
 } from "@workspace/api-zod";
 import { nanoid } from "../lib/nanoid";
+import {
+  attachOptionalSignedAuth,
+  getAuthPubkey,
+  rejectIfPubkeyMismatch,
+  requireSignedRequest,
+} from "../middlewares/require-signed-request";
+
+// RFC 4122 / 8-4-4-4-12 hex form. Used to distinguish a session UUID (private,
+// must be auth-gated) from an invite code (public bearer secret) on the
+// shared `GET /sessions/:sessionId` route.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const router: IRouter = Router();
 
@@ -40,12 +52,15 @@ async function buildSessionResponse(sessionId: string) {
   };
 }
 
-router.get("/sessions", async (req, res): Promise<void> => {
+// Listing the sessions a host owns is identity-scoped, so it must be signed.
+router.get("/sessions", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = ListSessionsQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  if (rejectIfPubkeyMismatch(req, res, params.data.pubkey)) return;
 
   const sessions = await db
     .select()
@@ -70,12 +85,15 @@ router.get("/sessions", async (req, res): Promise<void> => {
   res.json(sessionsWithParticipants.map((s) => ListSessionsResponseItem.parse(s)));
 });
 
-router.post("/sessions", async (req, res): Promise<void> => {
+// Creating a session writes the caller's pubkey as the host — auth required.
+router.post("/sessions", requireSignedRequest(), async (req, res): Promise<void> => {
   const parsed = CreateSessionBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  if (rejectIfPubkeyMismatch(req, res, parsed.data.hostPubkey)) return;
 
   const inviteCode = nanoid(8);
 
@@ -117,29 +135,87 @@ async function findSessionByIdOrInvite(idOrInvite: string) {
   return byId ?? null;
 }
 
-router.get("/sessions/:sessionId", async (req, res): Promise<void> => {
-  const params = GetSessionParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+// PUBLIC for invite-code lookups: guests need to resolve their meeting URL
+// BEFORE they sign in, so a successful lookup by INVITE CODE returns the
+// session unconditionally — the invite code itself is the bearer secret.
+//
+// PROTECTED for raw-UUID lookups: the session's UUID is private (only
+// returned to the host on create, or to participants after join). We require
+// a valid signed request whose pubkey is the host or an existing
+// participant before disclosing anything when the path param looks like a
+// UUID. This closes the metadata-leak path where someone with a leaked UUID
+// could enumerate sessions without auth.
+router.get(
+  "/sessions/:sessionId",
+  attachOptionalSignedAuth(),
+  async (req, res): Promise<void> => {
+    const params = GetSessionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
 
-  const session = await findSessionByIdOrInvite(params.data.sessionId);
-  if (!session) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+    const idOrInvite = params.data.sessionId;
+    const looksLikeUuid = UUID_RE.test(idOrInvite);
 
-  const full = await buildSessionResponse(session.id);
-  if (!full) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+    // Try invite code first — that path stays public.
+    const [byInvite] = await db
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.inviteCode, idOrInvite))
+      .limit(1);
 
-  res.json(GetSessionResponse.parse(full));
-});
+    let session = byInvite ?? null;
 
-router.patch("/sessions/:sessionId", async (req, res): Promise<void> => {
+    if (!session && looksLikeUuid) {
+      const [byId] = await db
+        .select()
+        .from(sessionsTable)
+        .where(eq(sessionsTable.id, idOrInvite))
+        .limit(1);
+      if (byId) {
+        const authPubkey = getAuthPubkey(req);
+        if (!authPubkey) {
+          // Hide the existence of this session from anonymous callers.
+          res.status(404).json({ error: "Session not found" });
+          return;
+        }
+        if (authPubkey !== byId.hostPubkey) {
+          const [participant] = await db
+            .select()
+            .from(participantsTable)
+            .where(
+              and(
+                eq(participantsTable.sessionId, byId.id),
+                eq(participantsTable.pubkey, authPubkey),
+              ),
+            )
+            .limit(1);
+          if (!participant) {
+            res.status(404).json({ error: "Session not found" });
+            return;
+          }
+        }
+        session = byId;
+      }
+    }
+
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const full = await buildSessionResponse(session.id);
+    if (!full) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    res.json(GetSessionResponse.parse(full));
+  },
+);
+
+router.patch("/sessions/:sessionId", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = UpdateSessionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -151,6 +227,18 @@ router.patch("/sessions/:sessionId", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  // Only the session host may mutate the session.
+  const [existing] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, params.data.sessionId))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  if (rejectIfPubkeyMismatch(req, res, existing.hostPubkey)) return;
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.title) updates.title = parsed.data.title;
@@ -174,12 +262,24 @@ router.patch("/sessions/:sessionId", async (req, res): Promise<void> => {
   res.json(UpdateSessionResponse.parse(full));
 });
 
-router.delete("/sessions/:sessionId", async (req, res): Promise<void> => {
+router.delete("/sessions/:sessionId", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = DeleteSessionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  // Only the session host may delete the session.
+  const [existing] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, params.data.sessionId))
+    .limit(1);
+  if (!existing) {
+    res.sendStatus(204);
+    return;
+  }
+  if (rejectIfPubkeyMismatch(req, res, existing.hostPubkey)) return;
 
   await db
     .delete(participantsTable)
@@ -192,62 +292,69 @@ router.delete("/sessions/:sessionId", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.post("/sessions/:sessionId/join", async (req, res): Promise<void> => {
-  const params = JoinSessionParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+router.post(
+  "/sessions/:sessionId/join",
+  requireSignedRequest(),
+  async (req, res): Promise<void> => {
+    const params = JoinSessionParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
 
-  const parsed = JoinSessionBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+    const parsed = JoinSessionBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
-  // Resolve invite code → real session UUID (guests join via invite code in the URL)
-  const targetSession = await findSessionByIdOrInvite(params.data.sessionId);
-  if (!targetSession) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
-  const realSessionId = targetSession.id;
+    // The guest must prove they hold the pubkey they're joining as.
+    if (rejectIfPubkeyMismatch(req, res, parsed.data.guestPubkey)) return;
 
-  const existing = await db
-    .select()
-    .from(participantsTable)
-    .where(and(
-      eq(participantsTable.sessionId, realSessionId),
-      eq(participantsTable.pubkey, parsed.data.guestPubkey)
-    ))
-    .limit(1);
+    // Resolve invite code → real session UUID (guests join via invite code in the URL)
+    const targetSession = await findSessionByIdOrInvite(params.data.sessionId);
+    if (!targetSession) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const realSessionId = targetSession.id;
 
-  if (existing.length === 0) {
-    await db.insert(participantsTable).values({
-      sessionId: realSessionId,
-      pubkey: parsed.data.guestPubkey,
-      displayName: parsed.data.guestName,
-      role: "guest",
-    });
-
-    const participants = await db
+    const existing = await db
       .select()
       .from(participantsTable)
-      .where(eq(participantsTable.sessionId, realSessionId));
+      .where(and(
+        eq(participantsTable.sessionId, realSessionId),
+        eq(participantsTable.pubkey, parsed.data.guestPubkey)
+      ))
+      .limit(1);
 
-    await db
-      .update(sessionsTable)
-      .set({ participantCount: participants.length })
-      .where(eq(sessionsTable.id, realSessionId));
-  }
+    if (existing.length === 0) {
+      await db.insert(participantsTable).values({
+        sessionId: realSessionId,
+        pubkey: parsed.data.guestPubkey,
+        displayName: parsed.data.guestName,
+        role: "guest",
+      });
 
-  const full = await buildSessionResponse(realSessionId);
-  if (!full) {
-    res.status(404).json({ error: "Session not found" });
-    return;
-  }
+      const participants = await db
+        .select()
+        .from(participantsTable)
+        .where(eq(participantsTable.sessionId, realSessionId));
 
-  res.json(JoinSessionResponse.parse(full));
-});
+      await db
+        .update(sessionsTable)
+        .set({ participantCount: participants.length })
+        .where(eq(sessionsTable.id, realSessionId));
+    }
+
+    const full = await buildSessionResponse(realSessionId);
+    if (!full) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    res.json(JoinSessionResponse.parse(full));
+  },
+);
 
 export default router;
