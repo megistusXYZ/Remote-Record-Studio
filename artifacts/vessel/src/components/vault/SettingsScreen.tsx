@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Settings, ChevronDown, Chrome, KeyRound, ShieldCheck, Loader2, CheckCircle2, AlertCircle, RotateCcw, Key } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useToast } from "../../hooks/use-toast";
@@ -316,6 +316,45 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                 <div className="flex justify-end mt-2">
                   <VesselButton variant="primary" size="sm" onClick={handleSaveInviteMessage}>Save</VesselButton>
                 </div>
+              </div>
+            </div>
+          </VesselCard>
+
+          <VesselCard>
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-vessel-bg-base border border-vessel-border flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldCheck className="w-4 h-4 text-vessel-accent" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-display text-lg font-bold text-vessel-text-primary">Privacy</h2>
+                  <p className="text-xs text-vessel-text-muted mt-0.5">
+                    What our server actually stores about you.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs text-vessel-text-secondary leading-relaxed pl-11">
+                <p>
+                  Vessel&rsquo;s server keeps a short list of plain things: studio
+                  names, public identities, invite codes, timestamps, and pointers
+                  to where your files live on your storage server. The audio and
+                  video themselves never reach us.
+                </p>
+                <p>
+                  Our request logs are equally short: a request id, the method, and
+                  the path. No IP address. No user agent. No body.
+                </p>
+              </div>
+
+              <div className="pl-11">
+                <Link
+                  href="/privacy"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-vessel-accent hover:underline"
+                  data-testid="link-privacy-disclosure"
+                >
+                  See the literal field list <span aria-hidden="true">&rarr;</span>
+                </Link>
               </div>
             </div>
           </VesselCard>

@@ -641,7 +641,13 @@ export default function LandingPage() {
         </div>
         
         <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-vessel-border/30 text-center">
-          <p className="text-xs text-vessel-text-muted/60">Built on open protocols. Your media never touches our servers.</p>
+          <p className="text-xs text-vessel-text-muted/60">
+            Built on open protocols. What our server sees: studio names, public identities, and timestamps. What it doesn&rsquo;t: your audio, your video, your chat, your IP address.{" "}
+            <Link href="/privacy" className="hover:text-vessel-accent underline-offset-2 hover:underline">
+              See the literal field list
+            </Link>
+            .
+          </p>
         </div>
       </footer>
 
