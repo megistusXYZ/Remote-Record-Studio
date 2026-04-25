@@ -120,6 +120,11 @@
     @apply border-border;
   }
 
+  html {
+    background-color: var(--vessel-bg-base);
+    color-scheme: dark;
+  }
+
   body {
     background-color: var(--vessel-bg-base);
     color: var(--vessel-text-primary);
