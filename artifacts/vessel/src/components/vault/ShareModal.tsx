@@ -21,7 +21,11 @@ import {
   ShareRevokeError,
   isLocallyRevoked,
 } from "../../lib/share-revoke";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import {
+  resolveAvatarColor,
+  useStoredAvatarColor,
+} from "../../hooks/use-avatar-color";
 import { VesselButton } from "../vessel-ui/VesselButton";
 
 export type ShareModalRecording = {
@@ -87,6 +91,7 @@ function CopyButton({ value, label = "Copy" }: { value: string; label?: string }
 
 export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
   const { identity, displayName, pubkey } = useIdentity();
+  const storedColor = useStoredAvatarColor();
   const { toast } = useToast();
   const [archive, setArchive] = useState<SessionArchiveResult | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
@@ -311,7 +316,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                     >
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: deriveAvatarColorFromPubkey(ownerPubkey) }}
+                        style={{ backgroundColor: resolveAvatarColor(ownerPubkey, pubkey, storedColor) }}
                       >
                         <span className="text-white text-xs font-bold">
                           {getInitials(t.participantName)}

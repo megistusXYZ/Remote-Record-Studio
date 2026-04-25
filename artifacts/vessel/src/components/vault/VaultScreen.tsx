@@ -6,7 +6,12 @@ import { Search, Share2, Download, AlertTriangle, Check, Loader2 } from "lucide-
 import { useListRecordings, getListRecordingsQueryKey } from "@workspace/api-client-react";
 import { downloadRecordingById, extractRecordingIdFromLocalUrl, isLocalBlobUrl } from "../../lib/recordings-storage";
 import { useToast } from "../../hooks/use-toast";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useIdentity } from "../../hooks/use-identity";
+import {
+  resolveAvatarColor,
+  useStoredAvatarColor,
+} from "../../hooks/use-avatar-color";
 import { VaultSidebar } from "./VaultSidebar";
 import { EmptyState } from "./EmptyState";
 import { ShareModal, type ShareModalRecording } from "./ShareModal";
@@ -55,6 +60,8 @@ function getTrackSyncState(r: { blobUrl?: string | null; status?: string }): Tra
 export function VaultScreen({ pubkey }: VaultScreenProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { pubkey: selfPubkey } = useIdentity();
+  const storedColor = useStoredAvatarColor();
   const [search, setSearch] = useState("");
   const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(new Set());
   const [shareSession, setShareSession] = useState<{
@@ -220,7 +227,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                     </button>
                     {uniqueParticipants.map((p, i) => (
                       <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-vessel-bg-base border border-vessel-border mr-2 mb-2">
-                        <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: deriveAvatarColorFromPubkey(p.ownerPubkey) }}>
+                        <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: resolveAvatarColor(p.ownerPubkey, selfPubkey, storedColor) }}>
                           <span className="text-white text-[8px] font-bold">{getInitials(p.participantName)[0]}</span>
                         </div>
                         <span className="text-xs text-vessel-text-secondary">{p.participantName}</span>
@@ -267,7 +274,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                 : { label: "On this device only", className: "text-vessel-text-muted bg-vessel-bg-base border-vessel-border", Icon: AlertTriangle };
                             return (
                               <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-vessel-bg-base transition-colors" data-testid={`row-track-${r.id}`}>
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: deriveAvatarColorFromPubkey(r.ownerPubkey) }}>
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: resolveAvatarColor(r.ownerPubkey, selfPubkey, storedColor) }}>
                                   <span className="text-white text-xs font-bold">{getInitials(r.participantName)}</span>
                                 </div>
                                 <div className="flex-1 min-w-0">

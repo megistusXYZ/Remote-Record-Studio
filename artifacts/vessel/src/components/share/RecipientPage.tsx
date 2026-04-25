@@ -22,7 +22,12 @@ import {
   DownloadError,
   type DownloadProgress,
 } from "../../lib/share-download";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useIdentity } from "../../hooks/use-identity";
+import {
+  resolveAvatarColor,
+  useStoredAvatarColor,
+} from "../../hooks/use-avatar-color";
 import { VesselButton } from "../vessel-ui/VesselButton";
 
 export type RecipientPageProps = {
@@ -95,6 +100,8 @@ function TrackRow({ track }: TrackRowProps) {
   const [state, setState] = useState<DownloadState>({ status: "idle" });
   const controllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  const { pubkey: selfPubkey } = useIdentity();
+  const storedColor = useStoredAvatarColor();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -269,7 +276,7 @@ function TrackRow({ track }: TrackRowProps) {
       <div className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: deriveAvatarColorFromPubkey(track.participantPubkey || track.recordingId) }}
+          style={{ backgroundColor: resolveAvatarColor(track.participantPubkey || track.recordingId, selfPubkey, storedColor) }}
         >
           <span className="text-white text-xs font-bold">
             {getInitials(track.participantName)}
@@ -386,6 +393,8 @@ function DownloadProgressBar({
 }
 
 export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPageProps) {
+  const { pubkey: selfPubkey } = useIdentity();
+  const storedColor = useStoredAvatarColor();
   const archivedAtPretty = useMemo(() => {
     if (!manifest?.archivedAt) return null;
     try {

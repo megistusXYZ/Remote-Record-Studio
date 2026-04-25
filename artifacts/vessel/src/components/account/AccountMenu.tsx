@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { LogOut, User } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
-import { getInitials, deriveAvatarColorFromPubkey } from "../../lib/identity";
+import { getInitials } from "../../lib/identity";
+import { useAvatarColor } from "../../hooks/use-avatar-color";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,11 +32,11 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
   const { displayName, pubkey, signOut } = useIdentity();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const avatarColor = useAvatarColor(pubkey);
 
   if (!displayName || !pubkey) return null;
 
   const initials = getInitials(displayName);
-  const avatarColor = deriveAvatarColorFromPubkey(pubkey);
 
   const handleSignOut = async () => {
     setSigningOut(true);
