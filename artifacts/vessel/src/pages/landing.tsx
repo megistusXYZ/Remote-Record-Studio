@@ -21,6 +21,7 @@ import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
 import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
 import pirateCrewSketch from "@assets/Gemini_Generated_Image_sctiuasctiuascti_1777089542804.png";
+import seascapeSketch from "@assets/Gemini_Generated_Image_b0di8ib0di8ib0di_1777089861634.png";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -436,6 +437,16 @@ export default function LandingPage() {
 
       {/* How it Works */}
       <section id="how-it-works" className="relative z-10 py-32 px-6 overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.07]"
+          style={{
+            backgroundImage: `url(${seascapeSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage: "radial-gradient(ellipse at center, black 45%, transparent 80%)",
+            WebkitMaskImage: "radial-gradient(ellipse at center, black 45%, transparent 80%)",
+          }}
+          aria-hidden="true"
+        />
         <div className="relative z-10 max-w-6xl mx-auto">
           <motion.div 
             initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}
