@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { VesselButton } from "../vessel-ui/VesselButton";
+import { NostrOstrich } from "../vessel-ui/NostrOstrich";
 import { useIdentity } from "../../hooks/use-identity";
 
 interface BackupKeySignInModalProps {
@@ -109,8 +110,9 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
 
         {onUseNostr && (
           <div className="mt-4 pt-5 border-t border-vessel-border flex items-center justify-between gap-4">
-            <span className="text-xs text-vessel-text-muted">
-              Have a Nostr extension instead?
+            <span className="text-xs text-vessel-text-muted inline-flex items-center gap-2">
+              <NostrOstrich className="w-8 h-6 rounded" />
+              <span>Have a Nostr extension instead?</span>
             </span>
             <button
               type="button"
@@ -118,9 +120,10 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
                 onOpenChange(false);
                 onUseNostr();
               }}
-              className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-vessel-accent/10 border border-vessel-accent/30 text-vessel-accent hover:bg-vessel-accent/15 hover:border-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent shrink-0"
+              className="group inline-flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-xs font-medium bg-vessel-accent/10 border border-vessel-accent/30 text-vessel-accent hover:bg-vessel-accent/15 hover:border-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent shrink-0"
               data-testid="link-switch-to-nostr"
             >
+              <NostrOstrich className="w-7 h-5 rounded-full" />
               <span>Sign in with Nostr</span>
               <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
             </button>
