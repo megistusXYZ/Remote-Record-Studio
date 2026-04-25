@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
 import { NostrSignInModal } from "./NostrSignInModal";
+import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import {
   DEFAULT_STORAGE_URL,
   getStorageUrl,
@@ -105,8 +106,12 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
             animate={{ opacity: 1, y: 0 }}
             className="w-full flex flex-col"
           >
-            <div className="flex items-center self-center font-display font-bold text-2xl tracking-tight mb-16">
-              Vessel<span className="text-vessel-accent">.</span>
+            <div className="flex items-center self-center gap-2 font-display font-bold text-2xl tracking-tight mb-16">
+              <VesselBrandIcon className="w-8 h-8 text-vessel-accent" />
+              <div className="flex items-baseline gap-1">
+                <span>Vessel</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+              </div>
             </div>
 
             <div className="text-center mb-10">
@@ -180,8 +185,12 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
             animate={{ opacity: 1, y: 0 }}
             className="w-full flex flex-col"
           >
-            <div className="flex items-center self-center font-display font-bold text-2xl tracking-tight mb-12">
-              Vessel<span className="text-vessel-accent">.</span>
+            <div className="flex items-center self-center gap-2 font-display font-bold text-2xl tracking-tight mb-12">
+              <VesselBrandIcon className="w-8 h-8 text-vessel-accent" />
+              <div className="flex items-baseline gap-1">
+                <span>Vessel</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
+              </div>
             </div>
 
             <div className="text-center mb-8">
