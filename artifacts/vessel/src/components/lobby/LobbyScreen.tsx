@@ -127,39 +127,39 @@ export function LobbyScreen({
         <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-vessel-accent/5 rounded-full blur-[100px] translate-x-1/3 translate-y-1/3" />
       </div>
 
-      <div className="relative z-10 w-full min-h-full pb-20">
+      <div className="relative z-10 w-full min-h-full pb-8 md:pb-12">
         {state === "default" ? (
-          <div className="container max-w-6xl mx-auto px-4 py-12 grid lg:grid-cols-[1.5fr_1fr] gap-8">
+          <div className="container max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 md:py-12 grid lg:grid-cols-[1.5fr_1fr] gap-6 lg:gap-8">
             <div className="flex flex-col">
-              <div className="mb-10">
-                <h1 className="font-display text-4xl font-bold text-vessel-text-primary tracking-tight">
+              <div className="mb-6 sm:mb-8 md:mb-10">
+                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-vessel-text-primary tracking-tight leading-[1.1]">
                   Good {timeOfDay}, {displayName}.
                 </h1>
-                <p className="text-vessel-text-secondary mt-2 text-lg">
+                <p className="text-vessel-text-secondary mt-2 sm:mt-3 text-base sm:text-lg">
                   Ready to record something great?
                 </p>
               </div>
 
-              <VesselCard className="p-8 mb-6 border-vessel-accent/30 shadow-[0_0_40px_rgba(0,212,170,0.08)]">
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-vessel-accent/10 flex items-center justify-center shrink-0">
-                    <StudioSproutIcon className="w-7 h-7 text-vessel-accent" />
+              <VesselCard className="p-5 sm:p-6 md:p-8 mb-4 sm:mb-6 border-vessel-accent/30 shadow-[0_0_40px_rgba(0,212,170,0.08)]">
+                <div className="flex items-start gap-3 sm:gap-4 mb-5 sm:mb-6">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-vessel-accent/10 flex items-center justify-center shrink-0">
+                    <StudioSproutIcon className="w-6 h-6 sm:w-7 sm:h-7 text-vessel-accent" />
                   </div>
                   <div className="flex-1 min-w-0 pt-0.5">
-                    <h2 className="font-display text-2xl font-bold text-vessel-text-primary leading-tight mb-1">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold text-vessel-text-primary leading-tight mb-1">
                       Start a new studio session
                     </h2>
-                    <p className="text-vessel-text-secondary text-base">
+                    <p className="text-vessel-text-secondary text-sm sm:text-base">
                       Create a private room, invite your guests, and record in studio quality.
                     </p>
                   </div>
                 </div>
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:gap-4">
                   <Input
                     value={newSessionTitle}
                     onChange={(e) => setNewSessionTitle(e.target.value)}
                     placeholder="Session title (e.g. Episode 12 — Future of Audio)"
-                    className="h-12 bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-xl"
+                    className="h-12 bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-xl text-base"
                     data-testid="input-session-title"
                   />
                   <VesselButton
@@ -175,16 +175,16 @@ export function LobbyScreen({
                 </div>
               </VesselCard>
 
-              <VesselCard variant="ghost" className="p-6">
-                <h3 className="font-display text-lg font-bold text-vessel-text-primary mb-3">
+              <VesselCard variant="ghost" className="p-5 sm:p-6">
+                <h3 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary mb-3">
                   Have an invite link?
                 </h3>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <Input
                     value={inviteInput}
                     onChange={(e) => setInviteInput(e.target.value)}
                     placeholder="Paste invite link or session code"
-                    className="h-11 flex-1 bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-xl"
+                    className="h-11 flex-1 bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-xl text-base"
                     data-testid="input-invite-code"
                   />
                   <VesselButton
@@ -193,6 +193,7 @@ export function LobbyScreen({
                     disabled={!inviteInput.trim()}
                     isLoading={isJoining}
                     data-testid="button-join-by-code"
+                    className="w-full sm:w-auto"
                   >
                     Join &rarr;
                   </VesselButton>
@@ -201,7 +202,7 @@ export function LobbyScreen({
             </div>
 
             <div className="flex flex-col">
-              <h3 className="font-display text-lg font-bold text-vessel-text-primary mb-4">
+              <h3 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary mb-3 sm:mb-4">
                 Recent Sessions
               </h3>
               <AlertDialog
@@ -289,63 +290,68 @@ export function LobbyScreen({
             </div>
           </div>
         ) : session ? (
-          <div className="container max-w-2xl mx-auto px-4 py-12">
-            <div className="mb-8">
+          <div className="container max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10 md:py-12">
+            <div className="mb-6 sm:mb-8">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.8)] animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.8)] animate-pulse shrink-0" />
                 <span className="text-vessel-text-secondary text-sm">Your studio is open</span>
               </div>
-              <h1 className="font-display text-3xl font-bold text-vessel-text-primary">
+              <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-vessel-text-primary tracking-tight leading-[1.15] break-words">
                 {session.title}
               </h1>
             </div>
 
-            <VesselCard className="p-6 border-vessel-accent/40 shadow-[0_0_30px_rgba(0,212,170,0.12)]">
+            <VesselCard className="p-5 sm:p-6 border-vessel-accent/40 shadow-[0_0_30px_rgba(0,212,170,0.12)]">
               <label className="block text-xs text-vessel-text-muted uppercase tracking-wider mb-3">
                 Share this link to invite guests:
               </label>
-              <div className="flex gap-2">
-                <div 
-                  className="flex-1 bg-vessel-bg-base border border-vessel-border rounded-xl p-3 font-mono-vessel text-sm text-vessel-text-primary overflow-hidden text-ellipsis whitespace-nowrap"
+              <div className="flex flex-col gap-3">
+                <div
+                  className="bg-vessel-bg-base border border-vessel-border rounded-xl p-3 font-mono-vessel text-xs sm:text-sm text-vessel-text-primary overflow-hidden text-ellipsis whitespace-nowrap"
                   data-testid="text-invite-link"
                 >
                   {buildInviteUrl(session.inviteCode, session.hostPubkey)}
                 </div>
-                <VesselButton
-                  variant="ghost"
-                  size="md"
-                  onClick={handleCopyLink}
-                  data-testid="button-copy-link"
-                >
-                  {copied ? <Check className="w-4 h-4 mr-2 text-vessel-green" /> : <Copy className="w-4 h-4 mr-2" />}
-                  {copied ? "Copied!" : "Copy"}
-                </VesselButton>
-                <VesselButton
-                  variant="ghost"
-                  size="md"
-                  onClick={() => setShowInviteModal(true)}
-                  data-testid="button-show-qr"
-                >
-                  <QrCode className="w-4 h-4 mr-2" />
-                  QR Code
-                </VesselButton>
+                <div className="flex gap-2">
+                  <VesselButton
+                    variant="ghost"
+                    size="md"
+                    onClick={handleCopyLink}
+                    className="flex-1"
+                    data-testid="button-copy-link"
+                  >
+                    {copied ? <Check className="w-4 h-4 mr-2 text-vessel-green" /> : <Copy className="w-4 h-4 mr-2" />}
+                    {copied ? "Copied!" : "Copy"}
+                  </VesselButton>
+                  <VesselButton
+                    variant="ghost"
+                    size="md"
+                    onClick={() => setShowInviteModal(true)}
+                    className="flex-1"
+                    data-testid="button-show-qr"
+                  >
+                    <QrCode className="w-4 h-4 mr-2" />
+                    QR Code
+                  </VesselButton>
+                </div>
               </div>
             </VesselCard>
 
-            <div className="mt-10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="font-display text-lg font-bold text-vessel-text-primary">In the room</h2>
+            <div className="mt-8 sm:mt-10">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <h2 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary">In the room</h2>
                   <VesselBadge variant="default">{session.participants.length}</VesselBadge>
                 </div>
                 <VesselButton
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowInviteModal(true)}
+                  className="shrink-0"
                   data-testid="button-invite-more"
                 >
-                  <Users className="w-4 h-4 mr-2" />
-                  Invite More
+                  <Users className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Invite More</span>
                 </VesselButton>
               </div>
 
