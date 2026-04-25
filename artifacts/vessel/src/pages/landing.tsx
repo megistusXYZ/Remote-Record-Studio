@@ -17,6 +17,7 @@ import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_qnqdd4qnqdd4qnqd_1777074939928.png";
+import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -84,7 +85,17 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 flex flex-col items-center justify-center pt-12 pb-32 px-6">
+      <section className="relative z-10 flex flex-col items-center justify-center pt-12 pb-32 px-6 overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${podcastSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+          }}
+          aria-hidden="true"
+        />
         <motion.div 
           initial="hidden" 
           animate="visible" 
