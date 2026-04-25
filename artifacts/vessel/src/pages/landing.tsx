@@ -9,6 +9,7 @@ import { AudioMeter } from "../components/vessel-ui/AudioMeter";
 import { RecordingDot } from "../components/vessel-ui/RecordingDot";
 import { SketchHost, SketchGuest } from "../components/vessel-ui/SketchConversation";
 import { BackupKeySignInModal } from "../components/onboarding/BackupKeySignInModal";
+import { NostrSignInModal } from "../components/onboarding/NostrSignInModal";
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Check, X } from "lucide-react";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
@@ -24,6 +25,7 @@ export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { displayName, isLoaded } = useIdentity();
   const [showBackupModal, setShowBackupModal] = React.useState(false);
+  const [showNostrModal, setShowNostrModal] = React.useState(false);
 
   // --- Interactive landing demo state (must run before any early return) ---
   const reduceMotion = useReducedMotion();
@@ -635,6 +637,20 @@ export default function LandingPage() {
         open={showBackupModal}
         onOpenChange={setShowBackupModal}
         onSuccess={() => setLocation("/home")}
+        onUseNostr={() => {
+          setShowBackupModal(false);
+          setShowNostrModal(true);
+        }}
+      />
+
+      <NostrSignInModal
+        open={showNostrModal}
+        onOpenChange={setShowNostrModal}
+        onSuccess={() => setLocation("/home")}
+        onUseBackupKey={() => {
+          setShowNostrModal(false);
+          setShowBackupModal(true);
+        }}
       />
     </div>
   );
