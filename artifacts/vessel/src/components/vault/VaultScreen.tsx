@@ -162,22 +162,22 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   return (
     <div className="flex h-[100dvh] bg-vessel-bg-base text-vessel-text-primary">
       <VaultSidebar active="my-vault" myVaultCount={filteredSessions.length} />
-      <main className="flex-1 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
-        <header className="sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border z-10 px-4 sm:px-8 py-4 sm:py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="font-display text-3xl font-bold text-vessel-text-primary">My Vault</h1>
+      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
+        <header className="sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border z-10 px-4 sm:px-8 py-4 sm:py-0 sm:h-[72px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-vessel-text-primary tracking-tight leading-none">My Vault</h1>
           <div className="relative w-full sm:w-auto">
-            <Search className="w-4 h-4 text-vessel-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-vessel-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search sessions..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full sm:w-64 pl-10 pr-3 py-2 rounded-lg bg-vessel-bg-surface border border-vessel-border text-sm focus:border-vessel-border-strong outline-none text-vessel-text-primary placeholder:text-vessel-text-muted"
+              className="w-full sm:w-64 pl-10 pr-3 py-2 rounded-lg bg-vessel-bg-surface border border-vessel-border text-base sm:text-sm focus:border-vessel-border-strong outline-none text-vessel-text-primary placeholder:text-vessel-text-muted"
             />
           </div>
         </header>
 
-        <div className="px-4 sm:px-8 py-6 space-y-4">
+        <div className="px-4 sm:px-6 md:px-8 py-6 space-y-4 max-w-5xl mx-auto">
           {isLoading ? (
             <>
               <div className="h-44 rounded-xl bg-vessel-bg-surface/50 animate-pulse" />

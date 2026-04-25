@@ -16,7 +16,7 @@ export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebar
 
   return (
     <aside className="hidden sm:flex flex-col w-60 shrink-0 border-r border-vessel-border bg-vessel-bg-base/40 backdrop-blur-sm h-full">
-      <div className="px-3 pb-4 pt-4 mb-2 border-b border-vessel-border">
+      <div className="h-[72px] shrink-0 px-4 flex items-center border-b border-vessel-border">
         <button
           type="button"
           onClick={() => setLocation("/home")}
