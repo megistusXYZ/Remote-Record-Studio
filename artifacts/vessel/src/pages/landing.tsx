@@ -424,9 +424,9 @@ export default function LandingPage() {
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp} transition={{ delay: 0.2 }}>
               <VesselCard variant="interactive" className="p-8 h-full">
                 <LaptopPersonIcon className="w-12 h-12 text-vessel-accent mb-6" />
-                <h3 className="font-display font-bold text-xl mb-3">Permanently Yours</h3>
+                <h3 className="font-display font-bold text-xl mb-3">You Pick Where Files Live</h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
-                  Files are distributed directly to you, not stored on our servers. Your media stays yours even if Vessel disappeared tomorrow.
+                  Send recordings to the community default server or one you control — never to ours. Your media stays yours even if Vessel disappeared tomorrow.
                 </p>
               </VesselCard>
             </motion.div>
@@ -530,6 +530,7 @@ export default function LandingPage() {
                     { label: "Local recording quality", v: "Lossless", r: "Lossless", z: "Compressed" },
                     { label: "Monthly cost", v: "Free", r: "$15–$100/mo", z: "$15–$20/mo" },
                     { label: "You own your files", v: "Always", r: "Platform-stored", z: "Platform-stored" },
+                    { label: "You pick where files live", v: "Yes", vCheck: true, r: "No", rCross: true, z: "No", zCross: true },
                     { label: "Guests need an account", v: "No", vCheck: true, r: "Yes", rCross: true, z: "Yes", zCross: true },
                     { label: "Works on spotty wi-fi", v: "Yes", vCheck: true, r: "Yes", rCheck: true, z: "No", zCross: true }
                   ].map((row, i) => (

@@ -131,6 +131,53 @@ export default function HowItWorks() {
         </ul>
       </ContentSection>
 
+      <ContentSection heading="How does Vessel know it&rsquo;s really you?">
+        <p>
+          We do not. Your browser does &mdash; and it proves it on every single request.
+        </p>
+        <p>
+          Every time your studio asks Vessel for something &mdash; &ldquo;list my
+          sessions,&rdquo; &ldquo;create a new room,&rdquo; &ldquo;cancel this
+          invite&rdquo; &mdash; your browser quietly stamps the request with your private
+          sign-in key first. Think of it as a wax seal on a letter: anyone can read whose
+          seal it is, but only the person holding the stamp could have made it. Vessel
+          checks the seal, sees that it matches your published identity, and lets the
+          request through.
+        </p>
+        <p>
+          If anyone else tries to ask for your data &mdash; even if they know your display
+          name, even if they guessed your studio&rsquo;s URL &mdash; the seal does not
+          check out and Vessel says no. There are no session cookies that can be stolen,
+          no passwords to phish, no &ldquo;forgot my login&rdquo; loophole. The proof is
+          made fresh on your device for every click, and the key that makes it never
+          leaves your laptop.
+        </p>
+      </ContentSection>
+
+      <ContentSection heading="Where do your recordings actually go?">
+        <p>
+          When you signed up, Vessel asked you a one-line question:{" "}
+          <em>where do your recordings live?</em> You picked one of two answers:
+        </p>
+        <ul className="list-disc pl-5 space-y-2">
+          <li>
+            <strong className="text-vessel-text-primary">The community default.</strong>{" "}
+            A free, public storage server run by the open-source community. Quick to
+            start, no setup, not run by Vessel.
+          </li>
+          <li>
+            <strong className="text-vessel-text-primary">A server you point at.</strong>{" "}
+            Any compatible storage server you control or trust &mdash; one you run on a
+            cheap VPS, a friend&rsquo;s, your studio&rsquo;s, your university&rsquo;s.
+          </li>
+        </ul>
+        <p>
+          Whichever you pick, that is where every recording from your sessions lands. You
+          can change your mind any time in Settings, and the change applies to future
+          sessions. Vessel itself never touches the bytes.
+        </p>
+      </ContentSection>
+
       <ContentSection heading="What happens when you press record">
         <ol className="list-decimal pl-5 space-y-3">
           <li>
@@ -177,9 +224,9 @@ export default function HowItWorks() {
             <strong className="text-vessel-text-primary">Delivery time.</strong>{" "}
             Your guest&rsquo;s browser packages up their high-quality file,
             seals it with a code only you (the host) can open, and ships it
-            directly to wherever you have told it to go. The file does{" "}
-            <strong className="text-vessel-text-primary">not</strong> stop over
-            on Vessel&rsquo;s servers.
+            directly to the storage server you picked when you signed up. The
+            file does <strong className="text-vessel-text-primary">not</strong>{" "}
+            stop over on Vessel&rsquo;s servers.
           </li>
           <li>
             <strong className="text-vessel-text-primary">You open your editor</strong>{" "}
@@ -208,10 +255,11 @@ export default function HowItWorks() {
             <strong className="text-vessel-text-primary">
               The studio-quality recordings
             </strong>{" "}
-            live with whoever recorded them, then a sealed copy is delivered
-            to the host. The host then owns those copies and can stash them
-            wherever they like &mdash; local drive, their own cloud bucket,
-            whatever.
+            live first on the device that recorded them, then a sealed copy
+            is shipped to the storage server the host chose at sign-up.
+            That server &mdash; not Vessel &mdash; is where the host&rsquo;s
+            edit-ready copies sit, and the host can move them onto a local
+            drive or anywhere else from there.
           </li>
           <li>
             <strong className="text-vessel-text-primary">
@@ -279,6 +327,10 @@ export default function HowItWorks() {
       <ContentSection heading="What does Vessel's server actually do, then?">
         <p>Honestly? Not much, on purpose. It is the receptionist, not the studio:</p>
         <ul className="list-disc pl-5 space-y-2">
+          <li>
+            Checks the wax-seal signature on every incoming request to make sure it
+            really is you asking.
+          </li>
           <li>Hands out invite links and tells the right two browsers how to find each other.</li>
           <li>Remembers the names of your studios and sessions so your dashboard is not empty.</li>
           <li>
