@@ -51,24 +51,34 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
   if (variant === "sidebar") {
     return (
       <>
-        <button
-          onClick={() => setConfirmOpen(true)}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary hover:bg-vessel-bg-surface/50 border border-transparent transition-colors"
-          data-testid="button-sign-out-sidebar"
-          aria-label={`Sign out ${displayName}`}
-        >
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-            style={{ backgroundColor: avatarColor }}
+        <div className="w-full flex items-center gap-1 rounded-lg border border-transparent hover:bg-vessel-bg-surface/50 transition-colors group">
+          <button
+            onClick={() => setLocation("/settings")}
+            className="flex-1 min-w-0 flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg text-sm font-medium text-vessel-text-secondary group-hover:text-vessel-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent/40 transition-colors"
+            data-testid="button-account-settings-sidebar"
+            aria-label={`Open account settings for ${displayName}`}
           >
-            <span className="text-white text-[10px] font-bold">{initials}</span>
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <div className="text-vessel-text-primary truncate">{displayName}</div>
-            <div className="text-xs text-vessel-text-muted">Tap to sign out</div>
-          </div>
-          <LogOut className="w-4 h-4 shrink-0 text-vessel-text-muted" />
-        </button>
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+              style={{ backgroundColor: avatarColor }}
+            >
+              <span className="text-white text-[10px] font-bold">{initials}</span>
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <div className="text-vessel-text-primary truncate">{displayName}</div>
+              <div className="text-xs text-vessel-text-muted">Account settings</div>
+            </div>
+          </button>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="shrink-0 p-2 mr-1 rounded-md text-vessel-text-muted hover:text-vessel-text-primary hover:bg-vessel-bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent/40 transition-colors"
+            data-testid="button-sign-out-sidebar"
+            aria-label={`Sign out ${displayName}`}
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
         {renderDialog(confirmOpen, setConfirmOpen, handleSignOut, signingOut)}
       </>
     );
