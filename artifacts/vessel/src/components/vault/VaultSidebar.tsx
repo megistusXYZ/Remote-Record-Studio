@@ -1,9 +1,10 @@
 import { useLocation } from "wouter";
-import { Archive, Users, Settings } from "lucide-react";
+import { Archive, Users } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { AccountMenu } from "../account/AccountMenu";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
+import { SettingsGearsIcon } from "../icons/SettingsGearsIcon";
 
 export type VaultSidebarProps = {
   active: "my-vault" | "shared" | "settings";
@@ -80,7 +81,7 @@ export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebar
           )}
           data-testid="nav-vault-settings"
         >
-          <Settings className="w-4 h-4 shrink-0" />
+          <SettingsGearsIcon className="w-4 h-4 shrink-0" />
           <span className="flex-1 text-left truncate">Settings</span>
         </button>
       </nav>
