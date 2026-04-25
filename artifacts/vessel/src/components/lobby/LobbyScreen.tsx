@@ -2,10 +2,15 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, ArrowRight, Copy, QrCode, Users, Check } from "lucide-react";
+import { Mic, ArrowRight, Copy, QrCode, Users, Check, Trash2 } from "lucide-react";
 import { LobbyEmptyState } from "./LobbyEmptyState";
 import { WaitingForGuestsEmpty } from "./WaitingForGuestsEmpty";
-import { useGetRecentActivity, getGetRecentActivityQueryKey } from "@workspace/api-client-react";
+import {
+  useGetRecentActivity,
+  getGetRecentActivityQueryKey,
+  useDeleteSession,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useIdentity } from "../../hooks/use-identity";
 import { buildInviteUrl, extractInviteCodeFromInput } from "../../lib/session";
@@ -13,6 +18,16 @@ import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
 import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ParticipantCard } from "./ParticipantCard";
 import { InviteModal } from "./InviteModal";
 
@@ -53,11 +68,27 @@ export function LobbyScreen({
   const [inviteInput, setInviteInput] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+
+  const queryClient = useQueryClient();
 
   const { data: activity, isLoading: isActivityLoading } = useGetRecentActivity(
     { pubkey: pubkey!, limit: 5 },
     { query: { enabled: !!pubkey && state === "default", queryKey: getGetRecentActivityQueryKey({ pubkey: pubkey!, limit: 5 }) } }
   );
+
+  const deleteSessionMutation = useDeleteSession({
+    mutation: {
+      onSuccess: () => {
+        if (pubkey) {
+          queryClient.invalidateQueries({
+            queryKey: getGetRecentActivityQueryKey({ pubkey, limit: 5 }),
+          });
+        }
+        setPendingDelete(null);
+      },
+    },
+  });
 
   const hour = new Date().getHours();
   const timeOfDay = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
@@ -168,6 +199,43 @@ export function LobbyScreen({
               <h3 className="font-display text-lg font-bold text-vessel-text-primary mb-4">
                 Recent Sessions
               </h3>
+              <AlertDialog
+                open={!!pendingDelete}
+                onOpenChange={(o) => {
+                  if (!o && !deleteSessionMutation.isPending) setPendingDelete(null);
+                }}
+              >
+                <AlertDialogContent data-testid="dialog-remove-recent-session">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove this session?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Removes <span className="text-vessel-text-primary font-medium">{pendingDelete?.title}</span> from your studio.
+                      Your recordings stay in your vault — they're never touched.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel
+                      disabled={deleteSessionMutation.isPending}
+                      data-testid="button-remove-recent-session-cancel"
+                    >
+                      Keep it
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (pendingDelete) {
+                          deleteSessionMutation.mutate({ sessionId: pendingDelete.id });
+                        }
+                      }}
+                      disabled={deleteSessionMutation.isPending}
+                      className="bg-vessel-red text-white hover:bg-vessel-red/90 focus-visible:ring-vessel-red/40"
+                      data-testid="button-remove-recent-session-confirm"
+                    >
+                      {deleteSessionMutation.isPending ? "Removing…" : "Remove"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <div className="flex flex-col gap-3">
                 {isActivityLoading ? (
                   <>
@@ -181,12 +249,12 @@ export function LobbyScreen({
                   activity.recentSessions.map(s => (
                     <VesselCard
                       key={s.id}
-                      className="p-4 cursor-pointer hover:border-vessel-accent/40 transition-colors flex items-center justify-between"
+                      className="group p-4 cursor-pointer hover:border-vessel-accent/40 transition-colors flex items-center justify-between gap-3"
                       onClick={() => setLocation(`/session/${s.id}`)}
                       data-testid={`card-recent-session-${s.id}`}
                     >
-                      <div className="flex flex-col">
-                        <span className="font-medium text-vessel-text-primary">{s.title}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-medium text-vessel-text-primary truncate">{s.title}</span>
                         <div className="flex items-center gap-1.5 mt-1 text-xs text-vessel-text-muted">
                           <div className={`w-1.5 h-1.5 rounded-full ${s.status === 'live' ? 'bg-vessel-red animate-pulse' : s.status === 'waiting' ? 'bg-vessel-accent' : 'bg-vessel-text-muted'}`} />
                           <span className="capitalize">{s.status}</span>
@@ -194,7 +262,21 @@ export function LobbyScreen({
                           <span>{formatDistanceToNow(new Date(s.createdAt), { addSuffix: true })}</span>
                         </div>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-vessel-text-muted" />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingDelete({ id: s.id, title: s.title });
+                          }}
+                          aria-label={`Remove ${s.title} from recent sessions`}
+                          className="p-1.5 rounded-lg text-vessel-text-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-vessel-red hover:bg-vessel-red/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vessel-red/40 transition-all"
+                          data-testid={`button-remove-recent-session-${s.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <ArrowRight className="w-4 h-4 text-vessel-text-muted" />
+                      </div>
                     </VesselCard>
                   ))
                 )}
