@@ -175,7 +175,7 @@ export function LobbyScreen({
                 </div>
               </VesselCard>
 
-              <VesselCard variant="ghost" className="p-5 sm:p-6">
+              <VesselCard variant="ghost" className="px-0">
                 <h3 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary mb-3">
                   Have an invite link?
                 </h3>
