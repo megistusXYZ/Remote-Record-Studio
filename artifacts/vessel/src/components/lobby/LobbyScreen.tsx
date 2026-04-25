@@ -202,9 +202,17 @@ export function LobbyScreen({
             </div>
 
             <div className="flex flex-col">
-              <h3 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary mb-3 sm:mb-4">
-                Recent Sessions
-              </h3>
+              <div className="mb-6 sm:mb-8 md:mb-10">
+                <p className="font-mono-vessel text-[11px] uppercase tracking-[0.18em] text-vessel-accent mb-2">
+                  Studio history
+                </p>
+                <h2 className="font-display text-2xl sm:text-3xl font-bold text-vessel-text-primary tracking-tight leading-[1.15]">
+                  Recent sessions
+                </h2>
+                <p className="text-vessel-text-secondary mt-2 sm:mt-3 text-sm sm:text-base">
+                  Pick up where you left off.
+                </p>
+              </div>
               <AlertDialog
                 open={!!pendingDelete}
                 onOpenChange={(o) => {
