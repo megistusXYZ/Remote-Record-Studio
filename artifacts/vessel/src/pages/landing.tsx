@@ -389,16 +389,6 @@ export default function LandingPage() {
 
       {/* Features Section */}
       <section id="features" className="relative z-10 py-24 px-6 bg-vessel-bg-surface/30 overflow-hidden">
-        <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.06]"
-          style={{
-            backgroundImage: `url(${pirateCrewSketch})`,
-            filter: "invert(1) grayscale(1)",
-            maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
-            WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
-          }}
-          aria-hidden="true"
-        />
         <div className="relative z-10 max-w-6xl mx-auto">
           <motion.div 
             initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }}
@@ -445,8 +435,18 @@ export default function LandingPage() {
       </section>
 
       {/* How it Works */}
-      <section id="how-it-works" className="relative z-10 py-32 px-6">
-        <div className="max-w-6xl mx-auto">
+      <section id="how-it-works" className="relative z-10 py-32 px-6 overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${pirateCrewSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+            WebkitMaskImage: "radial-gradient(ellipse at center, black 35%, transparent 75%)",
+          }}
+          aria-hidden="true"
+        />
+        <div className="relative z-10 max-w-6xl mx-auto">
           <motion.div 
             initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}
             className="text-center mb-20"
