@@ -20,7 +20,7 @@ import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
 import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
-import pirateCrewSketch from "@assets/Gemini_Generated_Image_gmbfr2gmbfr2gmbf_1777083673836.png";
+import pirateCrewSketch from "@assets/Gemini_Generated_Image_p6rkq1p6rkq1p6rk_1777089239893.png";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
