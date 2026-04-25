@@ -80,7 +80,7 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
                 onChange={(e) => setBackupKey(e.target.value)}
                 placeholder="nsec1..."
                 className="font-mono-vessel resize-none bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
-                rows={3}
+                rows={2}
               />
               <p className="text-xs text-vessel-text-muted">
                 Your backup key starts with 'nsec1' and is the only way to recover a studio on a new device.
