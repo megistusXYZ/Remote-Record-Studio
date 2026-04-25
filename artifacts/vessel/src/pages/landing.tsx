@@ -436,16 +436,6 @@ export default function LandingPage() {
 
       {/* How it Works */}
       <section id="how-it-works" className="relative z-10 py-32 px-6 overflow-hidden">
-        <div
-          className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.07]"
-          style={{
-            backgroundImage: `url(${pirateCrewSketch})`,
-            filter: "invert(1) grayscale(1)",
-            maskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
-            WebkitMaskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
-          }}
-          aria-hidden="true"
-        />
         <div className="relative z-10 max-w-6xl mx-auto">
           <motion.div 
             initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}
