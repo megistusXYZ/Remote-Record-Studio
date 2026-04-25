@@ -30,9 +30,12 @@ export default function Terms() {
 
       <ContentSection heading="Account and access">
         <p>
-          There are no paid plans. Your identity is a private sign-in key that you control. If
-          you lose the key, we cannot recover access to your studio &mdash; this is by design,
-          and is the same property that keeps your account safe from us.
+          There are no paid plans. Your identity is a private sign-in key that you control.
+          Every action you take in the Service &mdash; creating a studio, listing your past
+          sessions, cancelling an invite &mdash; is cryptographically signed by your key on
+          your device, so the Service can verify it is really you without ever holding your
+          key. If you lose the key, we cannot recover access to your studio &mdash; this is
+          by design, and is the same property that keeps your account safe from us.
         </p>
       </ContentSection>
 
@@ -43,12 +46,23 @@ export default function Terms() {
         </p>
       </ContentSection>
 
+      <ContentSection heading="Storage servers">
+        <p>
+          Vessel lets you point your recordings at any compatible storage server &mdash; the
+          community default, a server you operate yourself, or one offered by a third party.
+          Vessel does not operate that storage server unless you explicitly chose ours, and
+          we are not responsible for its uptime, pricing, retention, content moderation, or
+          terms. The contents of your recordings, the cost of storing them, and the
+          consequences of sharing them are your responsibility.
+        </p>
+      </ContentSection>
+
       <ContentSection heading="Open source and changes to the Service">
         <p>
           Vessel&rsquo;s source code is published on GitHub under an open-source license. The
           hosted Service may change, pause, or shut down at any time. Because your recordings
-          live with you and your guests, your media is not affected if the hosted Service
-          becomes unavailable.
+          live on storage servers you choose &mdash; not on Vessel&rsquo;s servers &mdash;
+          your media is not affected if the hosted Service becomes unavailable.
         </p>
       </ContentSection>
 

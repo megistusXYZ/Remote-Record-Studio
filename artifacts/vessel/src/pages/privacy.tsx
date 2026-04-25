@@ -37,7 +37,13 @@ export default function Privacy() {
         <ul className="list-disc pl-5 space-y-2">
           <li>
             Recordings, audio, or video. These are captured on each participant&rsquo;s device
-            and delivered straight to the host. They never touch our servers.
+            and delivered straight to the storage server the host picked at sign-up. They
+            never touch our servers.
+          </li>
+          <li>
+            Your storage server choice. The address of the storage server you pointed Vessel
+            at lives only in your browser. We never receive it and never see what you upload
+            there.
           </li>
           <li>Analytics about how you use the app. No third-party trackers and no advertising.</li>
           <li>
@@ -47,11 +53,26 @@ export default function Privacy() {
         </ul>
       </ContentSection>
 
-      <ContentSection heading="Cookies and local storage">
+      <ContentSection heading="How we know a request is really yours">
         <p>
-          We use a single session cookie to keep you signed in across page loads. Your private
-          sign-in key is stored locally in your browser and is never transmitted to us.
+          Vessel does not use sign-in cookies. Each time your studio asks Vessel for data,
+          your browser cryptographically signs the request on your device using your private
+          sign-in key. The signature proves the request is from you without ever exposing the
+          key. If a request is not signed by you, the server refuses it &mdash; even if it
+          claims to be on your behalf.
         </p>
+      </ContentSection>
+
+      <ContentSection heading="Local storage on your device">
+        <p>
+          Three things are kept in your browser&rsquo;s local storage and are never
+          transmitted to us:
+        </p>
+        <ul className="list-disc pl-5 space-y-2">
+          <li>Your private sign-in key.</li>
+          <li>Your chosen display name.</li>
+          <li>The address of the storage server you pointed Vessel at.</li>
+        </ul>
       </ContentSection>
 
       <ContentSection heading="Sharing">
