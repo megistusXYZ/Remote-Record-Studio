@@ -1,11 +1,11 @@
 import { useLocation } from "wouter";
-import { Archive } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { AccountMenu } from "../account/AccountMenu";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import { SettingsGearsIcon } from "../icons/SettingsGearsIcon";
 import { SharedPersonIcon } from "../icons/SharedPersonIcon";
+import { MyVaultLaptopIcon } from "../icons/MyVaultLaptopIcon";
 
 export type VaultSidebarProps = {
   active: "my-vault" | "shared" | "settings";
@@ -44,7 +44,7 @@ export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebar
           )}
           data-testid="nav-vault-my-vault"
         >
-          <Archive className="w-4 h-4 shrink-0" />
+          <MyVaultLaptopIcon className="w-4 h-4 shrink-0" />
           <span className="flex-1 text-left truncate">My Vault</span>
           {myVaultCount !== undefined && myVaultCount > 0 && (
             <span className="text-xs font-mono-vessel text-vessel-text-muted px-1.5 py-0.5 rounded bg-vessel-bg-base">
