@@ -41,7 +41,7 @@ Vessel is a studio-quality remote recording platform designed to offer a polishe
     - Local-key identities store encrypted `_secretKey` derived from `displayName + deviceFingerprint`.
     - Three sign-in builders: `signInWithExtension` (NIP-07), `signInWithRemoteSigner` (NIP-46), and `startNostrConnectInvite`.
     - Zustand store (`identityStore`) manages identity state, with async `signOut` for cleanup.
-    - Onboarding flow supports 2-step creator sign-up and explicit Nostr on-ramp with NIP-07, NIP-46 via paste or invite, and nsec backup key restore.
+    - Onboarding flow supports 3-step creator sign-up (name → storage → forced backup-key step gated by confirmation checkbox → welcome) and explicit Nostr on-ramp with NIP-07, NIP-46 via paste or invite, and nsec backup key restore.
     - Guest join flow is zero-friction, requiring explicit consent.
 
 - **Lobby & Session Management:**

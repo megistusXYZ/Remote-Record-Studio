@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   AlertTriangle,
@@ -9,6 +9,7 @@ import {
   EyeOff,
   QrCode,
   ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Dialog,
@@ -19,7 +20,12 @@ import {
 } from "@/components/ui/dialog";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { useToast } from "../../hooks/use-toast";
-import { exportIdentityBackup, type VesselIdentity } from "../../lib/identity";
+import {
+  downloadBackupFile,
+  exportIdentityBackup,
+  getStudioIdBech32,
+  type VesselIdentity,
+} from "../../lib/identity";
 
 export type BackupKeyModalProps = {
   open: boolean;
@@ -35,7 +41,13 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
   const [backupValue, setBackupValue] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const studioId = useMemo(
+    () => (identity ? getStudioIdBech32(identity) : null),
+    [identity],
+  );
 
   // Reset on every open transition so the modal always starts at the
   // confirm-to-reveal step, even if the user closes and reopens it
@@ -46,6 +58,7 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
     setBackupValue(null);
     setShowQr(false);
     setCopied(false);
+    setCopiedId(false);
     setError(null);
   }, [open]);
 
@@ -54,6 +67,12 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
     const t = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(t);
   }, [copied]);
+
+  useEffect(() => {
+    if (!copiedId) return;
+    const t = setTimeout(() => setCopiedId(false), 2000);
+    return () => clearTimeout(t);
+  }, [copiedId]);
 
   const handleReveal = () => {
     if (!identity) {
@@ -89,25 +108,23 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
     }
   };
 
+  const handleCopyStudioId = async () => {
+    if (!studioId) return;
+    try {
+      await navigator.clipboard.writeText(studioId);
+      setCopiedId(true);
+    } catch {
+      toast({
+        title: "Couldn't copy",
+        description: "Select the text and copy it manually.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDownload = () => {
-    if (!backupValue) return;
-    const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `vessel-backup-key-${stamp}.txt`;
-    const body =
-      "Vessel backup key\n" +
-      "=================\n\n" +
-      "This key controls your studio. Anyone who has it can sign in as you.\n" +
-      "Store it somewhere private — a password manager works well.\n\n" +
-      `${backupValue}\n`;
-    const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (!backupValue || !identity) return;
+    const filename = downloadBackupFile(identity, backupValue);
     toast({ title: "Downloaded", description: `Saved as ${filename}.` });
   };
 
@@ -118,7 +135,7 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
           <DialogTitle className="font-display text-xl">Backup key</DialogTitle>
           <DialogDescription className="text-vessel-text-secondary mt-2">
             {stage === "warn"
-              ? "This key is your account. Anyone who has it can sign in as you on any device."
+              ? "This key is your studio. Anyone who has it can sign in as you on any device."
               : "Save this somewhere private. A password manager works well."}
           </DialogDescription>
         </DialogHeader>
@@ -160,9 +177,46 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
           </div>
         ) : (
           <div className="mt-2 space-y-4">
+            {studioId && (
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-vessel-text-muted">
+                    <ShieldCheck className="w-3.5 h-3.5 text-vessel-accent" />
+                    Studio ID
+                    <span className="ml-1 normal-case text-[10px] tracking-normal text-vessel-text-muted/80">
+                      (public — safe to share)
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleCopyStudioId}
+                    className="text-xs text-vessel-accent hover:underline focus:outline-none flex items-center gap-1"
+                    data-testid="button-copy-studio-id"
+                  >
+                    {copiedId ? (
+                      <Check className="w-3 h-3 text-vessel-green" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                    {copiedId ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <code
+                  className="block font-mono-vessel text-[11px] select-all break-all p-3 rounded-lg bg-vessel-bg-base border border-vessel-border text-vessel-text-secondary"
+                  data-testid="text-studio-id-value"
+                >
+                  {studioId}
+                </code>
+              </div>
+            )}
+
             <div>
-              <label className="text-xs uppercase tracking-wider text-vessel-text-muted">
-                Your backup key
+              <label className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-vessel-text-muted">
+                <ShieldAlert className="w-3.5 h-3.5 text-vessel-amber" />
+                Backup key
+                <span className="ml-1 normal-case text-[10px] tracking-normal text-vessel-text-muted/80">
+                  (private — never share)
+                </span>
               </label>
               <code
                 className="block mt-2 font-mono-vessel text-xs select-all break-all p-3 rounded-lg bg-vessel-bg-base border border-vessel-border-strong text-vessel-text-secondary"
