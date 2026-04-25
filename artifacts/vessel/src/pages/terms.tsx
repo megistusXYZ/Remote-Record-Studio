@@ -1,8 +1,8 @@
-import { LegalPageShell, LegalSection } from "../components/LegalPageShell";
+import { ContentPageShell, ContentSection } from "../components/ContentPageShell";
 
 export default function Terms() {
   return (
-    <LegalPageShell title="Terms of Service" lastUpdated="Last updated · April 25, 2026">
+    <ContentPageShell title="Terms of Service" eyebrow="Last updated · April 25, 2026">
       <p>
         These terms govern your use of the Vessel service (the &ldquo;Service&rdquo;). By
         creating a studio or joining a session, you agree to them. The Service is open-source
@@ -10,7 +10,7 @@ export default function Terms() {
         of any kind.
       </p>
 
-      <LegalSection heading="Your studio, your responsibility">
+      <ContentSection heading="Your studio, your responsibility">
         <ul className="list-disc pl-5 space-y-2">
           <li>
             You own everything you record with Vessel. You are responsible for obtaining
@@ -26,41 +26,41 @@ export default function Terms() {
             that infringes the rights of others.
           </li>
         </ul>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Account and access">
+      <ContentSection heading="Account and access">
         <p>
           There are no paid plans. Your identity is a private sign-in key that you control. If
           you lose the key, we cannot recover access to your studio &mdash; this is by design,
           and is the same property that keeps your account safe from us.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Suspension">
+      <ContentSection heading="Suspension">
         <p>
           We may suspend or terminate access for any account that abuses the Service, attempts
           to compromise other users, or otherwise breaks these terms.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Open source and changes to the Service">
+      <ContentSection heading="Open source and changes to the Service">
         <p>
           Vessel&rsquo;s source code is published on GitHub under an open-source license. The
           hosted Service may change, pause, or shut down at any time. Because your recordings
           live with you and your guests, your media is not affected if the hosted Service
           becomes unavailable.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Warranty disclaimer">
+      <ContentSection heading="Warranty disclaimer">
         <p>
           The Service is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo;, without
           warranties of any kind, whether express or implied, including merchantability,
           fitness for a particular purpose, and non-infringement.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Limitation of liability">
+      <ContentSection heading="Limitation of liability">
         <p>
           To the fullest extent permitted by law, Vessel and its contributors are not liable
           for any indirect, incidental, special, consequential, or punitive damages arising
@@ -68,24 +68,24 @@ export default function Terms() {
           to the amount you paid us in the previous twelve months &mdash; which, for a free
           service, is zero.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Changes to these terms">
+      <ContentSection heading="Changes to these terms">
         <p>
           We may update these terms from time to time. Material changes will be announced on
           the project&rsquo;s GitHub repository. Your continued use of the Service after a
           change takes effect constitutes acceptance of the updated terms.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Governing law">
+      <ContentSection heading="Governing law">
         <p>
           These terms are governed by and construed in accordance with the laws of the State
           of Delaware, United States, without regard to its conflict-of-laws principles.
         </p>
-      </LegalSection>
+      </ContentSection>
 
-      <LegalSection heading="Contact">
+      <ContentSection heading="Contact">
         <p>
           Questions:{" "}
           <a href="mailto:legal@vessel.example" className="text-vessel-accent hover:underline">
@@ -93,7 +93,7 @@ export default function Terms() {
           </a>
           , or open an issue on the GitHub repository.
         </p>
-      </LegalSection>
-    </LegalPageShell>
+      </ContentSection>
+    </ContentPageShell>
   );
 }

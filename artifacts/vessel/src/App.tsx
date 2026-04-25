@@ -16,6 +16,7 @@ import Join from "./pages/join";
 import ShareView from "./pages/share-view";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
+import HowItWorks from "./pages/how-it-works";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/s/:pointer" component={ShareView} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/how-it-works" component={HowItWorks} />
       <Route component={NotFound} />
     </Switch>
   );
