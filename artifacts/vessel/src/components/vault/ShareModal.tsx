@@ -247,20 +247,37 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
           </div>
         ) : archive ? (
           <Tabs defaultValue="editor" className="w-full">
-            <TabsList className="grid grid-cols-3 bg-vessel-bg-base border border-vessel-border">
-              <TabsTrigger value="editor" data-testid="tab-share-editor">
-                <Share2 className="w-3.5 h-3.5 mr-1.5" /> Editor
+            <TabsList
+              className="grid grid-cols-3 gap-1 h-auto p-1 bg-vessel-bg-base border border-vessel-border rounded-lg w-full"
+            >
+              <TabsTrigger
+                value="editor"
+                data-testid="tab-share-editor"
+                className="px-2 py-1.5 text-xs sm:text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary data-[state=active]:bg-vessel-bg-elevated data-[state=active]:text-vessel-accent data-[state=active]:shadow-none transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Editor
               </TabsTrigger>
-              <TabsTrigger value="tracks" data-testid="tab-share-tracks">
-                <Users className="w-3.5 h-3.5 mr-1.5" /> Per Track
+              <TabsTrigger
+                value="tracks"
+                data-testid="tab-share-tracks"
+                className="px-2 py-1.5 text-xs sm:text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary data-[state=active]:bg-vessel-bg-elevated data-[state=active]:text-vessel-accent data-[state=active]:shadow-none transition-colors"
+              >
+                <Users className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Per Track
               </TabsTrigger>
-              <TabsTrigger value="info" data-testid="tab-share-info">
-                <Info className="w-3.5 h-3.5 mr-1.5" /> Archive Info
+              <TabsTrigger
+                value="info"
+                data-testid="tab-share-info"
+                className="px-2 py-1.5 text-xs sm:text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary data-[state=active]:bg-vessel-bg-elevated data-[state=active]:text-vessel-accent data-[state=active]:shadow-none transition-colors"
+              >
+                <Info className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Archive Info
               </TabsTrigger>
             </TabsList>
 
+            {/* Stable-height tab body so switching tabs doesn't shift the footer */}
+            <div className="min-h-[260px]">
+
             {/* Tab 1: Editor */}
-            <TabsContent value="editor" className="pt-4 space-y-4">
+            <TabsContent value="editor" className="pt-4 space-y-4 mt-0">
               <p className="text-sm text-vessel-text-secondary">
                 Anyone with this link can download your session tracks.
               </p>
@@ -298,7 +315,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
             </TabsContent>
 
             {/* Tab 2: Per-track */}
-            <TabsContent value="tracks" className="pt-4 space-y-3">
+            <TabsContent value="tracks" className="pt-4 space-y-3 mt-0">
               <p className="text-sm text-vessel-text-secondary">
                 Send each contributor a link to just their own track.
               </p>
@@ -338,7 +355,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
             </TabsContent>
 
             {/* Tab 3: Archive info */}
-            <TabsContent value="info" className="pt-4 space-y-4">
+            <TabsContent value="info" className="pt-4 space-y-4 mt-0">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-vessel-text-muted mb-1.5 font-mono-vessel">
                   Archive ID
@@ -365,6 +382,8 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 <div>Tracks: {archive.perTrackUrls.length}</div>
               </div>
             </TabsContent>
+
+            </div>
 
             {/* Revoke action — always visible at the bottom of the tab area */}
             <div className="mt-5 pt-4 border-t border-vessel-border">
