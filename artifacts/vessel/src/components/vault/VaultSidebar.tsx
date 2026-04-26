@@ -4,16 +4,14 @@ import { VesselButton } from "../vessel-ui/VesselButton";
 import { AccountMenu } from "../account/AccountMenu";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import { SettingsGearsIcon } from "../icons/SettingsGearsIcon";
-import { SharedPersonIcon } from "../icons/SharedPersonIcon";
 import { MyVaultLaptopIcon } from "../icons/MyVaultLaptopIcon";
 
 export type VaultSidebarProps = {
-  active: "my-vault" | "shared" | "settings";
+  active: "my-vault" | "settings";
   myVaultCount?: number;
-  sharedCount?: number;
 };
 
-export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebarProps) {
+export function VaultSidebar({ active, myVaultCount }: VaultSidebarProps) {
   const [, setLocation] = useLocation();
 
   return (
@@ -49,25 +47,6 @@ export function VaultSidebar({ active, myVaultCount, sharedCount }: VaultSidebar
           {myVaultCount !== undefined && myVaultCount > 0 && (
             <span className="text-xs font-mono-vessel text-vessel-text-muted px-1.5 py-0.5 rounded bg-vessel-bg-base">
               {myVaultCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setLocation("/vault?shared=1")}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-            active === "shared"
-              ? "bg-vessel-bg-surface text-vessel-text-primary border border-vessel-border-strong"
-              : "text-vessel-text-secondary hover:text-vessel-text-primary hover:bg-vessel-bg-surface/50 border border-transparent"
-          )}
-          data-testid="nav-vault-shared"
-        >
-          <SharedPersonIcon className="w-4 h-4 shrink-0" />
-          <span className="flex-1 text-left truncate">Shared with Me</span>
-          {sharedCount !== undefined && sharedCount > 0 && (
-            <span className="text-xs font-mono-vessel text-vessel-text-muted px-1.5 py-0.5 rounded bg-vessel-bg-base">
-              {sharedCount}
             </span>
           )}
         </button>
