@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2, Download, Link as LinkIcon, Cloud, CloudOff, ShieldCheck, ExternalLink, ShieldOff } from "lucide-react";
-import { getInitials } from "../../lib/identity";
+import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
 import {
   resolveAvatarColor,
@@ -366,12 +366,12 @@ export function SessionComplete({
                       transition={{ delay: idx * 0.08 }}
                       className="flex items-center gap-3 py-3 border-b border-vessel-border last:border-0"
                     >
-                      <div 
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: resolveAvatarColor(track.participantPubkey, selfPubkey, storedColor) }}
-                      >
-                        <span className="text-white text-xs font-bold">{getInitials(track.participantName)}</span>
-                      </div>
+                      <AvatarMark
+                        pubkey={track.participantPubkey}
+                        displayName={track.participantName}
+                        className="w-8 h-8"
+                        initialsClassName="text-xs"
+                      />
                       <span className="flex-1 text-sm font-medium text-vessel-text-primary text-left truncate">{track.participantName}</span>
                       <div className="w-32 h-1 rounded-full bg-vessel-bg-base overflow-hidden shrink-0">
                         <div 
@@ -420,12 +420,12 @@ export function SessionComplete({
                       {tracks.map((track) => (
                         <div key={track.participantId} className="p-4 rounded-xl bg-vessel-bg-base border border-vessel-border">
                           <div className="flex items-center gap-3 mb-3">
-                            <div
-                              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                              style={{ backgroundColor: resolveAvatarColor(track.participantPubkey, selfPubkey, storedColor) }}
-                            >
-                              <span className="text-white text-sm font-bold">{getInitials(track.participantName)}</span>
-                            </div>
+                            <AvatarMark
+                              pubkey={track.participantPubkey}
+                              displayName={track.participantName}
+                              className="w-10 h-10"
+                              initialsClassName="text-sm"
+                            />
                             <div>
                               <div className="font-medium text-vessel-text-primary">{track.participantName}'s Track</div>
                               <div className="text-xs text-vessel-text-muted font-mono-vessel mt-0.5">

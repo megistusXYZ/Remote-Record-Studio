@@ -22,7 +22,7 @@ import {
   DownloadError,
   type DownloadProgress,
 } from "../../lib/share-download";
-import { getInitials } from "../../lib/identity";
+import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import {
@@ -275,14 +275,12 @@ function TrackRow({ track }: TrackRowProps) {
       data-testid={`recipient-track-${track.recordingId}`}
     >
       <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: resolveAvatarColor(track.participantPubkey || track.recordingId, selfPubkey, storedColor) }}
-        >
-          <span className="text-white text-xs font-bold">
-            {getInitials(track.participantName)}
-          </span>
-        </div>
+        <AvatarMark
+          pubkey={track.participantPubkey || track.recordingId}
+          displayName={track.participantName}
+          className="w-10 h-10"
+          initialsClassName="text-xs"
+        />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-vessel-text-primary truncate">
             {track.participantName}

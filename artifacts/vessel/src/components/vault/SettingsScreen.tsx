@@ -7,9 +7,17 @@ import { clearAllLocalRecordings } from "../../lib/recordings-storage";
 import {
   deriveAvatarColorFromPubkey,
   describeSignerType,
-  getInitials,
 } from "../../lib/identity";
 import { setStoredAvatarColor } from "../../hooks/use-avatar-color";
+import {
+  setStoredAvatarIcon,
+  useStoredAvatarIcon,
+} from "../../hooks/use-avatar-icon";
+import {
+  AVATAR_MARKS,
+  type AvatarMarkId,
+} from "../icons/avatar-marks";
+import { AvatarMark } from "../AvatarMark";
 import { BackupKeyModal } from "./BackupKeyModal";
 import {
   DEFAULT_STORAGE_URL,
@@ -54,6 +62,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [isSavingName, setIsSavingName] = useState(false);
 
   const [selectedColor, setSelectedColor] = useState(() => localStorage.getItem("vessel_avatar_color") || deriveAvatarColorFromPubkey(pubkey));
+  const selectedIcon = useStoredAvatarIcon();
   const [inviteMessage, setInviteMessage] = useState(() => localStorage.getItem("vessel_invite_message") || "");
 
   const [storageUrl, setStorageUrlInput] = useState(() => getStorageUrl(pubkey));
@@ -262,9 +271,14 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
               <div className="space-y-3">
                 <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Avatar color</label>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: selectedColor }}>
-                    <span className="text-white text-base font-bold">{getInitials(displayName || "")}</span>
-                  </div>
+                  <AvatarMark
+                    pubkey={pubkey}
+                    displayName={displayName || ""}
+                    className="w-12 h-12 shadow-lg"
+                    initialsClassName="text-base"
+                    colorOverride={selectedColor}
+                    data-testid="avatar-preview"
+                  />
                   <div className="flex items-center gap-2 bg-vessel-bg-base p-2 rounded-xl border border-vessel-border">
                     {SWATCH_COLORS.map((color, idx) => (
                       <button
@@ -276,6 +290,64 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                       />
                     ))}
                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-baseline justify-between gap-4">
+                  <label className="text-xs uppercase tracking-wider text-vessel-text-muted">
+                    Avatar icon
+                  </label>
+                  {selectedIcon && (
+                    <button
+                      type="button"
+                      onClick={() => setStoredAvatarIcon(null)}
+                      className="text-xs text-vessel-text-secondary hover:text-vessel-text-primary transition-colors"
+                      data-testid="button-clear-avatar-icon"
+                    >
+                      Use my initials instead
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-vessel-text-muted">
+                  A little hand-drawn mark just for you. Only you see it — others see your initials.
+                </p>
+                <div
+                  className="grid grid-cols-6 sm:grid-cols-9 gap-2 p-3 rounded-xl bg-vessel-bg-base border border-vessel-border"
+                  role="radiogroup"
+                  aria-label="Avatar icon"
+                >
+                  {AVATAR_MARKS.map((mark) => {
+                    const isSelected = selectedIcon === mark.id;
+                    return (
+                      <button
+                        key={mark.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        title={mark.label}
+                        onClick={() => {
+                          setStoredAvatarIcon(
+                            isSelected ? null : (mark.id as AvatarMarkId),
+                          );
+                        }}
+                        className={`group relative aspect-square rounded-full transition-transform duration-150 ${
+                          isSelected
+                            ? "ring-2 ring-vessel-text-primary ring-offset-2 ring-offset-vessel-bg-base scale-105"
+                            : "ring-2 ring-transparent hover:scale-110"
+                        }`}
+                        data-testid={`icon-tile-${mark.id}`}
+                      >
+                        <AvatarMark
+                          pubkey={pubkey}
+                          displayName={displayName || ""}
+                          className="w-full h-full"
+                          colorOverride={selectedColor}
+                          iconOverride={mark.id as AvatarMarkId}
+                        />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

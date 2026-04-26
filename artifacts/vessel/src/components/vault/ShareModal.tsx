@@ -21,7 +21,7 @@ import {
   ShareRevokeError,
   isLocallyRevoked,
 } from "../../lib/share-revoke";
-import { getInitials } from "../../lib/identity";
+import { AvatarMark } from "../AvatarMark";
 import {
   resolveAvatarColor,
   useStoredAvatarColor,
@@ -331,14 +331,12 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                       transition={{ delay: i * 0.04 }}
                       className="flex items-center gap-3 p-3 rounded-lg bg-vessel-bg-base border border-vessel-border"
                     >
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: resolveAvatarColor(ownerPubkey, pubkey, storedColor) }}
-                      >
-                        <span className="text-white text-xs font-bold">
-                          {getInitials(t.participantName)}
-                        </span>
-                      </div>
+                      <AvatarMark
+                        pubkey={ownerPubkey}
+                        displayName={t.participantName}
+                        className="w-8 h-8"
+                        initialsClassName="text-xs"
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-vessel-text-primary truncate">
                           {t.participantName}

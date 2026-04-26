@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 import { MicOff } from "lucide-react";
 import { AudioMeter } from "../vessel-ui/AudioMeter";
-import { getInitials } from "../../lib/identity";
-import { useAvatarColor } from "../../hooks/use-avatar-color";
+import { AvatarMark } from "../AvatarMark";
 import { cn } from "@/lib/utils";
 
 export type VideoTileProps = {
@@ -37,9 +36,6 @@ export function VideoTile({
     }
   }, [stream]);
 
-  const avatarColor = useAvatarColor(participant.pubkey);
-  const initials = getInitials(participant.displayName);
-
   return (
     <div
       data-testid={`video-tile-${participant.id}`}
@@ -73,12 +69,12 @@ export function VideoTile({
         />
       ) : (
         <div className="absolute inset-0 bg-vessel-bg-elevated flex items-center justify-center">
-          <div
-            className="w-24 h-24 rounded-full flex items-center justify-center shadow-lg"
-            style={{ backgroundColor: avatarColor }}
-          >
-            <span className="text-white text-3xl font-bold">{initials}</span>
-          </div>
+          <AvatarMark
+            pubkey={participant.pubkey}
+            displayName={participant.displayName}
+            className="w-24 h-24 shadow-lg"
+            initialsClassName="text-3xl"
+          />
         </div>
       )}
 
@@ -103,12 +99,12 @@ export function VideoTile({
 
       {/* Bottom-left label */}
       <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-white/10"
-          style={{ backgroundColor: avatarColor }}
-        >
-          <span className="text-white text-xs font-bold">{initials}</span>
-        </div>
+        <AvatarMark
+          pubkey={participant.pubkey}
+          displayName={participant.displayName}
+          className="w-8 h-8 border border-white/10"
+          initialsClassName="text-xs"
+        />
         <div className="bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/5">
           <span className="text-sm font-medium text-white">{participant.displayName}</span>
         </div>
