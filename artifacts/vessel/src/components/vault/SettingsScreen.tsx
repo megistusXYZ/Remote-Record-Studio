@@ -299,7 +299,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-baseline justify-between gap-4">
                   <label className="text-xs uppercase tracking-wider text-vessel-text-muted">
                     Avatar icon
@@ -318,13 +318,18 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                 <p className="text-xs text-vessel-text-muted">
                   A little hand-drawn mark just for you. Only you see it — others see your initials.
                 </p>
+                {/* Clean monochrome grid — preview lives in the big
+                    avatar circle above (Avatar color section). Each
+                    tile renders just the mark SVG via currentColor; no
+                    chunky colored backdrop per tile. */}
                 <div
-                  className="grid grid-cols-6 sm:grid-cols-9 gap-2 p-3 rounded-xl bg-vessel-bg-base border border-vessel-border"
+                  className="grid grid-cols-9 sm:grid-cols-9 gap-1 pt-1"
                   role="radiogroup"
                   aria-label="Avatar icon"
                 >
                   {AVATAR_MARKS.map((mark) => {
                     const isSelected = selectedIcon === mark.id;
+                    const Icon = mark.Component;
                     return (
                       <button
                         key={mark.id}
@@ -337,20 +342,21 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                             isSelected ? null : (mark.id as AvatarMarkId),
                           );
                         }}
-                        className={`group relative aspect-square rounded-full transition-transform duration-150 ${
-                          isSelected
-                            ? "ring-2 ring-vessel-text-primary ring-offset-2 ring-offset-vessel-bg-base scale-105"
-                            : "ring-2 ring-transparent hover:scale-110"
-                        }`}
+                        className={`
+                          group flex items-center justify-center
+                          aspect-square rounded-lg
+                          transition-colors duration-150
+                          focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent
+                          ${
+                            isSelected
+                              ? "bg-vessel-accent/10 text-vessel-accent"
+                              : "text-vessel-text-muted hover:text-vessel-text-primary hover:bg-vessel-bg-elevated"
+                          }
+                        `}
                         data-testid={`icon-tile-${mark.id}`}
+                        aria-label={mark.label}
                       >
-                        <AvatarMark
-                          pubkey={pubkey}
-                          displayName={displayName || ""}
-                          className="w-full h-full"
-                          colorOverride={selectedColor}
-                          iconOverride={mark.id as AvatarMarkId}
-                        />
+                        <Icon className="w-5 h-5 sm:w-[1.375rem] sm:h-[1.375rem]" />
                       </button>
                     );
                   })}
