@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { AlertTriangle, X, Users, Settings, MonitorPlay } from "lucide-react";
+import { AlertTriangle, X, MonitorPlay } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
@@ -12,7 +12,6 @@ import { getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
 import { RecordingDot } from "../vessel-ui/RecordingDot";
-import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
@@ -1059,7 +1058,11 @@ export function StudioScreen({
             )}
           </div>
 
-          {/* Right */}
+          {/* Right — connection quality is the only unique signal here.
+              The participants count and a settings gear used to live in
+              this slot but they were dead weight: the count was already
+              surfaced (and made actionable) by the roster button in the
+              bottom control bar, and the gear had no handler. */}
           <div className="flex items-center gap-3">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1071,18 +1074,6 @@ export function StudioScreen({
               </TooltipTrigger>
               <TooltipContent>{getConnectionQualityLabel(connQuality)}</TooltipContent>
             </Tooltip>
-
-            <VesselBadge variant="default" className="hidden sm:inline-flex">
-              <Users className="w-3 h-3 mr-1.5" />
-              {session.participants.length}
-            </VesselBadge>
-
-            <button
-              data-testid="button-header-settings"
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-vessel-bg-surface transition-colors"
-            >
-              <Settings className="w-4 h-4 text-vessel-text-secondary" />
-            </button>
           </div>
         </header>
 
