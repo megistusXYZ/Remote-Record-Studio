@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ParticipantCard } from "./ParticipantCard";
 import { InviteModal } from "./InviteModal";
+import wheelhouseSketch from "@assets/Gemini_Generated_Image_zx4hpzx4hpzx4hpz_1777173879947.png";
 
 export type LobbyScreenProps = {
   state: "default" | "waitingRoom";
@@ -133,6 +134,23 @@ export function LobbyScreen({
       <div className="fixed inset-0 z-0 pointer-events-none">
         <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-vessel-accent/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-vessel-accent/5 rounded-full blur-[100px] translate-x-1/3 translate-y-1/3" />
+        {/* Captain's-bridge sketch — same hand-drawn family as the
+            landing page and the cabin backdrop in the vault. The
+            wheelhouse view fits the lobby's "you're at the helm,
+            ready to launch" framing. Inverted for the dark theme,
+            radial-masked so it never fights the content. */}
+        <div
+          className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${wheelhouseSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+          }}
+          aria-hidden="true"
+        />
       </div>
 
       <div className="relative z-10 w-full min-h-full pb-8 md:pb-12">
