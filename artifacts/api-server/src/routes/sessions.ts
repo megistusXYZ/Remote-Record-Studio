@@ -23,6 +23,19 @@ import {
   requireSignedRequest,
 } from "../middlewares/require-signed-request";
 
+// Server-side bounds for the per-session participant cap. Keep in sync with
+// the OpenAPI spec ({ minimum: 1, maximum: 25 }) and with the room-size
+// picker on the create-session form. The default applies when the host
+// omits maxParticipants on create.
+const ROOM_SIZE_MIN = 1;
+const ROOM_SIZE_MAX = 25;
+const ROOM_SIZE_DEFAULT = 8;
+
+function clampCap(value: number): number {
+  if (!Number.isFinite(value)) return ROOM_SIZE_DEFAULT;
+  return Math.max(ROOM_SIZE_MIN, Math.min(ROOM_SIZE_MAX, Math.floor(value)));
+}
+
 // RFC 4122 / 8-4-4-4-12 hex form. Used to distinguish a session UUID (private,
 // must be auth-gated) from an invite code (public bearer secret) on the
 // shared `GET /sessions/:sessionId` route.
@@ -97,6 +110,13 @@ router.post("/sessions", requireSignedRequest(), async (req, res): Promise<void>
 
   const inviteCode = nanoid(8);
 
+  // Honor the host's room-size choice when present, default to 8 otherwise.
+  // Always clamp into the allowed range so a hand-crafted request can't
+  // bypass the OpenAPI bounds.
+  const maxParticipants = clampCap(
+    parsed.data.maxParticipants ?? ROOM_SIZE_DEFAULT,
+  );
+
   const [session] = await db
     .insert(sessionsTable)
     .values({
@@ -106,6 +126,7 @@ router.post("/sessions", requireSignedRequest(), async (req, res): Promise<void>
       status: "waiting",
       inviteCode,
       participantCount: 1,
+      maxParticipants,
     })
     .returning();
 
@@ -247,6 +268,18 @@ router.patch("/sessions/:sessionId", requireSignedRequest(), async (req, res): P
     if (parsed.data.status === "live") updates.startedAt = new Date();
     if (parsed.data.status === "ended") updates.endedAt = new Date();
   }
+  if (typeof parsed.data.maxParticipants === "number") {
+    // Clamp the requested cap to the global max, then floor at the
+    // CURRENT live participant count so the host can never accidentally
+    // shrink the room below the people already in it.
+    const currentCount = await db
+      .select()
+      .from(participantsTable)
+      .where(eq(participantsTable.sessionId, params.data.sessionId))
+      .then((rows) => rows.length);
+    const requested = clampCap(parsed.data.maxParticipants);
+    updates.maxParticipants = Math.max(requested, currentCount);
+  }
 
   await db
     .update(sessionsTable)
@@ -329,6 +362,30 @@ router.post(
       .limit(1);
 
     if (existing.length === 0) {
+      // Enforce the per-session participant cap. Idempotent re-joins (the
+      // branch above) always succeed regardless of cap so a refreshed
+      // browser tab never gets locked out. New joiners get a structured
+      // 409 with a public-safe slice of session info so the guest's
+      // friendly "Room is full" page can name the host.
+      const currentParticipants = await db
+        .select()
+        .from(participantsTable)
+        .where(eq(participantsTable.sessionId, realSessionId));
+
+      if (currentParticipants.length >= targetSession.maxParticipants) {
+        res.status(409).json({
+          error: "ROOM_FULL",
+          message: "This room is full right now.",
+          session: {
+            title: targetSession.title,
+            hostName: targetSession.hostName,
+            participantCount: currentParticipants.length,
+            maxParticipants: targetSession.maxParticipants,
+          },
+        });
+        return;
+      }
+
       await db.insert(participantsTable).values({
         sessionId: realSessionId,
         pubkey: parsed.data.guestPubkey,

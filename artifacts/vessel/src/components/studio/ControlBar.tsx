@@ -1,4 +1,4 @@
-import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff } from "lucide-react";
+import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand } from "lucide-react";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -28,6 +28,14 @@ export type ControlBarProps = {
   onSelectCamera: (id: string) => void;
   onSelectMic: (id: string) => void;
   previewStream?: MediaStream | null;
+  /** Roster sidepanel toggle. When omitted the button is hidden. */
+  rosterOpen?: boolean;
+  onToggleRoster?: () => void;
+  /** Number of participants on the call (host + guests). Drives the badge. */
+  rosterCount?: number;
+  /** Number of raised hands among other participants — surfaced as an
+   *  attention-grabbing accent on the roster button. */
+  raisedHandsCount?: number;
 };
 
 function formatSeconds(s: number): string {
@@ -61,6 +69,10 @@ export function ControlBar({
   onSelectCamera,
   onSelectMic,
   previewStream,
+  rosterOpen,
+  onToggleRoster,
+  rosterCount,
+  raisedHandsCount = 0,
 }: ControlBarProps) {
   const handleLeave = () => {
     if (window.confirm("Leave this session?")) {
@@ -188,6 +200,47 @@ export function ControlBar({
 
         {/* Right Group */}
         <div className="flex-1 flex items-center gap-2 justify-end">
+          {onToggleRoster && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onToggleRoster}
+                  aria-pressed={!!rosterOpen}
+                  aria-label={rosterOpen ? "Close room panel" : "Open room panel"}
+                  data-testid="button-toggle-roster"
+                  className={cn(
+                    "relative w-10 h-10 rounded-full border flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    rosterOpen
+                      ? "bg-vessel-accent/15 border-vessel-accent/40 text-vessel-accent"
+                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-secondary",
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  {typeof rosterCount === "number" && rosterCount > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-vessel-bg-base border border-vessel-border text-[10px] font-mono-vessel text-vessel-text-primary flex items-center justify-center"
+                      data-testid="badge-roster-count"
+                    >
+                      {rosterCount}
+                    </span>
+                  )}
+                  {raisedHandsCount > 0 && (
+                    <span
+                      className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-vessel-amber border border-vessel-bg-base flex items-center justify-center"
+                      data-testid="badge-raised-hands"
+                      aria-label={`${raisedHandsCount} hand${raisedHandsCount === 1 ? "" : "s"} raised`}
+                    >
+                      <Hand className="w-2.5 h-2.5 text-vessel-bg-base" />
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {rosterOpen ? "Close room panel" : "Open room panel"}
+              </TooltipContent>
+            </Tooltip>
+          )}
           <VesselButton
             variant="ghost"
             size="sm"

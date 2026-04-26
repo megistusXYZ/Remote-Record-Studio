@@ -27,6 +27,7 @@ import type {
   ListSessionsParams,
   RecentActivity,
   Recording,
+  RoomFullError,
   Session,
   UpdateSessionBody,
   VaultSummary,
@@ -576,7 +577,7 @@ export const joinSession = async (
 };
 
 export const getJoinSessionMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<RoomFullError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -617,13 +618,13 @@ export type JoinSessionMutationResult = NonNullable<
   Awaited<ReturnType<typeof joinSession>>
 >;
 export type JoinSessionMutationBody = BodyType<JoinSessionBody>;
-export type JoinSessionMutationError = ErrorType<unknown>;
+export type JoinSessionMutationError = ErrorType<RoomFullError>;
 
 /**
  * @summary Join a session as a guest
  */
 export const useJoinSession = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<RoomFullError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
