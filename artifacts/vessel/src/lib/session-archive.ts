@@ -31,15 +31,33 @@ import { rememberShareForRevoke, encodeEphemeralSecret } from "./share-revoke";
  * download UI.
  */
 
+/** Per-stream blob descriptor inside an archive manifest. */
+export type ArchiveStream = {
+  url: string | null | undefined;
+  hash: string | null | undefined;
+  sizeBytes: number;
+  mimeType: string;
+};
+
 export type TrackDescriptor = {
   recordingId: string;
   participantPubkey: string;
   participantName: string;
+  /** Combined V+A blob — always present (it may also be audio-only when no
+   *  camera was used; that's reflected in `mimeType`). */
   blobUrl: string | null | undefined;
   blobHash: string | null | undefined;
   mimeType: string;
   sizeBytes: number;
   durationSeconds: number;
+  /** Audio-only sibling blob, recorded in parallel by a second MediaRecorder.
+   *  Null when no audio-only sibling exists. */
+  audio?: ArchiveStream | null;
+  /** Video-only sibling blob (no audio bytes), recorded in parallel by a
+   *  third MediaRecorder. Null when no camera was on or the recorder didn't
+   *  produce a sibling. Surfaced in the manifest so recipients can offer a
+   *  true "Video only" download cross-device with no transcoding. */
+  video?: ArchiveStream | null;
 };
 
 export type SessionArchiveInput = {
@@ -145,25 +163,50 @@ async function buildEncryptedManifestEvent(opts: {
     ["alt", "Encrypted Vessel session archive"],
   ];
 
+  // v: 3 — adds the optional `video` sibling (video-only blob recorded in
+  // parallel by a third MediaRecorder, no audio bytes) parallel to `audio`
+  // (v=2). Older recipients that only know v=1/v=2 still see their existing
+  // url/hash/audio fields in the same place.
   const plaintext = JSON.stringify({
-    v: 1,
+    v: 3,
     sessionTitle: session.sessionTitle,
     hostName: session.hostName,
     endedAt: session.endedAt.toISOString(),
     archivedAt: new Date(createdAt * 1000).toISOString(),
     trackCount: trackDescriptors.length,
-    tracks: trackDescriptors.map((t, i) => ({
-      recordingId: t.recordingId,
-      participantName: t.participantName,
-      participantPubkey: t.participantPubkey,
-      durationSeconds: t.durationSeconds,
-      sizeBytes: t.sizeBytes,
-      mimeType: t.mimeType,
-      // The actual download URL + hash never leave the encrypted payload.
-      url: t.blobUrl && !t.blobUrl.startsWith("idb://") ? t.blobUrl : null,
-      hash: t.blobHash || null,
-      eventId: trackEvents[i]?.id ?? null,
-    })),
+    tracks: trackDescriptors.map((t, i) => {
+      const audio =
+        t.audio && t.audio.url && !String(t.audio.url).startsWith("idb://")
+          ? {
+              url: t.audio.url,
+              hash: t.audio.hash || null,
+              sizeBytes: t.audio.sizeBytes,
+              mimeType: t.audio.mimeType,
+            }
+          : null;
+      const video =
+        t.video && t.video.url && !String(t.video.url).startsWith("idb://")
+          ? {
+              url: t.video.url,
+              hash: t.video.hash || null,
+              sizeBytes: t.video.sizeBytes,
+              mimeType: t.video.mimeType,
+            }
+          : null;
+      return {
+        recordingId: t.recordingId,
+        participantName: t.participantName,
+        participantPubkey: t.participantPubkey,
+        durationSeconds: t.durationSeconds,
+        sizeBytes: t.sizeBytes,
+        mimeType: t.mimeType,
+        url: t.blobUrl && !t.blobUrl.startsWith("idb://") ? t.blobUrl : null,
+        hash: t.blobHash || null,
+        audio,
+        video,
+        eventId: trackEvents[i]?.id ?? null,
+      };
+    }),
   });
 
   const content = await encryptManifestContent(plaintext, shareKey);

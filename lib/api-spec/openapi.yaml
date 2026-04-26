@@ -466,6 +466,30 @@ components:
         blobUrl:
           type: string
           nullable: true
+        audioBlobHash:
+          type: string
+          nullable: true
+        audioBlobUrl:
+          type: string
+          nullable: true
+        audioSizeBytes:
+          type: integer
+          nullable: true
+        audioMimeType:
+          type: string
+          nullable: true
+        videoBlobHash:
+          type: string
+          nullable: true
+        videoBlobUrl:
+          type: string
+          nullable: true
+        videoSizeBytes:
+          type: integer
+          nullable: true
+        videoMimeType:
+          type: string
+          nullable: true
         status:
           type: string
           enum: [processing, ready, error]
@@ -505,6 +529,30 @@ components:
           type: string
           nullable: true
         blobUrl:
+          type: string
+          nullable: true
+        audioBlobHash:
+          type: string
+          nullable: true
+        audioBlobUrl:
+          type: string
+          nullable: true
+        audioSizeBytes:
+          type: integer
+          nullable: true
+        audioMimeType:
+          type: string
+          nullable: true
+        videoBlobHash:
+          type: string
+          nullable: true
+        videoBlobUrl:
+          type: string
+          nullable: true
+        videoSizeBytes:
+          type: integer
+          nullable: true
+        videoMimeType:
           type: string
           nullable: true
         status:

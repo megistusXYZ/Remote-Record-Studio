@@ -1,13 +1,35 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Share2, Download, AlertTriangle, Check, Loader2, Trash2 } from "lucide-react";
+import {
+  Search,
+  Share2,
+  Download,
+  AlertTriangle,
+  Check,
+  Loader2,
+  Trash2,
+  Film,
+  Video,
+  Music,
+  Package,
+} from "lucide-react";
+import {
+  downloadSelectionsAsZip,
+  resolveStreamBlob,
+  buildExportFilename,
+  downloadBlobAsFile,
+  type TrackExportSource,
+  type TrackSelection,
+  type TrackStreamKind,
+} from "../../lib/track-export";
 import {
   useListRecordings,
   getListRecordingsQueryKey,
   useDeleteRecording,
 } from "@workspace/api-client-react";
+import type { Recording } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   downloadRecordingById,
@@ -15,6 +37,7 @@ import {
   isLocalBlobUrl,
   deleteRecordingBlob,
 } from "../../lib/recordings-storage";
+import { videoOnlyLocalUrl } from "../../hooks/use-recording";
 import { useToast } from "../../hooks/use-toast";
 import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
@@ -56,9 +79,6 @@ function formatSize(bytes: number) {
 }
 
 function triggerRemoteDownload(url: string, filename: string) {
-  // Open in a new tab — same-origin downloads can use the `download` attribute,
-  // but cross-origin storage servers will simply navigate. New tab keeps the
-  // user's session intact either way.
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
@@ -77,6 +97,15 @@ function getTrackSyncState(r: { blobUrl?: string | null; status?: string }): Tra
   if (r.blobUrl && !isLocalBlobUrl(r.blobUrl)) return "synced";
   return "local-only";
 }
+
+type VaultSession = {
+  id: string;
+  title: string;
+  createdAt: Date;
+  recordings: Recording[];
+  maxDuration: number;
+  totalSize: number;
+};
 
 type DeleteTarget =
   | {
@@ -108,18 +137,41 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedTracks, setSelectedTracks] = useState<Map<string, Set<string>>>(new Map());
+  const [bundlingSessionId, setBundlingSessionId] = useState<string | null>(null);
+  const [bundleStreamBySession, setBundleStreamBySession] = useState<
+    Map<string, TrackStreamKind>
+  >(new Map());
+  const getBundleStream = useCallback(
+    (sid: string): TrackStreamKind => bundleStreamBySession.get(sid) ?? "video+audio",
+    [bundleStreamBySession],
+  );
+  const setBundleStream = useCallback((sid: string, kind: TrackStreamKind) => {
+    setBundleStreamBySession((prev) => {
+      const next = new Map(prev);
+      next.set(sid, kind);
+      return next;
+    });
+  }, []);
 
   const { data: recordings, isLoading } = useListRecordings(
     { pubkey },
     { query: { enabled: !!pubkey, queryKey: getListRecordingsQueryKey({ pubkey }) } }
   );
 
-  const filteredSessions = useMemo(() => {
-    const sessionsMap = new Map<string, { id: string; title: string; createdAt: Date; recordings: any[]; maxDuration: number; totalSize: number }>();
+  const filteredSessions = useMemo<VaultSession[]>(() => {
+    const sessionsMap = new Map<string, VaultSession>();
     for (const r of recordings || []) {
       const key = r.sessionId || `__solo_${r.id}`;
       if (!sessionsMap.has(key)) {
-        sessionsMap.set(key, { id: key, title: r.sessionTitle || "Untitled session", createdAt: new Date(r.createdAt), recordings: [], maxDuration: 0, totalSize: 0 });
+        sessionsMap.set(key, {
+          id: key,
+          title: r.sessionTitle || "Untitled session",
+          createdAt: new Date(r.createdAt),
+          recordings: [],
+          maxDuration: 0,
+          totalSize: 0,
+        });
       }
       const s = sessionsMap.get(key)!;
       s.recordings.push(r);
@@ -128,9 +180,13 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
       const rDate = new Date(r.createdAt);
       if (rDate < s.createdAt) s.createdAt = rDate;
     }
-    const sessionsList = Array.from(sessionsMap.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const sessionsList = Array.from(sessionsMap.values()).sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
     if (!search) return sessionsList;
-    return sessionsList.filter(s => s.title.toLowerCase().includes(search.toLowerCase()));
+    return sessionsList.filter((s) =>
+      s.title.toLowerCase().includes(search.toLowerCase()),
+    );
   }, [recordings, search]);
 
   const toggleExpand = (id: string) => {
@@ -142,20 +198,15 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
     });
   };
 
-  const handleDownloadAll = async (session: any) => {
+  const handleDownloadAll = async (session: VaultSession) => {
     let downloaded = 0;
     let missing = 0;
     for (const r of session.recordings) {
-      // The DB row id is a server-side UUID; the local blob is keyed by the
-      // client-side recordingId encoded inside the idb:// URL. Always extract
-      // from the URL — never use r.id as an IndexedDB key.
-      const localId = extractRecordingIdFromLocalUrl(r.blobUrl);
+      const localId = extractRecordingIdFromLocalUrl(r.blobUrl ?? "");
       if (localId) {
         await downloadRecordingById(localId, `${r.participantName}_track.webm`);
         downloaded++;
       } else if (r.blobUrl) {
-        // Recording is on a remote storage server — kick off a regular
-        // browser download via the canonical URL.
         triggerRemoteDownload(r.blobUrl, `${r.participantName}_track.webm`);
         downloaded++;
       } else {
@@ -173,21 +224,23 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
     }
   };
 
-  const handleShareSession = (session: any) => {
+  const handleShareSession = (session: VaultSession) => {
     setShareSession({
       id: session.id,
       title: session.title,
       createdAt: session.createdAt,
-      recordings: session.recordings.map((r: any) => ({
-        id: r.id,
-        ownerPubkey: r.ownerPubkey,
-        participantName: r.participantName,
-        blobUrl: r.blobUrl,
-        blobHash: r.blobHash,
-        mimeType: r.mimeType,
-        sizeBytes: r.sizeBytes,
-        durationSeconds: r.durationSeconds,
-      })),
+      recordings: session.recordings.map(
+        (r): ShareModalRecording => ({
+          id: r.id,
+          ownerPubkey: r.ownerPubkey,
+          participantName: r.participantName,
+          blobUrl: r.blobUrl ?? null,
+          blobHash: r.blobHash ?? null,
+          mimeType: r.mimeType,
+          sizeBytes: r.sizeBytes,
+          durationSeconds: r.durationSeconds,
+        }),
+      ),
     });
   };
 
@@ -241,18 +294,145 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
     }
   }, [deleteTarget, deleteMutation, queryClient, pubkey, toast]);
 
-  const handleDownloadTrack = async (r: any) => {
-    const localId = extractRecordingIdFromLocalUrl(r.blobUrl);
-    if (localId) {
-      await downloadRecordingById(localId, `${r.participantName}_track.webm`);
-      return;
-    }
-    if (r.blobUrl) {
-      triggerRemoteDownload(r.blobUrl, `${r.participantName}_track.webm`);
-      return;
-    }
-    toast({ description: "This track isn't available for download." });
-  };
+  const ensureSelectionInit = useCallback(
+    (sessionId: string, recordingIds: string[]) => {
+      setSelectedTracks((prev) => {
+        if (prev.has(sessionId)) return prev;
+        const next = new Map(prev);
+        next.set(sessionId, new Set(recordingIds));
+        return next;
+      });
+    },
+    [],
+  );
+  const toggleTrackSelection = useCallback((sessionId: string, recordingId: string) => {
+    setSelectedTracks((prev) => {
+      const next = new Map(prev);
+      const current = new Set(next.get(sessionId) ?? []);
+      if (current.has(recordingId)) current.delete(recordingId);
+      else current.add(recordingId);
+      next.set(sessionId, current);
+      return next;
+    });
+  }, []);
+  const setAllSelected = useCallback(
+    (sessionId: string, recordingIds: string[], selectAll: boolean) => {
+      setSelectedTracks((prev) => {
+        const next = new Map(prev);
+        next.set(sessionId, selectAll ? new Set(recordingIds) : new Set());
+        return next;
+      });
+    },
+    [],
+  );
+
+  const recordingToExportSource = useCallback((r: Recording): TrackExportSource => {
+    const localId = extractRecordingIdFromLocalUrl(r.blobUrl ?? "");
+    const videoSiblingLocalUrl = localId ? videoOnlyLocalUrl(localId) : null;
+    return {
+      participantName: r.participantName || "Participant",
+      combinedBlobUrl: r.blobUrl ?? null,
+      combinedMimeType: r.mimeType || "video/webm",
+      audioBlobUrl: r.audioBlobUrl ?? null,
+      audioMimeType: r.audioMimeType ?? null,
+      videoOnlyRemoteUrl: r.videoBlobUrl ?? null,
+      videoOnlyLocalUrl: videoSiblingLocalUrl,
+      videoOnlyMimeType: r.videoMimeType ?? null,
+    };
+  }, []);
+
+  const handleDownloadStream = useCallback(
+    async (r: Recording, kind: TrackStreamKind) => {
+      const selection: TrackSelection = { source: recordingToExportSource(r), stream: kind };
+      const blob = await resolveStreamBlob(selection);
+      if (!blob) {
+        const fallbackUrl =
+          kind === "audio-only"
+            ? r.audioBlobUrl
+            : kind === "video-only"
+              ? r.videoBlobUrl
+              : r.blobUrl;
+        if (fallbackUrl && !String(fallbackUrl).startsWith("idb://")) {
+          triggerRemoteDownload(
+            fallbackUrl,
+            buildExportFilename(
+              r.participantName,
+              kind,
+              kind === "audio-only"
+                ? r.audioMimeType ?? r.mimeType
+                : kind === "video-only"
+                  ? r.videoMimeType ?? r.mimeType
+                  : r.mimeType,
+            ),
+          );
+          return;
+        }
+        toast({
+          variant: "destructive",
+          description:
+            kind === "audio-only"
+              ? "No audio-only sibling available for this track."
+              : kind === "video-only"
+                ? "No video-only sibling available for this track."
+                : "This track isn't available for download.",
+        });
+        return;
+      }
+      const filename = buildExportFilename(
+        r.participantName,
+        kind,
+        kind === "audio-only"
+          ? r.audioMimeType ?? blob.type
+          : kind === "video-only"
+            ? r.videoMimeType ?? blob.type
+            : r.mimeType,
+      );
+      downloadBlobAsFile(blob, filename);
+    },
+    [recordingToExportSource, toast],
+  );
+
+  const handleBundleDownload = useCallback(
+    async (session: VaultSession, kind: TrackStreamKind) => {
+      if (bundlingSessionId) return;
+      const selectedSet = selectedTracks.get(session.id) ?? new Set<string>();
+      const chosen = session.recordings.filter((r) => selectedSet.has(r.id));
+      if (chosen.length === 0) {
+        toast({ description: "Pick at least one track first." });
+        return;
+      }
+      setBundlingSessionId(session.id);
+      try {
+        const selections: TrackSelection[] = chosen.map((r) => ({
+          source: recordingToExportSource(r),
+          stream: kind,
+        }));
+        const stamp = format(session.createdAt, "yyyy-MM-dd");
+        const result = await downloadSelectionsAsZip(selections, `vessel-session-${stamp}.zip`);
+        if (result.includedFilenames.length === 0) {
+          toast({
+            variant: "destructive",
+            description: "None of the selected tracks were available to download.",
+          });
+          return;
+        }
+        if (result.skipped.length > 0) {
+          toast({
+            description: `${result.includedFilenames.length} included, ${result.skipped.length} skipped.`,
+          });
+        } else {
+          toast({ description: `Bundle downloaded — ${result.includedFilenames.length} tracks.` });
+        }
+      } catch (err) {
+        console.error("Bundle download failed", err);
+        toast({ variant: "destructive", description: "Couldn't build the zip. Try again in a moment." });
+      } finally {
+        setBundlingSessionId(null);
+      }
+    },
+    [bundlingSessionId, recordingToExportSource, selectedTracks, toast],
+  );
+
 
   return (
     <div className="flex h-[100dvh] bg-vessel-bg-base text-vessel-text-primary">
@@ -307,7 +487,29 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
           ) : (
             filteredSessions.map(session => {
               const isExpanded = expandedSessionIds.has(session.id);
-              const uniqueParticipants = Array.from(new Set(session.recordings.map(r => r.participantName))).map(name => session.recordings.find(r => r.participantName === name)!);
+              const uniqueParticipants = Array.from(
+                new Set(session.recordings.map((r) => r.participantName)),
+              ).map((name) =>
+                session.recordings.find((r) => r.participantName === name)!,
+              );
+              const recordingIds = session.recordings.map((r) => r.id);
+              const currentSelection = selectedTracks.get(session.id);
+              const selectedCount = currentSelection
+                ? recordingIds.filter((id) => currentSelection.has(id)).length
+                : recordingIds.length;
+              const allRowsSelected = selectedCount === recordingIds.length;
+              const isBundling = bundlingSessionId === session.id;
+              const selectedRowsForTotals = currentSelection
+                ? session.recordings.filter((r) => currentSelection.has(r.id))
+                : session.recordings;
+              const selectedTotals = selectedRowsForTotals.reduce(
+                (acc, r) => ({
+                  videoAudio: acc.videoAudio + (r.sizeBytes || 0),
+                  videoOnly: acc.videoOnly + (r.videoSizeBytes || 0),
+                  audioOnly: acc.audioOnly + (r.audioSizeBytes || 0),
+                }),
+                { videoAudio: 0, videoOnly: 0, audioOnly: 0 },
+              );
 
               return (
                 <div key={session.id} className="p-6 rounded-xl bg-vessel-bg-surface border border-vessel-border hover:border-vessel-border-strong transition-colors" data-testid={`card-session-${session.id}`}>
@@ -331,9 +533,9 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                           setDeleteTarget({
                             kind: "session",
                             title: session.title,
-                            recordings: session.recordings.map((r: any) => ({
+                            recordings: session.recordings.map((r) => ({
                               id: r.id,
-                              blobUrl: r.blobUrl,
+                              blobUrl: r.blobUrl ?? null,
                             })),
                           })
                         }
@@ -369,7 +571,15 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                     <VesselButton variant="ghost" size="sm" onClick={() => handleDownloadAll(session)} data-testid={`button-download-all-${session.id}`}>
                       <Download className="w-4 h-4 mr-2" /> Download All
                     </VesselButton>
-                    <VesselButton variant="ghost" size="sm" onClick={() => toggleExpand(session.id)} data-testid={`button-toggle-tracks-${session.id}`}>
+                    <VesselButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        ensureSelectionInit(session.id, recordingIds);
+                        toggleExpand(session.id);
+                      }}
+                      data-testid={`button-toggle-tracks-${session.id}`}
+                    >
                       {isExpanded ? "Hide Tracks" : "View Tracks"}
                     </VesselButton>
                     <VesselButton
@@ -392,6 +602,27 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                         className="overflow-hidden"
                       >
                         <div className="border-t border-vessel-border mt-4 pt-4 space-y-2">
+                          {/* Select-all header for the bundle download flow.
+                              Mirrors the SessionComplete affordance so the
+                              UX carries over between the post-session card
+                              and the vault. */}
+                          <div className="flex items-center justify-between text-xs text-vessel-text-secondary px-3 pb-1">
+                            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={allRowsSelected}
+                                onChange={() =>
+                                  setAllSelected(session.id, recordingIds, !allRowsSelected)
+                                }
+                                className="w-4 h-4 rounded border-vessel-border accent-vessel-accent"
+                                data-testid={`checkbox-select-all-${session.id}`}
+                              />
+                              <span>{allRowsSelected ? "Deselect all" : "Select all"}</span>
+                            </label>
+                            <span className="text-vessel-text-muted font-mono-vessel">
+                              {selectedCount} of {recordingIds.length} selected
+                            </span>
+                          </div>
                           {session.recordings.map(r => {
                             const syncState = getTrackSyncState(r);
                             const chip =
@@ -402,56 +633,194 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                 : syncState === "failed"
                                 ? { label: "Save failed", className: "text-vessel-red bg-vessel-red/10 border-vessel-red/20", Icon: AlertTriangle }
                                 : { label: "On this device only", className: "text-vessel-text-muted bg-vessel-bg-base border-vessel-border", Icon: AlertTriangle };
+                            const isRowSelected =
+                              currentSelection ? currentSelection.has(r.id) : true;
+                            const hasAudioSibling = !!r.audioBlobUrl;
+                            const rowHasVideo = (r.mimeType || "").includes("video");
+                            const rowHasVideoOnly = rowHasVideo && !!r.videoBlobUrl;
                             return (
-                              <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-vessel-bg-base transition-colors" data-testid={`row-track-${r.id}`}>
-                                <AvatarMark
-                                  pubkey={r.ownerPubkey}
-                                  displayName={r.participantName}
-                                  className="w-8 h-8"
-                                  initialsClassName="text-xs"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-medium text-vessel-text-primary truncate">{r.participantName}</div>
-                                  <div className="text-xs text-vessel-text-muted font-mono-vessel">
-                                    {formatDuration(r.durationSeconds)} &middot; {formatSize(r.sizeBytes)} &middot; {r.mimeType.includes('video') ? 'Video + Audio' : 'Audio'}
+                              <div
+                                key={r.id}
+                                className={`flex flex-col gap-2 py-2 px-3 rounded-lg hover:bg-vessel-bg-base transition-colors ${
+                                  isRowSelected ? "bg-vessel-bg-base/50" : ""
+                                }`}
+                                data-testid={`row-track-${r.id}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isRowSelected}
+                                    onChange={() => toggleTrackSelection(session.id, r.id)}
+                                    className="w-4 h-4 rounded border-vessel-border accent-vessel-accent shrink-0"
+                                    data-testid={`checkbox-track-${r.id}`}
+                                    aria-label={`Include ${r.participantName} in bundle`}
+                                  />
+                                  <AvatarMark
+                                    pubkey={r.ownerPubkey}
+                                    displayName={r.participantName}
+                                    className="w-8 h-8"
+                                    initialsClassName="text-xs"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-vessel-text-primary truncate">{r.participantName}</div>
+                                    <div className="text-xs text-vessel-text-muted font-mono-vessel">
+                                      {formatDuration(r.durationSeconds)} &middot; {formatSize(r.sizeBytes)} &middot; {rowHasVideo ? 'Video + Audio' : 'Audio only'}
+                                      {hasAudioSibling ? (
+                                        <span className="text-vessel-text-secondary"> &middot; Audio sibling</span>
+                                      ) : null}
+                                    </div>
                                   </div>
+                                  <div
+                                    className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] shrink-0 ${chip.className}`}
+                                    data-testid={`chip-track-sync-${r.id}`}
+                                    data-state={syncState}
+                                  >
+                                    <chip.Icon className={`w-3 h-3 ${syncState === "processing" ? "animate-spin" : ""}`} />
+                                    <span>{chip.label}</span>
+                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      setDeleteTarget({
+                                        kind: "track",
+                                        recordingId: r.id,
+                                        participantName: r.participantName,
+                                        blobUrl: r.blobUrl,
+                                      })
+                                    }
+                                    className="w-9 h-9 rounded-full flex items-center justify-center text-vessel-text-secondary hover:text-vessel-red hover:bg-vessel-red/10 transition-colors shrink-0"
+                                    data-testid={`button-delete-track-${r.id}`}
+                                    aria-label="Delete track"
+                                    title="Delete track"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
-                                <div
-                                  className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] shrink-0 ${chip.className}`}
-                                  data-testid={`chip-track-sync-${r.id}`}
-                                  data-state={syncState}
-                                >
-                                  <chip.Icon className={`w-3 h-3 ${syncState === "processing" ? "animate-spin" : ""}`} />
-                                  <span>{chip.label}</span>
+                                {/* Per-row 3-stream download buttons —
+                                    matches SessionComplete row affordance.
+                                    Disabled buttons stay visible so the user
+                                    can see what's available per row. */}
+                                <div className="flex flex-wrap items-center gap-2 pl-7">
+                                  <VesselButton
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={!r.blobUrl}
+                                    onClick={() => void handleDownloadStream(r, "video+audio")}
+                                    data-testid={`button-download-va-${r.id}`}
+                                    title={
+                                      rowHasVideo
+                                        ? "Download combined video + audio"
+                                        : "Camera was off — downloads the combined audio recording"
+                                    }
+                                  >
+                                    <Film className="w-3.5 h-3.5 mr-1.5" />
+                                    {rowHasVideo ? "Video + Audio" : "Combined (audio)"}
+                                  </VesselButton>
+                                  <VesselButton
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={!rowHasVideoOnly}
+                                    onClick={() => void handleDownloadStream(r, "video-only")}
+                                    data-testid={`button-download-v-${r.id}`}
+                                    title={
+                                      rowHasVideoOnly
+                                        ? "Download a true video-only file (no audio bytes)"
+                                        : rowHasVideo
+                                          ? "No video-only sibling was recorded for this track"
+                                          : "No video for this track"
+                                    }
+                                  >
+                                    <Video className="w-3.5 h-3.5 mr-1.5" />
+                                    Video only
+                                  </VesselButton>
+                                  <VesselButton
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={!hasAudioSibling}
+                                    onClick={() => void handleDownloadStream(r, "audio-only")}
+                                    data-testid={`button-download-a-${r.id}`}
+                                    title={hasAudioSibling ? "Download just the audio sibling" : "No audio-only sibling for this track"}
+                                  >
+                                    <Music className="w-3.5 h-3.5 mr-1.5" />
+                                    Audio only
+                                  </VesselButton>
                                 </div>
-                                <button
-                                  onClick={() => handleDownloadTrack(r)}
-                                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-vessel-bg-elevated transition-colors shrink-0"
-                                  data-testid={`button-download-track-${r.id}`}
-                                  aria-label="Download track"
-                                  title="Download track"
-                                >
-                                  <Download className="w-4 h-4 text-vessel-text-secondary" />
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    setDeleteTarget({
-                                      kind: "track",
-                                      recordingId: r.id,
-                                      participantName: r.participantName,
-                                      blobUrl: r.blobUrl,
-                                    })
-                                  }
-                                  className="w-9 h-9 rounded-full flex items-center justify-center text-vessel-text-secondary hover:text-vessel-red hover:bg-vessel-red/10 transition-colors shrink-0"
-                                  data-testid={`button-delete-track-${r.id}`}
-                                  aria-label="Delete track"
-                                  title="Delete track"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
                               </div>
                             );
                           })}
+                        </div>
+
+                        {/* Bundle footer — same shape as SessionComplete's
+                            footer: one stream choice for the whole selection. */}
+                        <div
+                          className="mt-4 p-4 rounded-xl bg-vessel-bg-base border border-vessel-border"
+                          data-testid={`bundle-footer-${session.id}`}
+                        >
+                          <div className="flex items-start gap-2 mb-3 text-xs text-vessel-text-secondary">
+                            <Package className="w-4 h-4 text-vessel-accent shrink-0 mt-0.5" />
+                            <div>
+                              {selectedCount > 0 ? (
+                                <>
+                                  <div>
+                                    <span className="font-medium text-vessel-text-primary">
+                                      {selectedCount} track{selectedCount === 1 ? "" : "s"}
+                                    </span>{" "}
+                                    selected — pick a stream to bundle as a zip.
+                                  </div>
+                                  <div
+                                    className="mt-1 text-[11px] text-vessel-text-muted"
+                                    data-testid={`bundle-footer-totals-${session.id}`}
+                                  >
+                                    <span data-testid={`bundle-total-va-${session.id}`}>V+A: {formatSize(selectedTotals.videoAudio)}</span>
+                                    <span className="mx-2 opacity-50">·</span>
+                                    <span data-testid={`bundle-total-v-${session.id}`}>Video only: {selectedTotals.videoOnly > 0 ? formatSize(selectedTotals.videoOnly) : "—"}</span>
+                                    <span className="mx-2 opacity-50">·</span>
+                                    <span data-testid={`bundle-total-a-${session.id}`}>Audio only: {selectedTotals.audioOnly > 0 ? formatSize(selectedTotals.audioOnly) : "—"}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>Select tracks above to enable the bundle download.</>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="sr-only" htmlFor={`bundle-stream-${session.id}`}>
+                              Bundle stream
+                            </label>
+                            <select
+                              id={`bundle-stream-${session.id}`}
+                              value={getBundleStream(session.id)}
+                              onChange={(e) =>
+                                setBundleStream(session.id, e.target.value as TrackStreamKind)
+                              }
+                              disabled={isBundling || selectedCount === 0}
+                              className="h-9 rounded-md border border-vessel-border bg-vessel-bg-base px-2 text-sm text-vessel-text-primary disabled:opacity-50"
+                              data-testid={`select-bundle-stream-${session.id}`}
+                            >
+                              <option value="video+audio">Video + Audio</option>
+                              <option value="video-only">Video only</option>
+                              <option value="audio-only">Audio only</option>
+                            </select>
+                            <VesselButton
+                              variant="primary"
+                              size="sm"
+                              disabled={isBundling || selectedCount === 0}
+                              onClick={() =>
+                                void handleBundleDownload(session, getBundleStream(session.id))
+                              }
+                              data-testid={`button-bundle-download-${session.id}`}
+                            >
+                              {isBundling ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : getBundleStream(session.id) === "video-only" ? (
+                                <Video className="w-4 h-4 mr-2" />
+                              ) : getBundleStream(session.id) === "audio-only" ? (
+                                <Music className="w-4 h-4 mr-2" />
+                              ) : (
+                                <Film className="w-4 h-4 mr-2" />
+                              )}
+                              Download selected (.zip)
+                            </VesselButton>
+                          </div>
                         </div>
                       </motion.div>
                     )}
