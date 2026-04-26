@@ -847,6 +847,12 @@ export function StudioScreen({
   };
 
   const handleLeave = () => {
+    // Tell every other peer we're leaving so their roster drops our row
+    // immediately. Best-effort and non-blocking — if the relay publish
+    // hangs (network drop, slow ws) we still want to navigate the user
+    // out of the studio without a perceptible delay. The receiving side
+    // also has stale/drop TTLs as a safety net.
+    void callSignal.sendLeave();
     void onLeave();
   };
 

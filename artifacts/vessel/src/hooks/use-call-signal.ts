@@ -30,6 +30,13 @@ export const KIND_MUTE_REQUEST = 27004;
  *  host's signature is honoured. The recipient drops their own raise-hand
  *  state when this lands; non-host senders are silently ignored. */
 export const KIND_LOWER_HAND_REQUEST = 27005;
+/** Voluntary "I'm leaving the room" event. The author's signature is the
+ *  only thing we honour — peers who receive this drop the sender from
+ *  their roster immediately instead of waiting for the heartbeat
+ *  staleness timers. Best-effort: if the publish doesn't land (network
+ *  drop, tab killed before the ws can flush), the existing stale/drop
+ *  TTLs still clean things up within ~45s. */
+export const KIND_LEAVE = 27006;
 
 const ALL_KINDS = [
   KIND_PRESENCE,
@@ -37,6 +44,7 @@ const ALL_KINDS = [
   KIND_REACTION,
   KIND_MUTE_REQUEST,
   KIND_LOWER_HAND_REQUEST,
+  KIND_LEAVE,
 ];
 
 // ─── Timing ────────────────────────────────────────────────────────────────
@@ -167,6 +175,11 @@ export type UseCallSignalResult = {
   lowerHandFor: (targetPubkey: string) => Promise<void>;
   /** Host-only convenience: lower every currently-raised peer at once. */
   lowerAllHands: () => Promise<void>;
+  /** Tell every other peer that we're leaving the room right now so they
+   *  can drop our roster row immediately instead of waiting for the
+   *  heartbeat staleness timers. Best-effort: callers should still
+   *  navigate away regardless of whether the publish settles. */
+  sendLeave: () => Promise<void>;
   /** When the host has just lowered our own hand, this carries the moment
    *  that happened so the studio can surface a one-off toast. Cleared by
    *  {@link acknowledgeHandLowered}. */
@@ -544,6 +557,21 @@ export function useCallSignal({
           }
           break;
         }
+        case KIND_LEAVE: {
+          // The sender is telling us they've left the room. Drop their
+          // roster row immediately so we don't pretend they're still
+          // present for the staleness window. Authenticity is the
+          // signature itself: relays only deliver events whose signature
+          // matches the claimed pubkey, so we can trust ev.pubkey.
+          setPeers((prev) => {
+            if (!prev.has(ev.pubkey)) return prev;
+            const next = new Map(prev);
+            next.delete(ev.pubkey);
+            peersRef.current = next;
+            return next;
+          });
+          break;
+        }
         default:
           break;
       }
@@ -876,6 +904,34 @@ export function useCallSignal({
     await Promise.all(targets.map((t) => lowerHandFor(t)));
   }, [enabled, sessionId, identity, publishSigned, lowerHandFor]);
 
+  const sendLeave = useCallback(async () => {
+    if (!enabled || !sessionId || !identity) return;
+    const tmpl = buildEventTemplate(KIND_LEAVE, sessionId, {
+      // Carry the display name purely for log/debug purposes — peers
+      // identify the leaver by ev.pubkey, not by the content payload.
+      displayName: myNameRef.current,
+    });
+    await publishSigned(tmpl);
+  }, [enabled, sessionId, identity, publishSigned]);
+
+  // Best-effort browser-close coverage. If the user closes the tab,
+  // navigates away via the browser chrome, or kills the process, fire a
+  // last-ditch leave event so peers don't have to wait out the staleness
+  // window. The websocket may not actually flush before unload — that's
+  // OK, the existing stale/drop TTLs are the safety net.
+  useEffect(() => {
+    if (!enabled || !sessionId || !identity) return;
+    const fireLeave = () => {
+      void sendLeave();
+    };
+    window.addEventListener("pagehide", fireLeave);
+    window.addEventListener("beforeunload", fireLeave);
+    return () => {
+      window.removeEventListener("pagehide", fireLeave);
+      window.removeEventListener("beforeunload", fireLeave);
+    };
+  }, [enabled, sessionId, identity, sendLeave]);
+
   const removeReaction = useCallback((id: string) => {
     setReactions((prev) => prev.filter((r) => r.id !== id));
   }, []);
@@ -904,6 +960,7 @@ export function useCallSignal({
     askToMute,
     lowerHandFor,
     lowerAllHands,
+    sendLeave,
     handLoweredByHost,
     acknowledgeHandLowered,
     chat,
