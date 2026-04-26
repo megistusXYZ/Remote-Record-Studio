@@ -54,59 +54,30 @@ export function InviteModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md p-6 sm:p-7 bg-vessel-bg-surface border-vessel-border">
-        <DialogHeader className="text-left space-y-1.5">
-          <DialogTitle className="font-display text-2xl text-vessel-text-primary">
+      <DialogContent
+        className="
+          w-[calc(100vw-2rem)] max-w-[26rem]
+          p-5 sm:p-6
+          bg-vessel-bg-surface border-vessel-border
+          overflow-hidden
+        "
+      >
+        <DialogHeader className="text-left space-y-1">
+          <DialogTitle className="font-display text-xl sm:text-2xl text-vessel-text-primary">
             Invite guests
           </DialogTitle>
           <DialogDescription className="text-sm text-vessel-text-secondary">
-            Share the link below — guests join with one tap, no account needed.
+            Share the link or QR code — guests join in one tap, no account needed.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-6 space-y-5">
-          {/* Invite link + copy pill */}
-          <div className="flex items-center gap-2 bg-vessel-bg-base border border-vessel-border rounded-xl p-1.5 pl-4">
-            <div
-              className="font-mono-vessel text-xs text-vessel-text-secondary overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-              title={inviteUrl}
-              data-testid="text-invite-url"
-            >
-              {inviteUrl}
-            </div>
-            <button
-              onClick={handleCopy}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-vessel-bg-surface hover:bg-vessel-accent/10 text-vessel-text-primary text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
-              data-testid="button-copy-invite-link"
-              aria-label={copied ? "Link copied" : "Copy invite link"}
-            >
-              {copied ? (
-                <Check className="w-3.5 h-3.5 text-vessel-green" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-              <span className="w-12 text-left">{copied ? "Copied" : "Copy"}</span>
-            </button>
-          </div>
-
-          {/* OR divider */}
-          <div className="relative" aria-hidden="true">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-vessel-border" />
-            </div>
-            <div className="relative flex justify-center text-[10px] uppercase tracking-[0.2em]">
-              <span className="bg-vessel-bg-surface px-3 text-vessel-text-muted">
-                or scan
-              </span>
-            </div>
-          </div>
-
-          {/* QR */}
-          <div className="flex flex-col items-center gap-2.5">
-            <div className="rounded-2xl p-3.5 bg-white">
+        <div className="mt-5 space-y-5">
+          {/* QR — primary visual */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="rounded-2xl p-3 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
               <QRCodeSVG
                 value={inviteUrl}
-                size={156}
+                size={144}
                 bgColor="#ffffff"
                 fgColor="#080b0f"
                 level="M"
@@ -114,13 +85,66 @@ export function InviteModal({
                 data-testid="qr-invite"
               />
             </div>
-            <p className="text-xs text-vessel-text-muted">
-              Open the camera on your phone
+            <p className="text-[11px] uppercase tracking-[0.18em] text-vessel-text-muted">
+              Scan with a phone camera
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-1">
+          {/* Soft divider */}
+          <div
+            className="h-px bg-vessel-border/70"
+            aria-hidden="true"
+          />
+
+          {/* Invite link row — min-w-0 fixes flex truncation */}
+          <div className="space-y-2">
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-vessel-text-muted">
+              Or share the link
+            </label>
+            <div className="flex items-stretch gap-2 min-w-0 bg-vessel-bg-base border border-vessel-border rounded-xl p-1.5 pl-3">
+              <div
+                className="
+                  font-mono-vessel text-xs text-vessel-text-secondary
+                  flex-1 min-w-0
+                  self-center
+                  overflow-hidden text-ellipsis whitespace-nowrap
+                "
+                title={inviteUrl}
+                data-testid="text-invite-url"
+              >
+                {inviteUrl}
+              </div>
+              <button
+                onClick={handleCopy}
+                className="
+                  shrink-0 inline-flex items-center justify-center gap-1.5
+                  px-3 py-2 min-w-[5.25rem]
+                  rounded-lg
+                  bg-vessel-bg-surface hover:bg-vessel-accent/10
+                  text-vessel-text-primary text-xs font-medium
+                  transition-colors
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent
+                "
+                data-testid="button-copy-invite-link"
+                aria-label={copied ? "Link copied" : "Copy invite link"}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-vessel-green" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Actions — stack on very narrow screens for thumb-friendliness */}
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-1">
             <VesselButton
               variant="ghost"
               size="md"
