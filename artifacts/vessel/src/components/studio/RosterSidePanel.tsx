@@ -13,6 +13,7 @@ import {
   Crown,
   Wifi,
   WifiOff,
+  MessageCircle,
 } from "lucide-react";
 import {
   type Peer,
@@ -608,6 +609,46 @@ function ReactionPicker({ onPick }: { onPick: (emoji: string) => void }) {
   );
 }
 
+/** Wall-clock gap that breaks a sender's "run" of consecutive messages,
+ *  so a reply hours later still gets its own avatar + timestamp header
+ *  even if it's from the same person. Mirrors iMessage / Slack behavior. */
+const CHAT_GROUP_BREAK_MS = 5 * 60 * 1000;
+
+type ChatRow = {
+  message: ChatMessage;
+  isSelf: boolean;
+  /** True for the FIRST message in a same-sender run. The avatar
+   *  (others) and the "Name · time" header render only on this row. */
+  isFirstInGroup: boolean;
+};
+
+function buildChatRows(
+  chat: ChatMessage[],
+  selfPubkey: string | null | undefined,
+): ChatRow[] {
+  return chat.map((m, i) => {
+    const prev = chat[i - 1];
+    const sameSenderAsPrev =
+      !!prev &&
+      prev.fromPubkey === m.fromPubkey &&
+      m.createdAtMs - prev.createdAtMs < CHAT_GROUP_BREAK_MS;
+    return {
+      message: m,
+      isSelf: m.fromPubkey === selfPubkey,
+      isFirstInGroup: !sameSenderAsPrev,
+    };
+  });
+}
+
+function formatChatTime(ms: number): string {
+  const d = new Date(ms);
+  const hh = d.getHours();
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  const ampm = hh >= 12 ? "PM" : "AM";
+  const h12 = ((hh + 11) % 12) + 1;
+  return `${h12}:${mm} ${ampm}`;
+}
+
 function ChatThread({
   chat,
   selfPubkey,
@@ -622,42 +663,109 @@ function ChatThread({
     }
   }, [chat.length]);
 
+  const rows = useMemo(
+    () => buildChatRows(chat, selfPubkey),
+    [chat, selfPubkey],
+  );
+
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto px-3 py-3 space-y-2"
+      className="flex-1 overflow-y-auto px-3 py-3"
       data-testid="list-chat"
     >
       {chat.length === 0 ? (
-        <div className="text-center text-xs text-vessel-text-muted py-8">
-          Say hi to the room — chat is just for the people on this call.
-        </div>
+        <ChatEmptyState />
       ) : (
-        chat.map((m) => {
-          const isSelf = m.fromPubkey === selfPubkey;
-          return (
-            <div
-              key={m.id}
-              className={cn("flex flex-col", isSelf ? "items-end" : "items-start")}
-              data-testid={`chat-message-${m.id}`}
-            >
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-2xl px-3 py-1.5 text-sm leading-snug",
-                  isSelf
-                    ? "bg-vessel-accent text-vessel-bg-base rounded-br-sm"
-                    : "bg-vessel-bg-base text-vessel-text-primary rounded-bl-sm border border-vessel-border",
-                )}
-              >
-                {m.text}
-              </div>
-              <div className="text-[10px] text-vessel-text-muted mt-0.5 px-1">
-                {isSelf ? "You" : m.fromName}
-              </div>
-            </div>
-          );
-        })
+        <div className="flex flex-col">
+          {rows.map((row) => (
+            <ChatBubble key={row.message.id} row={row} />
+          ))}
+        </div>
       )}
+    </div>
+  );
+}
+
+function ChatEmptyState() {
+  return (
+    <div className="flex flex-col items-center text-center py-10 px-4 gap-3">
+      <div
+        aria-hidden="true"
+        className="w-11 h-11 rounded-full bg-vessel-accent/10 flex items-center justify-center"
+      >
+        <MessageCircle className="w-5 h-5 text-vessel-accent" />
+      </div>
+      <p className="text-xs text-vessel-text-muted leading-relaxed max-w-[230px]">
+        Say hi to the room — chat is just for the people on this call.
+      </p>
+    </div>
+  );
+}
+
+function ChatBubble({ row }: { row: ChatRow }) {
+  const { message: m, isSelf, isFirstInGroup } = row;
+  const time = formatChatTime(m.createdAtMs);
+
+  if (isSelf) {
+    return (
+      <div
+        className={cn("flex flex-col items-end", isFirstInGroup ? "mt-3" : "mt-0.5")}
+        data-testid={`chat-message-${m.id}`}
+      >
+        {isFirstInGroup && (
+          <div className="text-[10px] text-vessel-text-muted mb-1 px-1 flex items-center gap-1.5">
+            <span className="font-medium text-vessel-text-secondary">You</span>
+            <span>·</span>
+            <span>{time}</span>
+          </div>
+        )}
+        <div
+          title={time}
+          className="max-w-[85%] rounded-2xl rounded-br-md px-3.5 py-2 text-sm leading-snug bg-vessel-accent text-vessel-bg-base shadow-sm break-words"
+        >
+          {m.text}
+        </div>
+      </div>
+    );
+  }
+
+  // Other people's messages: avatar gutter on the left.
+  return (
+    <div
+      className={cn(
+        "flex items-end gap-2",
+        isFirstInGroup ? "mt-3" : "mt-0.5",
+      )}
+      data-testid={`chat-message-${m.id}`}
+    >
+      <div className="w-7 shrink-0">
+        {isFirstInGroup && (
+          <AvatarMark
+            pubkey={m.fromPubkey}
+            displayName={m.fromName}
+            className="w-7 h-7"
+            initialsClassName="text-[10px]"
+          />
+        )}
+      </div>
+      <div className="flex flex-col items-start min-w-0 max-w-[85%]">
+        {isFirstInGroup && (
+          <div className="text-[10px] text-vessel-text-muted mb-1 px-1 flex items-center gap-1.5 min-w-0">
+            <span className="font-medium text-vessel-text-secondary truncate">
+              {m.fromName}
+            </span>
+            <span>·</span>
+            <span className="shrink-0">{time}</span>
+          </div>
+        )}
+        <div
+          title={time}
+          className="rounded-2xl rounded-bl-md px-3.5 py-2 text-sm leading-snug bg-vessel-bg-base text-vessel-text-primary border border-vessel-border break-words"
+        >
+          {m.text}
+        </div>
+      </div>
     </div>
   );
 }
@@ -677,20 +785,28 @@ function ChatComposer({
         e.preventDefault();
         onSend();
       }}
-      className="border-t border-vessel-border p-2 flex items-center gap-2 shrink-0"
+      // pb-[max(...)] picks up the iOS home-indicator safe-area inset
+      // so the input doesn't hug the bezel on notched phones.
+      className="border-t border-vessel-border p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-end gap-2 shrink-0"
     >
       <input
         type="text"
         value={draft}
         onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
-        placeholder="Message the room…"
-        className="flex-1 h-9 rounded-lg bg-vessel-bg-base border border-vessel-border focus:outline-none focus:ring-2 focus:ring-vessel-accent/40 px-3 text-sm text-vessel-text-primary placeholder:text-vessel-text-muted"
+        placeholder="Message everyone…"
+        // text-base on mobile prevents iOS Safari from auto-zooming
+        // when the input is focused (it zooms anything < 16px).
+        className="flex-1 h-11 sm:h-10 rounded-xl bg-vessel-bg-base border border-vessel-border focus:outline-none focus:ring-2 focus:ring-vessel-accent/40 px-3.5 text-base sm:text-sm text-vessel-text-primary placeholder:text-vessel-text-muted"
         data-testid="input-chat-draft"
+        enterKeyHint="send"
+        autoComplete="off"
+        autoCorrect="on"
       />
       <button
         type="submit"
         disabled={!draft.trim()}
-        className="h-9 w-9 rounded-lg bg-vessel-accent text-vessel-bg-base disabled:opacity-40 disabled:cursor-not-allowed hover:bg-vessel-accent/90 flex items-center justify-center transition-opacity"
+        // 44px tap target on mobile (iOS HIG minimum), 40px on desktop.
+        className="h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-vessel-accent text-vessel-bg-base disabled:opacity-40 disabled:cursor-not-allowed hover:bg-vessel-accent/90 flex items-center justify-center transition-opacity shrink-0"
         data-testid="button-chat-send"
         aria-label="Send message"
       >
