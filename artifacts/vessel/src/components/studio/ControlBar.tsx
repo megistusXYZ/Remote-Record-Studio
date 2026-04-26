@@ -36,6 +36,9 @@ export type ControlBarProps = {
   /** Number of raised hands among other participants — surfaced as an
    *  attention-grabbing accent on the roster button. */
   raisedHandsCount?: number;
+  /** Local raise-hand state (host AND guests). */
+  handRaised?: boolean;
+  onToggleHand?: () => void;
 };
 
 function formatSeconds(s: number): string {
@@ -73,6 +76,8 @@ export function ControlBar({
   onToggleRoster,
   rosterCount,
   raisedHandsCount = 0,
+  handRaised = false,
+  onToggleHand,
 }: ControlBarProps) {
   const handleLeave = () => {
     if (window.confirm("Leave this session?")) {
@@ -196,6 +201,31 @@ export function ControlBar({
             </TooltipTrigger>
             <TooltipContent>{cameraEnabled ? "Turn off camera" : "Turn on camera"}</TooltipContent>
           </Tooltip>
+
+          {/* Raise hand — open to host AND guests. Accent fills the icon when
+              the hand is up. Press H elsewhere to toggle the same state. */}
+          {onToggleHand && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="button-toggle-hand"
+                  onClick={onToggleHand}
+                  aria-pressed={handRaised}
+                  aria-label={handRaised ? "Lower hand" : "Raise hand"}
+                  className={cn(
+                    "w-14 h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    handRaised
+                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
+                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
+                  )}
+                >
+                  <Hand className="w-6 h-6" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{handRaised ? "Lower hand (H)" : "Raise hand (H)"}</TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {/* Right Group */}

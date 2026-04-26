@@ -170,6 +170,97 @@ export function StudioScreen({
     () => callSignal.peers.filter((p) => p.handRaised).length,
     [callSignal.peers],
   );
+
+  // Surface "the host lowered your hand" as a calm toast. Acknowledged on
+  // display so the same id can't re-fire if it lingers in state.
+  useEffect(() => {
+    if (!callSignal.handLoweredByHost) return;
+    toast({
+      description: `${callSignal.handLoweredByHost.fromName} lowered your hand.`,
+    });
+    callSignal.acknowledgeHandLowered();
+  }, [callSignal, toast]);
+
+  // ─── Self mic-level analyzer ────────────────────────────────────────────
+  // Drives the soft pulse on the self-row mic dot in the roster panel.
+  // Runs only while the local stream + mic are live; tears down cleanly on
+  // device swap or mic-mute. We sample at ~15Hz (the analyzer FFT is fast
+  // enough that this is essentially free), and gate state updates so React
+  // only re-renders when the smoothed level meaningfully changes.
+  const [myMicLevel, setMyMicLevel] = useState(0);
+  useEffect(() => {
+    if (!localStream || !micEnabled) {
+      setMyMicLevel(0);
+      return;
+    }
+    const audioTracks = localStream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    let ctx: AudioContext;
+    try {
+      ctx = new AudioCtx();
+    } catch {
+      return;
+    }
+    let analyser: AnalyserNode;
+    let source: MediaStreamAudioSourceNode;
+    try {
+      source = ctx.createMediaStreamSource(localStream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.6;
+      source.connect(analyser);
+    } catch {
+      try {
+        void ctx.close();
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    const buffer = new Uint8Array(analyser.frequencyBinCount);
+    let cancelled = false;
+    let lastEmitted = 0;
+    const tick = () => {
+      if (cancelled) return;
+      analyser.getByteFrequencyData(buffer);
+      let sum = 0;
+      for (let i = 0; i < buffer.length; i++) sum += buffer[i];
+      const rms = sum / buffer.length / 255; // 0..1
+      // Only push to state if the level actually shifted; this keeps the
+      // mic dot's pulse stable rather than re-rendering 15× per second.
+      if (Math.abs(rms - lastEmitted) > 0.01) {
+        lastEmitted = rms;
+        setMyMicLevel(rms);
+      }
+    };
+    const id = window.setInterval(tick, 66);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      try {
+        source.disconnect();
+      } catch {
+        // ignore
+      }
+      try {
+        analyser.disconnect();
+      } catch {
+        // ignore
+      }
+      try {
+        void ctx.close();
+      } catch {
+        // ignore
+      }
+      setMyMicLevel(0);
+    };
+  }, [localStream, micEnabled]);
+
   const [showLivePreviewBanner, setShowLivePreviewBanner] = useState(!liveTransport.isSupported);
   useEffect(() => {
     setShowLivePreviewBanner(!liveTransport.isSupported);
@@ -420,11 +511,21 @@ export function StudioScreen({
           }
         },
       },
+      {
+        // Toggle the live roster side panel.
+        key: "r",
+        handler: () => setShowRoster((v) => !v),
+      },
+      {
+        // Raise / lower hand for both host and guests.
+        key: "h",
+        handler: () => callSignal.toggleHand(),
+      },
     ],
     // handleStopRecording / handleStartRecording are stable enough — re-binding on
     // every render is fine because the hook strips and re-attaches the listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isHost, session.status]
+    [isHost, session.status, callSignal.toggleHand]
   );
   useKeyboardShortcuts(shortcuts, shortcutsEnabled);
 
@@ -624,8 +725,16 @@ export function StudioScreen({
           </div>
         )}
 
-        {/* Main Area */}
-        <main className="flex-1 overflow-hidden relative pb-20">
+        {/* Main Area — when the roster is open on lg+ viewports we shift the
+            video grid left so the panel pushes it instead of overlaying. On
+            smaller viewports the panel still uses the overlay behavior with
+            its own backdrop. */}
+        <main
+          className={cn(
+            "flex-1 overflow-hidden relative pb-20 transition-[padding-right] duration-200 ease-out",
+            showRoster && "lg:pr-[360px]",
+          )}
+        >
           <VideoGrid participantCount={session.participants.length}>
             {session.participants.map((p) => {
               const isLocal = p.pubkey === currentPubkey;
@@ -675,6 +784,8 @@ export function StudioScreen({
           onToggleRoster={() => setShowRoster((v) => !v)}
           rosterCount={session.participants.length}
           raisedHandsCount={raisedHandsCount}
+          handRaised={callSignal.handRaised}
+          onToggleHand={callSignal.toggleHand}
         />
 
         <RosterSidePanel
@@ -688,10 +799,17 @@ export function StudioScreen({
           myCameraEnabled={cameraEnabled}
           myQuality={signalQuality}
           myHandRaised={callSignal.handRaised}
-          onToggleHand={callSignal.toggleHand}
+          myHandRaisedAtMs={callSignal.handRaisedAtMs}
+          myMicLevel={myMicLevel}
           onAskToMute={(pubkey) => {
             void callSignal.askToMute(pubkey);
             toast({ description: "Sent a polite mute request." });
+          }}
+          onLowerHand={(pubkey) => {
+            void callSignal.lowerHandFor(pubkey);
+          }}
+          onLowerAllHands={() => {
+            void callSignal.lowerAllHands();
           }}
           chat={callSignal.chat}
           onSendChat={(text) => {
