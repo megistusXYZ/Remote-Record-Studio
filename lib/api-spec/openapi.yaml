@@ -151,6 +151,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
+        "409":
+          description: Room is full — guest cannot join.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomFullError"
 
   /recordings:
     get:
@@ -301,6 +307,11 @@ components:
           type: string
         participantCount:
           type: integer
+        maxParticipants:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: Maximum number of participants allowed in the room (counts host + guests).
         participants:
           type: array
           items:
@@ -324,6 +335,7 @@ components:
         - status
         - inviteCode
         - participantCount
+        - maxParticipants
         - participants
         - createdAt
 
@@ -336,6 +348,11 @@ components:
           type: string
         hostName:
           type: string
+        maxParticipants:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: Optional room size cap chosen by the host. Defaults to 8 if omitted.
       required:
         - title
         - hostPubkey
@@ -349,6 +366,45 @@ components:
           enum: [waiting, live, ended]
         title:
           type: string
+        maxParticipants:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: New room size cap. Server clamps to be no less than the current participant count.
+
+    RoomFullPublicSession:
+      type: object
+      description: Minimal public-safe slice of session info returned with a 409 Room Full response so guests can see the host's name without leaking sensitive metadata.
+      properties:
+        title:
+          type: string
+        hostName:
+          type: string
+        participantCount:
+          type: integer
+        maxParticipants:
+          type: integer
+      required:
+        - title
+        - hostName
+        - participantCount
+        - maxParticipants
+
+    RoomFullError:
+      type: object
+      description: Returned when a guest tries to join a room that is at its participant cap.
+      properties:
+        error:
+          type: string
+          enum: [ROOM_FULL]
+        message:
+          type: string
+        session:
+          $ref: "#/components/schemas/RoomFullPublicSession"
+      required:
+        - error
+        - message
+        - session
 
     JoinSessionBody:
       type: object

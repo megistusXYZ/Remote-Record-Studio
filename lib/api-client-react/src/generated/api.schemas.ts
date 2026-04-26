@@ -41,6 +41,12 @@ export interface Session {
   status: SessionStatus;
   inviteCode: string;
   participantCount: number;
+  /**
+   * Maximum number of participants allowed in the room (counts host + guests).
+   * @minimum 1
+   * @maximum 25
+   */
+  maxParticipants: number;
   participants: Participant[];
   createdAt: string;
   startedAt?: string | null;
@@ -51,6 +57,12 @@ export interface CreateSessionBody {
   title: string;
   hostPubkey: string;
   hostName: string;
+  /**
+   * Optional room size cap chosen by the host. Defaults to 8 if omitted.
+   * @minimum 1
+   * @maximum 25
+   */
+  maxParticipants?: number;
 }
 
 export type UpdateSessionBodyStatus =
@@ -65,6 +77,38 @@ export const UpdateSessionBodyStatus = {
 export interface UpdateSessionBody {
   status?: UpdateSessionBodyStatus;
   title?: string;
+  /**
+   * New room size cap. Server clamps to be no less than the current participant count.
+   * @minimum 1
+   * @maximum 25
+   */
+  maxParticipants?: number;
+}
+
+/**
+ * Minimal public-safe slice of session info returned with a 409 Room Full response so guests can see the host's name without leaking sensitive metadata.
+ */
+export interface RoomFullPublicSession {
+  title: string;
+  hostName: string;
+  participantCount: number;
+  maxParticipants: number;
+}
+
+export type RoomFullErrorError =
+  (typeof RoomFullErrorError)[keyof typeof RoomFullErrorError];
+
+export const RoomFullErrorError = {
+  ROOM_FULL: "ROOM_FULL",
+} as const;
+
+/**
+ * Returned when a guest tries to join a room that is at its participant cap.
+ */
+export interface RoomFullError {
+  error: RoomFullErrorError;
+  message: string;
+  session: RoomFullPublicSession;
 }
 
 export interface JoinSessionBody {

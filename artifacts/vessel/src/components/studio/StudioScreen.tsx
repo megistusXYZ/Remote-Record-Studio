@@ -5,6 +5,7 @@ import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
 import { useKeyboardShortcuts, type Shortcut } from "../../hooks/use-keyboard-shortcuts";
 import { useLiveTransport } from "../../hooks/use-live-transport";
+import { useCallSignal, type ConnectionQuality } from "../../hooks/use-call-signal";
 import { getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
@@ -13,8 +14,10 @@ import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
 import { ControlBar } from "./ControlBar";
+import { RosterSidePanel, type RosterParticipant } from "./RosterSidePanel";
 import { SessionComplete, type Track, type PersonalArchiveStatus } from "./SessionComplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "../../hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useCreateRecording } from "@workspace/api-client-react";
 import { publishPersonalArchive } from "../../lib/session-archive";
@@ -69,6 +72,8 @@ export function StudioScreen({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSessionComplete, setShowSessionComplete] = useState(false);
   const [personalArchive, setPersonalArchive] = useState<PersonalArchiveStatus>({ status: "idle" });
+  const [showRoster, setShowRoster] = useState(false);
+  const { toast } = useToast();
 
   const { identity, pubkey: currentPubkey, displayName } = useIdentity();
   const recording = useRecording();
@@ -104,6 +109,67 @@ export function StudioScreen({
     enabled: session.status === "live" || session.status === "waiting",
   });
   const connQuality = liveTransport.quality;
+
+  // ─── Ephemeral signaling channel ────────────────────────────────────────
+  // Heartbeats every 5s with our mic/cam/quality, prunes peers that go quiet
+  // for 15s. Powers the live RosterSidePanel (presence, raise hand, chat,
+  // host "ask to mute"). Disabled once the session ends so we don't keep
+  // chatting on relays after the call is over.
+  const signalQuality: ConnectionQuality =
+    connQuality === "good" || connQuality === "fair" || connQuality === "poor"
+      ? connQuality
+      : "unknown";
+  // The host's pubkey is needed to authenticate inbound mute prompts —
+  // anything signed by a non-host is silently dropped by the hook.
+  const hostPubkey = useMemo(
+    () => session.participants.find((p) => p.role === "host")?.pubkey ?? null,
+    [session.participants],
+  );
+  const callSignal = useCallSignal({
+    sessionId: session.id,
+    identity,
+    myDisplayName: displayName || "You",
+    myMicEnabled: micEnabled,
+    myCameraEnabled: cameraEnabled,
+    myQuality: signalQuality,
+    enabled: session.status !== "ended",
+    hostPubkey,
+  });
+
+  // Surface incoming "ask to mute" requests from the host as a friendly
+  // toast — never force the device. Acknowledged on display so we don't
+  // re-fire if the same id sticks around in state.
+  useEffect(() => {
+    if (!callSignal.incomingMuteRequest) return;
+    const req = callSignal.incomingMuteRequest;
+    toast({
+      description: `${req.fromName} is asking you to mute your mic.`,
+    });
+    callSignal.acknowledgeMuteRequest();
+  }, [callSignal, toast]);
+
+  // Build a presence-by-pubkey map for the roster panel.
+  const presenceByPubkey = useMemo(() => {
+    const m = new Map<string, (typeof callSignal.peers)[number]>();
+    for (const p of callSignal.peers) m.set(p.pubkey, p);
+    return m;
+  }, [callSignal.peers]);
+
+  const rosterParticipants = useMemo<RosterParticipant[]>(
+    () =>
+      session.participants.map((p) => ({
+        pubkey: p.pubkey,
+        displayName: p.displayName,
+        role: p.role,
+        isSelf: p.pubkey === currentPubkey,
+      })),
+    [session.participants, currentPubkey],
+  );
+
+  const raisedHandsCount = useMemo(
+    () => callSignal.peers.filter((p) => p.handRaised).length,
+    [callSignal.peers],
+  );
   const [showLivePreviewBanner, setShowLivePreviewBanner] = useState(!liveTransport.isSupported);
   useEffect(() => {
     setShowLivePreviewBanner(!liveTransport.isSupported);
@@ -605,6 +671,35 @@ export function StudioScreen({
           onSelectCamera={setSelectedCameraId}
           onSelectMic={setSelectedMicId}
           previewStream={localStream}
+          rosterOpen={showRoster}
+          onToggleRoster={() => setShowRoster((v) => !v)}
+          rosterCount={session.participants.length}
+          raisedHandsCount={raisedHandsCount}
+        />
+
+        <RosterSidePanel
+          open={showRoster}
+          onClose={() => setShowRoster(false)}
+          participants={rosterParticipants}
+          presenceByPubkey={presenceByPubkey}
+          isConnected={callSignal.isConnected}
+          isHost={isHost}
+          myMicEnabled={micEnabled}
+          myCameraEnabled={cameraEnabled}
+          myQuality={signalQuality}
+          myHandRaised={callSignal.handRaised}
+          onToggleHand={callSignal.toggleHand}
+          onAskToMute={(pubkey) => {
+            void callSignal.askToMute(pubkey);
+            toast({ description: "Sent a polite mute request." });
+          }}
+          chat={callSignal.chat}
+          onSendChat={(text) => {
+            void callSignal.sendChat(text);
+          }}
+          onSendReaction={(emoji) => {
+            void callSignal.sendReaction(emoji);
+          }}
         />
 
         <InviteModal
