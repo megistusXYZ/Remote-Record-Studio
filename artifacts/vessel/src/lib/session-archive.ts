@@ -58,6 +58,15 @@ export type TrackDescriptor = {
    *  produce a sibling. Surfaced in the manifest so recipients can offer a
    *  true "Video only" download cross-device with no transcoding. */
   video?: ArchiveStream | null;
+  /** Optional screen-share blob captured in parallel when the participant
+   *  pressed "Share screen" during the call. Carries its own duration so the
+   *  vault can label it independently of the camera/audio track length —
+   *  the screen recorder may have started or stopped at a different time
+   *  than the camera/audio recorder. Null when the participant never
+   *  shared, the share was too short to flush a chunk, or the screen
+   *  recorder errored before producing a blob. */
+  screen?: ArchiveStream | null;
+  screenDurationSeconds?: number | null;
 };
 
 export type SessionArchiveInput = {
@@ -163,12 +172,13 @@ async function buildEncryptedManifestEvent(opts: {
     ["alt", "Encrypted Vessel session archive"],
   ];
 
-  // v: 3 — adds the optional `video` sibling (video-only blob recorded in
-  // parallel by a third MediaRecorder, no audio bytes) parallel to `audio`
-  // (v=2). Older recipients that only know v=1/v=2 still see their existing
-  // url/hash/audio fields in the same place.
+  // v: 4 — adds the optional `screen` sibling (clean screen-share blob
+  // recorded in parallel when the participant pressed "Share screen"
+  // during the call) parallel to `audio` (v=2) and `video` (v=3). Older
+  // recipients that only know v=1/v=2/v=3 still see all their existing
+  // fields in the same place — `screen` is purely additive.
   const plaintext = JSON.stringify({
-    v: 3,
+    v: 4,
     sessionTitle: session.sessionTitle,
     hostName: session.hostName,
     endedAt: session.endedAt.toISOString(),
@@ -193,6 +203,16 @@ async function buildEncryptedManifestEvent(opts: {
               mimeType: t.video.mimeType,
             }
           : null;
+      const screen =
+        t.screen && t.screen.url && !String(t.screen.url).startsWith("idb://")
+          ? {
+              url: t.screen.url,
+              hash: t.screen.hash || null,
+              sizeBytes: t.screen.sizeBytes,
+              mimeType: t.screen.mimeType,
+              durationSeconds: t.screenDurationSeconds ?? null,
+            }
+          : null;
       return {
         recordingId: t.recordingId,
         participantName: t.participantName,
@@ -204,6 +224,7 @@ async function buildEncryptedManifestEvent(opts: {
         hash: t.blobHash || null,
         audio,
         video,
+        screen,
         eventId: trackEvents[i]?.id ?? null,
       };
     }),

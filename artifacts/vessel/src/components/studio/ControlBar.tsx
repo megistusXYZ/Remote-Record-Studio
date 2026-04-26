@@ -1,4 +1,4 @@
-import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand } from "lucide-react";
+import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff } from "lucide-react";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -39,6 +39,13 @@ export type ControlBarProps = {
   /** Local raise-hand state (host AND guests). */
   handRaised?: boolean;
   onToggleHand?: () => void;
+  /** Screen-share controls. The button is hidden entirely when
+   *  `screenShareSupported` is false (mobile / unsupported browsers).
+   *  When omitted, the button is also hidden — keeps the control bar
+   *  unchanged for callers that haven't opted into the feature yet. */
+  screenShareSupported?: boolean;
+  isScreenSharing?: boolean;
+  onToggleScreenShare?: () => void;
 };
 
 function formatSeconds(s: number): string {
@@ -78,6 +85,9 @@ export function ControlBar({
   raisedHandsCount = 0,
   handRaised = false,
   onToggleHand,
+  screenShareSupported = false,
+  isScreenSharing = false,
+  onToggleScreenShare,
 }: ControlBarProps) {
   const handleLeave = () => {
     if (window.confirm("Leave this session?")) {
@@ -224,6 +234,38 @@ export function ControlBar({
                 </button>
               </TooltipTrigger>
               <TooltipContent>{handRaised ? "Lower hand (H)" : "Raise hand (H)"}</TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Share screen — desktop only. Hidden on mobile / tablet via the
+              `hidden md:flex` wrapper since browser screen-share APIs aren't
+              reliable on touch devices. The accent ring fills when sharing. */}
+          {onToggleScreenShare && screenShareSupported && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="button-toggle-screen-share"
+                  onClick={onToggleScreenShare}
+                  aria-pressed={isScreenSharing}
+                  aria-label={isScreenSharing ? "Stop sharing screen" : "Share screen"}
+                  className={cn(
+                    "hidden md:flex w-14 h-14 rounded-full border transition-all items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    isScreenSharing
+                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
+                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
+                  )}
+                >
+                  {isScreenSharing ? (
+                    <MonitorOff className="w-6 h-6" />
+                  ) : (
+                    <MonitorUp className="w-6 h-6" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isScreenSharing ? "Stop sharing screen" : "Share screen"}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>

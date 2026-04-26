@@ -40,6 +40,14 @@ export type RecipientTrack = {
   /** Video-only sibling blob (v≥3 manifests). Null when not present (legacy
    *  manifests, no camera, or video-only sync failed on the host). */
   video: RecipientStream | null;
+  /** Screen-share sibling blob (v≥4 manifests). Null when the participant
+   *  never shared their screen, the share was too short to flush a chunk,
+   *  or the upload didn't reach a sharing server before the session ended. */
+  screen: RecipientStream | null;
+  /** Wall-clock duration of the screen-share file. May differ from the
+   *  combined track's duration because the screen recorder starts/stops
+   *  on Share-screen, not on session start/end. Null when no screen file. */
+  screenDurationSeconds: number | null;
   eventId: string | null;
 };
 
@@ -78,6 +86,27 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
         mimeType: String(rawVideo.mimeType ?? "video/webm"),
       }
     : null;
+  // Screen sibling — same defensive parse as audio/video. We accept
+  // missing duration as null (the recipient page just won't show a
+  // separate runtime for the screen file when it's absent).
+  const rawScreen = t.screen && typeof t.screen === "object" ? (t.screen as Record<string, unknown>) : null;
+  const screen: RecipientStream | null = rawScreen
+    ? {
+        url: rawScreen.url ? String(rawScreen.url) : null,
+        hash: rawScreen.hash ? String(rawScreen.hash) : null,
+        sizeBytes: Number(rawScreen.sizeBytes ?? 0),
+        mimeType: String(rawScreen.mimeType ?? "video/webm"),
+      }
+    : null;
+  // Screen duration may live inside the `screen` block (preferred) or as
+  // a top-level sibling on the manifest track row — accept either shape
+  // so older drafts that landed before the field moved still parse.
+  const screenDurationRaw =
+    rawScreen && rawScreen.durationSeconds != null
+      ? rawScreen.durationSeconds
+      : t.screenDurationSeconds;
+  const screenDurationSeconds =
+    screen && screenDurationRaw != null ? Number(screenDurationRaw) : null;
   return {
     recordingId: String(t.recordingId ?? ""),
     participantName: String(t.participantName ?? "Unknown"),
@@ -89,6 +118,8 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     hash: t.hash ? String(t.hash) : null,
     audio,
     video,
+    screen,
+    screenDurationSeconds,
     eventId: t.eventId ? String(t.eventId) : null,
   };
 }

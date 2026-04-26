@@ -69,6 +69,11 @@ router.post("/recordings", requireSignedRequest(), async (req, res): Promise<voi
       videoBlobUrl: parsed.data.videoBlobUrl ?? null,
       videoSizeBytes: parsed.data.videoSizeBytes ?? null,
       videoMimeType: parsed.data.videoMimeType ?? null,
+      screenBlobHash: parsed.data.screenBlobHash ?? null,
+      screenBlobUrl: parsed.data.screenBlobUrl ?? null,
+      screenSizeBytes: parsed.data.screenSizeBytes ?? null,
+      screenMimeType: parsed.data.screenMimeType ?? null,
+      screenDurationSeconds: parsed.data.screenDurationSeconds ?? null,
       status: parsed.data.status,
     })
     .returning();

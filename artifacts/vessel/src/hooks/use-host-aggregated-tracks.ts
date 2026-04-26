@@ -238,6 +238,8 @@ export function buildExportSource(track: RecipientTrack): TrackExportSource {
     audioMimeType: track.audio?.mimeType ?? null,
     videoOnlyRemoteUrl: track.video?.url ?? null,
     videoOnlyMimeType: track.video?.mimeType ?? null,
+    screenRemoteUrl: track.screen?.url ?? null,
+    screenMimeType: track.screen?.mimeType ?? null,
   };
 }
 

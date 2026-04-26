@@ -29,6 +29,17 @@ export const recordingsTable = pgTable("recordings", {
   videoBlobUrl: text("video_blob_url"),
   videoSizeBytes: integer("video_size_bytes"),
   videoMimeType: text("video_mime_type"),
+  // Screen-share blob, recorded in parallel by a separate ChunkedRecorder
+  // when the participant pressed "Share screen" during the call. Captured
+  // as a clean per-participant track — no compositing with camera/audio —
+  // so the vault can offer "Screen", "Screen + Mic" and bundle it into the
+  // selective-export zip alongside camera and audio tracks. Always
+  // nullable: most rows won't have a screen-share.
+  screenBlobHash: text("screen_blob_hash"),
+  screenBlobUrl: text("screen_blob_url"),
+  screenSizeBytes: integer("screen_size_bytes"),
+  screenMimeType: text("screen_mime_type"),
+  screenDurationSeconds: integer("screen_duration_seconds"),
   status: text("status").notNull().default("ready"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

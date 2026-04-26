@@ -144,6 +144,11 @@ export interface Recording {
   videoBlobUrl?: string | null;
   videoSizeBytes?: number | null;
   videoMimeType?: string | null;
+  screenBlobHash?: string | null;
+  screenBlobUrl?: string | null;
+  screenSizeBytes?: number | null;
+  screenMimeType?: string | null;
+  screenDurationSeconds?: number | null;
   status: RecordingStatus;
   createdAt: string;
 }
@@ -175,6 +180,11 @@ export interface CreateRecordingBody {
   videoBlobUrl?: string | null;
   videoSizeBytes?: number | null;
   videoMimeType?: string | null;
+  screenBlobHash?: string | null;
+  screenBlobUrl?: string | null;
+  screenSizeBytes?: number | null;
+  screenMimeType?: string | null;
+  screenDurationSeconds?: number | null;
   status: CreateRecordingBodyStatus;
 }
 

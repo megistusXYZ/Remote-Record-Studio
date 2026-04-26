@@ -14,6 +14,7 @@ import {
   Video,
   Music,
   Package,
+  MonitorPlay,
 } from "lucide-react";
 import {
   downloadSelectionsAsZip,
@@ -38,6 +39,7 @@ import {
   deleteRecordingBlob,
 } from "../../lib/recordings-storage";
 import { videoOnlyLocalUrl } from "../../hooks/use-recording";
+import { screenLocalUrl } from "../../hooks/use-screen-recording";
 import { useToast } from "../../hooks/use-toast";
 import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
@@ -329,6 +331,11 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   const recordingToExportSource = useCallback((r: Recording): TrackExportSource => {
     const localId = extractRecordingIdFromLocalUrl(r.blobUrl ?? "");
     const videoSiblingLocalUrl = localId ? videoOnlyLocalUrl(localId) : null;
+    // Screen sibling local URL: derived from the combined recording id so
+    // the post-merge IndexedDB lookup matches what the studio writes
+    // during capture. Only meaningful for the local participant's row;
+    // for remote rows we rely on `screenRemoteUrl` from the recording.
+    const screenSiblingLocalUrl = localId ? screenLocalUrl(localId) : null;
     return {
       participantName: r.participantName || "Participant",
       combinedBlobUrl: r.blobUrl ?? null,
@@ -338,6 +345,9 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
       videoOnlyRemoteUrl: r.videoBlobUrl ?? null,
       videoOnlyLocalUrl: videoSiblingLocalUrl,
       videoOnlyMimeType: r.videoMimeType ?? null,
+      screenRemoteUrl: r.screenBlobUrl ?? null,
+      screenLocalUrl: screenSiblingLocalUrl,
+      screenMimeType: r.screenMimeType ?? null,
     };
   }, []);
 
@@ -638,6 +648,13 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                             const hasAudioSibling = !!r.audioBlobUrl;
                             const rowHasVideo = (r.mimeType || "").includes("video");
                             const rowHasVideoOnly = rowHasVideo && !!r.videoBlobUrl;
+                            // Screen sibling availability — true once the
+                            // recipient has a remote URL or, for the local
+                            // owner row, an idb:// fallback exists. The UI
+                            // mirrors how audio/video-only download buttons
+                            // gate themselves: button stays visible but
+                            // disabled when the sibling isn't there.
+                            const rowHasScreen = !!r.screenBlobUrl;
                             return (
                               <div
                                 key={r.id}
@@ -742,6 +759,21 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                   >
                                     <Music className="w-3.5 h-3.5 mr-1.5" />
                                     Audio only
+                                  </VesselButton>
+                                  <VesselButton
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={!rowHasScreen}
+                                    onClick={() => void handleDownloadStream(r, "screen-only")}
+                                    data-testid={`button-download-s-${r.id}`}
+                                    title={
+                                      rowHasScreen
+                                        ? "Download the screen-share file from this session"
+                                        : "This participant didn't share their screen"
+                                    }
+                                  >
+                                    <MonitorPlay className="w-3.5 h-3.5 mr-1.5" />
+                                    Screen
                                   </VesselButton>
                                 </div>
                               </div>

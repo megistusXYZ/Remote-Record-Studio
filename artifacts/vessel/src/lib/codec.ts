@@ -99,6 +99,14 @@ export type PublisherHandle = {
   stop: () => Promise<void>;
 };
 
+export type PublishStreamOptions = {
+  /** Capture source for every track encoded from this stream. Tagged onto
+   *  each TrackHeader so receivers can route a participant's screen-share
+   *  separately from their camera feed. Optional — receivers fall back to
+   *  the legacy default ("camera") when the field is absent. */
+  source?: "camera" | "screen";
+};
+
 /**
  * Encode every video + audio track of `stream` and stream the encoded chunks
  * via `startPublish`. Returns a handle that tears the encoders down.
@@ -107,11 +115,13 @@ export async function publishStream(
   stream: MediaStream,
   namespace: string,
   startPublish: StartPublish,
+  options: PublishStreamOptions = {},
 ): Promise<PublisherHandle> {
   const w = api();
   const handles: PublishHandle[] = [];
   const cleanup: Array<() => void> = [];
   let stopped = false;
+  const source = options.source ?? "camera";
 
   for (const track of stream.getVideoTracks()) {
     const settings = track.getSettings?.() ?? {};
@@ -121,6 +131,7 @@ export async function publishStream(
       codec: VIDEO_CODEC,
       width: settings.width,
       height: settings.height,
+      source,
     };
     const handle = await startPublish(header);
     handles.push(handle);
@@ -193,6 +204,7 @@ export async function publishStream(
       codec: AUDIO_CODEC,
       sampleRate,
       numberOfChannels,
+      source,
     };
     const handle = await startPublish(header);
     handles.push(handle);

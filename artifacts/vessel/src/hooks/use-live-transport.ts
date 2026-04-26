@@ -69,6 +69,10 @@ export type UseLiveTransportArgs = {
   selfPubkey: string | null | undefined;
   /** Local A/V stream to publish. May be null while devices are warming up. */
   localStream: MediaStream | null;
+  /** Optional local screen-capture stream to publish as a second feed
+   *  tagged source="screen". When null we don't publish anything extra
+   *  and any previously-published screen stream is torn down. */
+  screenStream?: MediaStream | null;
   /** Pause the transport entirely (e.g. session not yet live). */
   enabled?: boolean;
 };
@@ -84,20 +88,33 @@ export type UseLiveTransportResult = {
   rttMs: number | null;
   /** Last connect / disconnect error, cleared on reconnect. */
   error: string | null;
-  /** Decoded remote MediaStreams keyed by participant pubkey. */
+  /** Decoded remote camera MediaStreams keyed by participant pubkey. */
   remoteStreams: Map<string, MediaStream>;
-  /** Pubkeys whose video track has actually rendered at least one frame.
-   *  Use this — not just `remoteStreams.has(pubkey)` — to flip a tile
-   *  from "Connecting..." to live preview, since a track exists from the
-   *  moment its header arrives, before any payload bytes are decoded. */
+  /** Decoded remote screen-share MediaStreams keyed by sharer pubkey.
+   *  Only present while a participant is actively sharing. */
+  remoteScreenStreams: Map<string, MediaStream>;
+  /** Pubkeys whose camera video track has actually rendered at least one
+   *  frame. Use this — not just `remoteStreams.has(pubkey)` — to flip a
+   *  tile from "Connecting..." to live preview, since a track exists from
+   *  the moment its header arrives, before any payload bytes are decoded. */
   remoteReady: Set<string>;
+  /** Pubkeys whose screen track has rendered its first frame. */
+  remoteScreenReady: Set<string>;
 };
 
 type RemoteParticipant = {
   pubkey: string;
-  videoTrack: DecodedTrack | null;
-  audioTrack: DecodedTrack | null;
-  stream: MediaStream;
+  cameraVideoTrack: DecodedTrack | null;
+  cameraAudioTrack: DecodedTrack | null;
+  cameraStream: MediaStream;
+  screenVideoTrack: DecodedTrack | null;
+  screenAudioTrack: DecodedTrack | null;
+  screenStream: MediaStream;
+  /** True once the screen feed has actually carried any track at all
+   *  (header arrived). Used so callers can distinguish "no share" from
+   *  "share started but first frame still pending" in concert with
+   *  `remoteScreenReady`. */
+  hasScreen: boolean;
 };
 
 function namespaceFor(sessionId: string, pubkey: string): string {
@@ -114,6 +131,7 @@ export function useLiveTransport({
   sessionId,
   selfPubkey,
   localStream,
+  screenStream = null,
   enabled = true,
 }: UseLiveTransportArgs): UseLiveTransportResult {
   const [isSupported] = useState(() => isLivePreviewSupported());
@@ -124,70 +142,111 @@ export function useLiveTransport({
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(
     () => new Map(),
   );
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState<Map<string, MediaStream>>(
+    () => new Map(),
+  );
   const [remoteReady, setRemoteReady] = useState<Set<string>>(() => new Set());
+  const [remoteScreenReady, setRemoteScreenReady] = useState<Set<string>>(() => new Set());
 
   const relayUrl = useReactiveRelayUrl();
 
   const clientRef = useRef<MoqClient | null>(null);
   const publisherRef = useRef<PublisherHandle | null>(null);
+  const screenPublisherRef = useRef<PublisherHandle | null>(null);
   const remotesRef = useRef<Map<string, RemoteParticipant>>(new Map());
 
-  const upsertRemoteTrack = (pubkey: string, decoded: DecodedTrack) => {
+  const refreshStreamMaps = () => {
+    const cameraEntries: Array<readonly [string, MediaStream]> = [];
+    const screenEntries: Array<readonly [string, MediaStream]> = [];
+    remotesRef.current.forEach((r, k) => {
+      cameraEntries.push([k, r.cameraStream] as const);
+      if (r.hasScreen) screenEntries.push([k, r.screenStream] as const);
+    });
+    setRemoteStreams(new Map(cameraEntries));
+    setRemoteScreenStreams(new Map(screenEntries));
+  };
+
+  const upsertRemoteTrack = (
+    pubkey: string,
+    decoded: DecodedTrack,
+    source: "camera" | "screen",
+  ) => {
     let entry = remotesRef.current.get(pubkey);
     if (!entry) {
       entry = {
         pubkey,
-        videoTrack: null,
-        audioTrack: null,
-        stream: new MediaStream(),
+        cameraVideoTrack: null,
+        cameraAudioTrack: null,
+        cameraStream: new MediaStream(),
+        screenVideoTrack: null,
+        screenAudioTrack: null,
+        screenStream: new MediaStream(),
+        hasScreen: false,
       };
       remotesRef.current.set(pubkey, entry);
     }
+    const isScreen = source === "screen";
+    const targetStream = isScreen ? entry.screenStream : entry.cameraStream;
     if (decoded.kind === "video") {
-      if (entry.videoTrack) {
-        entry.videoTrack.stop();
+      const existing = isScreen ? entry.screenVideoTrack : entry.cameraVideoTrack;
+      if (existing) {
+        existing.stop();
         try {
-          entry.stream.removeTrack(entry.videoTrack.track);
+          targetStream.removeTrack(existing.track);
         } catch {
           // ignore
         }
       }
-      entry.videoTrack = decoded;
+      if (isScreen) entry.screenVideoTrack = decoded;
+      else entry.cameraVideoTrack = decoded;
     } else {
-      if (entry.audioTrack) {
-        entry.audioTrack.stop();
+      const existing = isScreen ? entry.screenAudioTrack : entry.cameraAudioTrack;
+      if (existing) {
+        existing.stop();
         try {
-          entry.stream.removeTrack(entry.audioTrack.track);
+          targetStream.removeTrack(existing.track);
         } catch {
           // ignore
         }
       }
-      entry.audioTrack = decoded;
+      if (isScreen) entry.screenAudioTrack = decoded;
+      else entry.cameraAudioTrack = decoded;
     }
-    entry.stream.addTrack(decoded.track);
-    // Force a fresh Map identity so React re-renders consumers.
-    setRemoteStreams(new Map(Array.from(remotesRef.current.entries()).map(
-      ([k, v]) => [k, v.stream] as const,
-    )));
+    targetStream.addTrack(decoded.track);
+    if (isScreen) entry.hasScreen = true;
+    refreshStreamMaps();
   };
 
-  const markRemoteReady = (pubkey: string) => {
-    setRemoteReady((prev) => {
-      if (prev.has(pubkey)) return prev;
-      const next = new Set(prev);
-      next.add(pubkey);
-      return next;
-    });
+  const markRemoteReady = (pubkey: string, source: "camera" | "screen") => {
+    if (source === "screen") {
+      setRemoteScreenReady((prev) => {
+        if (prev.has(pubkey)) return prev;
+        const next = new Set(prev);
+        next.add(pubkey);
+        return next;
+      });
+    } else {
+      setRemoteReady((prev) => {
+        if (prev.has(pubkey)) return prev;
+        const next = new Set(prev);
+        next.add(pubkey);
+        return next;
+      });
+    }
   };
 
   const clearAllRemotes = () => {
     for (const r of remotesRef.current.values()) {
-      r.videoTrack?.stop();
-      r.audioTrack?.stop();
+      r.cameraVideoTrack?.stop();
+      r.cameraAudioTrack?.stop();
+      r.screenVideoTrack?.stop();
+      r.screenAudioTrack?.stop();
     }
     remotesRef.current.clear();
     setRemoteStreams(new Map());
+    setRemoteScreenStreams(new Map());
     setRemoteReady(new Set());
+    setRemoteScreenReady(new Set());
   };
 
   // Connection lifecycle. Restarts if the session id, self pubkey, or
@@ -226,14 +285,18 @@ export function useLiveTransport({
       if (parsed.sessionId !== sessionId) return;
       // Skip our own published tracks if the relay echoes them back.
       if (parsed.pubkey === selfPubkey) return;
+      // Default to "camera" so legacy publishers (and any future unknown
+      // source value) keep working without changes.
+      const source: "camera" | "screen" =
+        track.header.source === "screen" ? "screen" : "camera";
       try {
         const decoded = decodeTrack(track.header, track.objects, {
           onFirstFrame:
             track.header.kind === "video"
-              ? () => markRemoteReady(parsed.pubkey)
+              ? () => markRemoteReady(parsed.pubkey, source)
               : undefined,
         });
-        upsertRemoteTrack(parsed.pubkey, decoded);
+        upsertRemoteTrack(parsed.pubkey, decoded, source);
       } catch (err) {
         console.warn("Failed to decode incoming track", err);
       }
@@ -267,8 +330,8 @@ export function useLiveTransport({
     };
   }, [enabled, isSupported, sessionId, selfPubkey, relayUrl]);
 
-  // Publish lifecycle. Restarts encoders whenever the local stream identity
-  // changes (device switch). Tears down on transport loss.
+  // Publish lifecycle (camera + mic). Restarts encoders whenever the local
+  // stream identity changes (device switch). Tears down on transport loss.
   useEffect(() => {
     if (!isConnected || !localStream || !selfPubkey) return;
     const client = clientRef.current;
@@ -280,8 +343,11 @@ export function useLiveTransport({
     void (async () => {
       try {
         const ns = namespaceFor(sessionId, selfPubkey);
-        publisher = await publishStream(localStream, ns, (header) =>
-          client.openPublishTrack(header),
+        publisher = await publishStream(
+          localStream,
+          ns,
+          (header) => client.openPublishTrack(header),
+          { source: "camera" },
         );
         if (cancelled) {
           await publisher.stop().catch(() => {});
@@ -303,6 +369,48 @@ export function useLiveTransport({
     };
   }, [isConnected, localStream, selfPubkey, sessionId]);
 
+  // Independent screen-share publish lifecycle. Spins up a second publisher
+  // tagged source="screen" against the same per-pubkey namespace whenever a
+  // screen stream is provided. Tears down cleanly when the stream goes
+  // away (user pressed Stop, OS dialog closed, session ended). Failures
+  // here NEVER affect the camera publisher above.
+  useEffect(() => {
+    if (!isConnected || !screenStream || !selfPubkey) return;
+    const client = clientRef.current;
+    if (!client) return;
+
+    let cancelled = false;
+    let publisher: PublisherHandle | null = null;
+
+    void (async () => {
+      try {
+        const ns = namespaceFor(sessionId, selfPubkey);
+        publisher = await publishStream(
+          screenStream,
+          ns,
+          (header) => client.openPublishTrack(header),
+          { source: "screen" },
+        );
+        if (cancelled) {
+          await publisher.stop().catch(() => {});
+          return;
+        }
+        screenPublisherRef.current = publisher;
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("Failed to publish screen stream", err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      const p = publisher;
+      screenPublisherRef.current = null;
+      void p?.stop().catch(() => {});
+    };
+  }, [isConnected, screenStream, selfPubkey, sessionId]);
+
   return {
     isSupported,
     isConnected,
@@ -310,6 +418,8 @@ export function useLiveTransport({
     rttMs,
     error,
     remoteStreams,
+    remoteScreenStreams,
     remoteReady,
+    remoteScreenReady,
   };
 }

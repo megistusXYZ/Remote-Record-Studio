@@ -223,6 +223,10 @@ export type TrackHeader = {
   /** Encoder-reported width / height (video). */
   width?: number;
   height?: number;
+  /** Which capture source produced the track. Optional for backward
+   *  compatibility — receivers that see this missing or unknown should
+   *  treat the track as the legacy default ("camera"). */
+  source?: "camera" | "screen";
 };
 
 export type ObjectFrame = {
