@@ -10,6 +10,10 @@ import {
 } from "../../lib/identity";
 import { setStoredAvatarColor } from "../../hooks/use-avatar-color";
 import {
+  DEFAULT_AVATAR_ICON_COLOR,
+  setStoredAvatarIconColor,
+} from "../../hooks/use-avatar-icon-color";
+import {
   setStoredAvatarIcon,
   useStoredAvatarIcon,
 } from "../../hooks/use-avatar-icon";
@@ -54,6 +58,19 @@ export type SettingsScreenProps = {
 
 const SWATCH_COLORS = ["#00d4aa", "#ff4757", "#ffa502", "#5352ed", "#ff6b9d", "#7bed9f", "#70a1ff", "#ffaa7b"];
 
+// Foreground color choices for the avatar mark / initials. Kept
+// intentionally tight: White is the historical default and reads on
+// every saturated background; Cream gives a warm, sketch-paper feel
+// that pairs with the hand-drawn sketch backdrops; Ink lets light
+// background colors carry the avatar; Accent puts the brand color
+// on top of a neutral circle.
+const ICON_COLOR_SWATCHES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "#ffffff", label: "White" },
+  { value: "#f5f1e8", label: "Cream" },
+  { value: "#0a0a0a", label: "Ink" },
+  { value: "#00d4aa", label: "Accent" },
+];
+
 type ReachabilityState =
   | { kind: "idle" }
   | { kind: "checking" }
@@ -69,6 +86,9 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [isSavingName, setIsSavingName] = useState(false);
 
   const [selectedColor, setSelectedColor] = useState(() => localStorage.getItem("vessel_avatar_color") || deriveAvatarColorFromPubkey(pubkey));
+  const [selectedIconColor, setSelectedIconColor] = useState<string>(
+    () => localStorage.getItem("vessel_avatar_icon_color") || DEFAULT_AVATAR_ICON_COLOR,
+  );
   const selectedIcon = useStoredAvatarIcon();
   const [inviteMessage, setInviteMessage] = useState(() => localStorage.getItem("vessel_invite_message") || "");
 
@@ -88,6 +108,10 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   useEffect(() => {
     setStoredAvatarColor(selectedColor);
   }, [selectedColor]);
+
+  useEffect(() => {
+    setStoredAvatarIconColor(selectedIconColor);
+  }, [selectedIconColor]);
 
   // Live reachability check, debounced. Aborts on unmount or when the URL
   // changes again so we don't race overlapping probes.
@@ -300,18 +324,57 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                     className="w-12 h-12 shadow-lg"
                     initialsClassName="text-base"
                     colorOverride={selectedColor}
+                    iconColorOverride={selectedIconColor}
                     data-testid="avatar-preview"
                   />
-                  <div className="flex items-center gap-2 bg-vessel-bg-base p-2 rounded-xl border border-vessel-border">
-                    {SWATCH_COLORS.map((color, idx) => (
-                      <button
-                        key={color}
-                        className={`w-7 h-7 rounded-full cursor-pointer transition-all ${selectedColor === color ? 'ring-2 ring-vessel-text-primary ring-offset-2 ring-offset-vessel-bg-surface scale-110' : 'ring-2 ring-transparent hover:scale-110'}`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setSelectedColor(color)}
-                        data-testid={`swatch-color-${idx}`}
-                      />
-                    ))}
+                  <div className="flex flex-col gap-2">
+                    <div
+                      className="flex items-center gap-2 bg-vessel-bg-base p-2 rounded-xl border border-vessel-border"
+                      role="radiogroup"
+                      aria-label="Avatar background color"
+                    >
+                      {SWATCH_COLORS.map((color, idx) => (
+                        <button
+                          key={color}
+                          type="button"
+                          role="radio"
+                          aria-checked={selectedColor === color}
+                          aria-label={`Background color ${idx + 1}`}
+                          className={`w-7 h-7 rounded-full cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent ${selectedColor === color ? 'ring-2 ring-vessel-text-primary ring-offset-2 ring-offset-vessel-bg-surface scale-110' : 'ring-2 ring-transparent hover:scale-110'}`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setSelectedColor(color)}
+                          data-testid={`swatch-color-${idx}`}
+                        />
+                      ))}
+                    </div>
+                    {/* Icon color — same swatch language, smaller pill,
+                        only the four foreground tones that read well on
+                        any of the background swatches above. */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] uppercase tracking-wider text-vessel-text-muted shrink-0">
+                        Icon
+                      </span>
+                      <div
+                        className="flex items-center gap-1.5 bg-vessel-bg-base p-1.5 rounded-xl border border-vessel-border"
+                        role="radiogroup"
+                        aria-label="Avatar icon color"
+                      >
+                        {ICON_COLOR_SWATCHES.map(({ value, label }, idx) => (
+                          <button
+                            key={value}
+                            type="button"
+                            role="radio"
+                            aria-checked={selectedIconColor === value}
+                            aria-label={label}
+                            title={label}
+                            className={`w-5 h-5 rounded-full cursor-pointer transition-all border border-vessel-border-strong/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent ${selectedIconColor === value ? 'ring-2 ring-vessel-text-primary ring-offset-2 ring-offset-vessel-bg-surface scale-110' : 'ring-2 ring-transparent hover:scale-110'}`}
+                            style={{ backgroundColor: value }}
+                            onClick={() => setSelectedIconColor(value)}
+                            data-testid={`swatch-icon-color-${idx}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
