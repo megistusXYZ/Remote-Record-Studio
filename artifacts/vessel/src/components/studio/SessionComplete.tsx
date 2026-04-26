@@ -11,6 +11,7 @@ import {
   ShieldOff,
   Video,
   Music,
+  MonitorPlay,
   Film,
   Package,
   Hash,
@@ -81,6 +82,17 @@ export type Track = {
   videoOnlyMimeType?: string | null;
   videoOnlySizeBytes?: number;
   videoOnlyBlobHash?: string | null;
+  /** Optional screen-share sibling captured in parallel by the screen
+   *  recorder. Mirrors the audio/video sibling shape so the same
+   *  download/copy-link UX works without special-casing. All fields stay
+   *  null when this participant didn't share their screen. */
+  screenBlob?: Blob | null;
+  screenLocalUrl?: string | null;
+  screenRemoteUrl?: string | null;
+  screenMimeType?: string | null;
+  screenSizeBytes?: number;
+  screenBlobHash?: string | null;
+  screenDurationSeconds?: number | null;
 };
 
 /** Status of publishing this device's personal single-track archive. */
@@ -151,6 +163,10 @@ function trackToExportSource(track: Track): TrackExportSource {
     videoOnlyLocalUrl: track.videoOnlyLocalUrl ?? null,
     videoOnlyRemoteUrl: track.videoOnlyRemoteUrl ?? null,
     videoOnlyMimeType: track.videoOnlyMimeType ?? null,
+    screenBlob: track.screenBlob ?? null,
+    screenLocalUrl: track.screenLocalUrl ?? null,
+    screenRemoteUrl: track.screenRemoteUrl ?? null,
+    screenMimeType: track.screenMimeType ?? null,
   };
 }
 
@@ -343,6 +359,14 @@ function TrackStreamButtons({
     hasVideo && (!!track.videoOnlyBlob || !!track.videoOnlyLocalUrl || !!track.videoOnlyRemoteUrl);
   const hasCombined =
     !!track.blob || !!track.combinedBlobUrl || !!track.combinedRemoteUrl;
+  // Screen sibling availability — independent of camera/mic status. The
+  // button stays in the row even when null so the layout doesn't shift,
+  // and the disabled state advertises that this participant didn't
+  // share. The on-disk file is whatever the screen recorder captured
+  // (display video plus optional system audio, depending on what the
+  // user opted into at picker time) — we never re-mux it with the mic.
+  const hasScreen =
+    !!track.screenBlob || !!track.screenLocalUrl || !!track.screenRemoteUrl;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <VesselButton
@@ -388,6 +412,21 @@ function TrackStreamButtons({
         <Music className="w-4 h-4 mr-2" />
         Audio only
       </VesselButton>
+      <VesselButton
+        variant="ghost"
+        size="sm"
+        disabled={!hasScreen || isWorking}
+        title={
+          hasScreen
+            ? "Download the screen-share file from this session"
+            : "This participant didn't share their screen"
+        }
+        onClick={() => onDownload(track, "screen-only")}
+        data-testid={`button-download-s-${track.participantId}`}
+      >
+        <MonitorPlay className="w-4 h-4 mr-2" />
+        Screen
+      </VesselButton>
     </div>
   );
 }
@@ -402,19 +441,27 @@ function TrackMetaRow({
   const combinedUrl = track.combinedRemoteUrl ?? track.combinedBlobUrl;
   const audioUrl = track.audioRemoteUrl ?? track.audioBlobUrl;
   const videoUrl = track.videoOnlyRemoteUrl ?? track.videoOnlyLocalUrl ?? null;
+  // Screen prefers the remote URL; the local idb:// fallback is shown as
+  // a hash chip but never as a "Copy file link" since that link is
+  // meaningless to anyone outside this device.
+  const screenUrl = track.screenRemoteUrl ?? track.screenLocalUrl ?? null;
   const combinedShareable = isShareableRemoteUrl(combinedUrl);
   const audioShareable = isShareableRemoteUrl(audioUrl);
   const videoShareable = isShareableRemoteUrl(videoUrl);
+  const screenShareable = isShareableRemoteUrl(screenUrl);
   const showCombinedHash = !!track.combinedBlobHash;
   const showAudioHash = !!track.audioBlobHash;
   const showVideoHash = !!track.videoOnlyBlobHash;
+  const showScreenHash = !!track.screenBlobHash;
   if (
     !combinedShareable &&
     !audioShareable &&
     !videoShareable &&
+    !screenShareable &&
     !showCombinedHash &&
     !showAudioHash &&
-    !showVideoHash
+    !showVideoHash &&
+    !showScreenHash
   ) {
     return null;
   }
@@ -500,6 +547,35 @@ function TrackMetaRow({
               className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-vessel-text-secondary hover:text-vessel-accent hover:bg-vessel-accent/5 transition-colors"
               title={videoUrl}
               data-testid={`button-copy-link-v-${track.participantId}`}
+            >
+              <LinkIcon className="w-3 h-3" />
+              <span>Copy file link</span>
+            </button>
+          )}
+        </div>
+      )}
+      {(showScreenHash || screenShareable) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-12 shrink-0">
+            Screen
+          </span>
+          {showScreenHash && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-vessel-bg-surface border border-vessel-border text-vessel-text-secondary font-mono-vessel"
+              title={`SHA-256: ${track.screenBlobHash}`}
+              data-testid={`chip-hash-s-${track.participantId}`}
+            >
+              <Hash className="w-3 h-3" />
+              {shortHash(track.screenBlobHash)}
+            </span>
+          )}
+          {screenShareable && screenUrl && (
+            <button
+              type="button"
+              onClick={() => onCopy(screenUrl, "Screen")}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-vessel-text-secondary hover:text-vessel-accent hover:bg-vessel-accent/5 transition-colors"
+              title={screenUrl}
+              data-testid={`button-copy-link-s-${track.participantId}`}
             >
               <LinkIcon className="w-3 h-3" />
               <span>Copy file link</span>
@@ -762,6 +838,8 @@ export function SessionComplete({
   const selectedCount = tracks.filter((t) => selected.has(t.participantId)).length;
 
   // Per-stream byte totals across the current selection (footer summary).
+  // The screen total is folded in alongside the existing three so the
+  // footer chips reflect every stream the bundle dropdown can produce.
   const selectedTotals = tracks
     .filter((t) => selected.has(t.participantId))
     .reduce(
@@ -769,8 +847,9 @@ export function SessionComplete({
         videoAudio: acc.videoAudio + (t.sizeBytes || 0),
         videoOnly: acc.videoOnly + (t.videoOnlySizeBytes || 0),
         audioOnly: acc.audioOnly + (t.audioSizeBytes || 0),
+        screenOnly: acc.screenOnly + (t.screenSizeBytes || 0),
       }),
-      { videoAudio: 0, videoOnly: 0, audioOnly: 0 },
+      { videoAudio: 0, videoOnly: 0, audioOnly: 0, screenOnly: 0 },
     );
 
   return (
@@ -970,6 +1049,8 @@ export function SessionComplete({
                                 <span data-testid="bundle-total-v">Video only: {selectedTotals.videoOnly > 0 ? formatSize(selectedTotals.videoOnly) : "—"}</span>
                                 <span className="mx-2 opacity-50">·</span>
                                 <span data-testid="bundle-total-a">Audio only: {selectedTotals.audioOnly > 0 ? formatSize(selectedTotals.audioOnly) : "—"}</span>
+                                <span className="mx-2 opacity-50">·</span>
+                                <span data-testid="bundle-total-s">Screen: {selectedTotals.screenOnly > 0 ? formatSize(selectedTotals.screenOnly) : "—"}</span>
                               </div>
                             </>
                           ) : (
@@ -992,6 +1073,7 @@ export function SessionComplete({
                           <option value="video+audio">Video + Audio</option>
                           <option value="video-only">Video only</option>
                           <option value="audio-only">Audio only</option>
+                          <option value="screen-only">Screen</option>
                         </select>
                         <VesselButton
                           variant="primary"

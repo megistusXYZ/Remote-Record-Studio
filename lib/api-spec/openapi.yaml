@@ -490,6 +490,21 @@ components:
         videoMimeType:
           type: string
           nullable: true
+        screenBlobHash:
+          type: string
+          nullable: true
+        screenBlobUrl:
+          type: string
+          nullable: true
+        screenSizeBytes:
+          type: integer
+          nullable: true
+        screenMimeType:
+          type: string
+          nullable: true
+        screenDurationSeconds:
+          type: integer
+          nullable: true
         status:
           type: string
           enum: [processing, ready, error]
@@ -554,6 +569,21 @@ components:
           nullable: true
         videoMimeType:
           type: string
+          nullable: true
+        screenBlobHash:
+          type: string
+          nullable: true
+        screenBlobUrl:
+          type: string
+          nullable: true
+        screenSizeBytes:
+          type: integer
+          nullable: true
+        screenMimeType:
+          type: string
+          nullable: true
+        screenDurationSeconds:
+          type: integer
           nullable: true
         status:
           type: string

@@ -11,6 +11,7 @@ import {
   videoOnlyLocalKey,
   videoOnlyLocalUrl,
 } from "../hooks/use-recording";
+import { screenLocalKey } from "../hooks/use-screen-recording";
 
 /**
  * Per-participant export descriptor used by the SessionComplete and Vault
@@ -36,9 +37,19 @@ export type TrackExportSource = {
   videoOnlyLocalUrl?: string | null;
   videoOnlyRemoteUrl?: string | null;
   videoOnlyMimeType?: string | null;
+  /** Optional screen-share sibling. `screenBlob` / `screenLocalUrl` cover
+   *  the local participant who recorded their own screen capture during
+   *  the call; `screenRemoteUrl` covers cross-device recipients reading
+   *  from a manifest. Three slots mirror the audio/video sibling shape so
+   *  the same resolver handles all three "true sibling, never fall back"
+   *  semantics. Null when the participant never shared. */
+  screenBlob?: Blob | null;
+  screenLocalUrl?: string | null;
+  screenRemoteUrl?: string | null;
+  screenMimeType?: string | null;
 };
 
-export type TrackStreamKind = "video+audio" | "video-only" | "audio-only";
+export type TrackStreamKind = "video+audio" | "video-only" | "audio-only" | "screen-only";
 
 export type TrackSelection = {
   source: TrackExportSource;
@@ -56,6 +67,13 @@ export function hasAudioOnlyExport(source: TrackExportSource): boolean {
  *  bytes). The export helpers refuse to fall back to V+A. */
 export function hasVideoOnlyExport(source: TrackExportSource): boolean {
   return !!(source.videoOnlyBlob || source.videoOnlyLocalUrl || source.videoOnlyRemoteUrl);
+}
+
+/** True when this source can produce a screen-share download. Mirrors the
+ *  audio/video helpers — the resolver refuses to fall back to camera or
+ *  audio when the screen sibling isn't present. */
+export function hasScreenExport(source: TrackExportSource): boolean {
+  return !!(source.screenBlob || source.screenLocalUrl || source.screenRemoteUrl);
 }
 
 function safeFilenameSegment(input: string): string {
@@ -91,6 +109,13 @@ export function buildExportFilename(
     // exists; the caller surfaces a "skipped" entry in that case.
     return `${safe}-video.${extensionFromMime(mimeType, "webm")}`;
   }
+  if (stream === "screen-only") {
+    // Screen-share file. May or may not contain system-audio bytes
+    // depending on whether the user opted into "share tab audio" at
+    // capture time — kept as one self-contained file either way so the
+    // recipient gets exactly what was broadcast.
+    return `${safe}-screen.${extensionFromMime(mimeType, "webm")}`;
+  }
   return `${safe}-video-audio.${extensionFromMime(mimeType, "webm")}`;
 }
 
@@ -117,7 +142,38 @@ export async function resolveStreamBlob(selection: TrackSelection): Promise<Blob
     }
     return null;
   }
+  if (stream === "screen-only") {
+    if (source.screenBlob) return source.screenBlob;
+    const idbScreen = await loadScreenFallback(source);
+    if (idbScreen) return idbScreen;
+    if (source.screenRemoteUrl && !isLocalBlobUrl(source.screenRemoteUrl)) {
+      return fetchRemoteBlob(source.screenRemoteUrl);
+    }
+    return null;
+  }
   return resolveCombinedBlob(source);
+}
+
+async function loadScreenFallback(source: TrackExportSource): Promise<Blob | null> {
+  // Screen sibling is keyed by `<recordingId>:screen`. Same derivation as
+  // the audio/video siblings — try the explicit `screenLocalUrl` first,
+  // then fall back to deriving the key from the combined URL when the
+  // explicit slot is empty (older flow that only stored the combined URL).
+  if (source.screenLocalUrl && isLocalBlobUrl(source.screenLocalUrl)) {
+    const key = extractRecordingIdFromLocalUrl(source.screenLocalUrl);
+    if (key) {
+      const blob = await loadRecordingBlob(key);
+      if (blob) return blob;
+    }
+  }
+  if (source.combinedBlobUrl && isLocalBlobUrl(source.combinedBlobUrl)) {
+    const id = extractRecordingIdFromLocalUrl(source.combinedBlobUrl);
+    if (id) {
+      const blob = await loadRecordingBlob(screenLocalKey(id));
+      if (blob) return blob;
+    }
+  }
+  return null;
 }
 
 async function resolveCombinedBlob(source: TrackExportSource): Promise<Blob | null> {
@@ -241,7 +297,9 @@ export async function downloadSelectionsAsZip(
             ? "Audio-only sibling isn't available."
             : sel.stream === "video-only"
               ? "Video-only sibling isn't available."
-              : "Track blob isn't available on this device.",
+              : sel.stream === "screen-only"
+                ? "Screen-share file isn't available."
+                : "Track blob isn't available on this device.",
       });
       continue;
     }

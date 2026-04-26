@@ -79,6 +79,17 @@ export type Peer = {
    *  raise cycle. Used to render the queue ordinal ("1st", "2nd"). Cleared
    *  whenever the peer transitions back to handRaised=false. */
   handRaisedAtMs: number | null;
+  /** True iff this peer is currently broadcasting a screen-share feed. The
+   *  flag is set by the peer themselves on every heartbeat; if they crash
+   *  or drop, the presence row goes stale (and then drops) on the same
+   *  TTL as everything else, so screen-share state self-heals without a
+   *  separate cleanup channel. */
+  screenSharing: boolean;
+  /** Wall-clock ms when this peer's current screen-share session started.
+   *  Frozen until the share ends (anti-cut-the-line, same shape as the
+   *  hand-raise timestamp), so multiple overlapping requests can be
+   *  arbitrated by oldest-wins. Null when not sharing. */
+  screenSharingStartedAtMs: number | null;
   quality: ConnectionQuality;
   /** Wall-clock ms of the most recent heartbeat we've received. */
   lastSeenMs: number;
@@ -110,6 +121,14 @@ export type UseCallSignalArgs = {
   myDisplayName: string;
   myMicEnabled: boolean;
   myCameraEnabled: boolean;
+  /** True iff the local user is currently broadcasting a screen-share feed.
+   *  Mirrored into our outbound presence heartbeats so peers can render a
+   *  "Screen sharing" badge on our roster row and arbitrate handoffs. */
+  myScreenSharing?: boolean;
+  /** Wall-clock ms when the local user's current share began (null when not
+   *  sharing). The studio passes a stable timestamp captured at start so
+   *  the value doesn't drift across renders. */
+  myScreenSharingStartedAtMs?: number | null;
   myQuality: ConnectionQuality;
   /** Disable the channel entirely (e.g. while the session is still loading
    *  or after it has ended). When false the hook is a no-op. */
@@ -232,6 +251,8 @@ export function useCallSignal({
   myDisplayName,
   myMicEnabled,
   myCameraEnabled,
+  myScreenSharing = false,
+  myScreenSharingStartedAtMs = null,
   myQuality,
   enabled = true,
   relays = DEFAULT_SIGNAL_RELAYS,
@@ -266,6 +287,8 @@ export function useCallSignal({
   const peersRef = useRef<Map<string, Peer>>(new Map());
   const myMicRef = useRef(myMicEnabled);
   const myCamRef = useRef(myCameraEnabled);
+  const myScreenRef = useRef(myScreenSharing);
+  const myScreenStartedAtRef = useRef<number | null>(myScreenSharingStartedAtMs);
   const myQualityRef = useRef<ConnectionQuality>(myQuality);
   const myNameRef = useRef(myDisplayName);
   const seenIdsRef = useRef<string[]>([]);
@@ -277,6 +300,12 @@ export function useCallSignal({
   useEffect(() => {
     myCamRef.current = myCameraEnabled;
   }, [myCameraEnabled]);
+  useEffect(() => {
+    myScreenRef.current = myScreenSharing;
+  }, [myScreenSharing]);
+  useEffect(() => {
+    myScreenStartedAtRef.current = myScreenSharingStartedAtMs;
+  }, [myScreenSharingStartedAtMs]);
   useEffect(() => {
     myQualityRef.current = myQuality;
   }, [myQuality]);
@@ -330,6 +359,8 @@ export function useCallSignal({
             cameraEnabled?: boolean;
             handRaised?: boolean;
             handRaisedAtMs?: number;
+            screenSharing?: boolean;
+            screenSharingStartedAtMs?: number;
             quality?: ConnectionQuality;
           }>(ev.content);
           if (!c) return;
@@ -366,6 +397,29 @@ export function useCallSignal({
               }
               // else: keep existing — refuse to rewrite backwards.
             }
+            // Screen-share state — same anti-cut-the-line treatment as
+            // the hand-raise timestamp so two clients trying to take over
+            // simultaneously can be ordered deterministically.
+            const screenSharing =
+              typeof c.screenSharing === "boolean"
+                ? c.screenSharing
+                : !!existing?.screenSharing;
+            let screenSharingStartedAtMs: number | null =
+              existing?.screenSharingStartedAtMs ?? null;
+            if (!screenSharing) {
+              screenSharingStartedAtMs = null;
+            } else {
+              const claimedShareTs =
+                typeof c.screenSharingStartedAtMs === "number" &&
+                Number.isFinite(c.screenSharingStartedAtMs)
+                  ? c.screenSharingStartedAtMs
+                  : null;
+              if (!existing?.screenSharing) {
+                screenSharingStartedAtMs = claimedShareTs ?? Date.now();
+              } else if (screenSharingStartedAtMs == null && claimedShareTs != null) {
+                screenSharingStartedAtMs = claimedShareTs;
+              }
+            }
             const updated: Peer = {
               pubkey: ev.pubkey,
               displayName: incomingName || existing?.displayName || "Guest",
@@ -374,6 +428,8 @@ export function useCallSignal({
                 typeof c.cameraEnabled === "boolean" ? c.cameraEnabled : !!existing?.cameraEnabled,
               handRaised,
               handRaisedAtMs,
+              screenSharing,
+              screenSharingStartedAtMs,
               quality:
                 c.quality === "good" || c.quality === "fair" || c.quality === "poor"
                   ? c.quality
@@ -480,6 +536,8 @@ export function useCallSignal({
               cameraEnabled: myCamRef.current,
               handRaised: false,
               handRaisedAtMs: null,
+              screenSharing: myScreenRef.current,
+              screenSharingStartedAtMs: myScreenStartedAtRef.current,
               quality: myQualityRef.current,
             });
             void publishSigned(tmpl);
@@ -509,6 +567,10 @@ export function useCallSignal({
     setHandRaisedAtMs(null);
     handRaisedRef.current = false;
     handRaisedAtRef.current = null;
+    // Note: we deliberately don't clear myScreenRef / myScreenStartedAtRef
+    // here — those mirror the studio's local screen-share lifecycle which
+    // is owned by the parent component, not by the signaling channel.
+    // Parents that swap rooms should also tear down their share.
     seenIdsRef.current = [];
     seenSetRef.current = new Set();
   }, [sessionId, myPubkey]);
@@ -572,6 +634,8 @@ export function useCallSignal({
         cameraEnabled: myCamRef.current,
         handRaised: handRaisedRef.current,
         handRaisedAtMs: handRaisedAtRef.current,
+        screenSharing: myScreenRef.current,
+        screenSharingStartedAtMs: myScreenStartedAtRef.current,
         quality: myQualityRef.current,
       });
       void publishSigned(tmpl);
@@ -634,6 +698,8 @@ export function useCallSignal({
       cameraEnabled: myCamRef.current,
       handRaised: handRaisedRef.current,
       handRaisedAtMs: handRaisedAtRef.current,
+      screenSharing: myScreenRef.current,
+      screenSharingStartedAtMs: myScreenStartedAtRef.current,
       quality: myQualityRef.current,
     });
     void publishSigned(tmpl);
@@ -764,6 +830,8 @@ export function useCallSignal({
         cameraEnabled: myCamRef.current,
         handRaised: false,
         handRaisedAtMs: null,
+        screenSharing: myScreenRef.current,
+        screenSharingStartedAtMs: myScreenStartedAtRef.current,
         quality: myQualityRef.current,
       });
       void publishSigned(tmpl);
