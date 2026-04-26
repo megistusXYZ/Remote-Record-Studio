@@ -1,3 +1,4 @@
+import { customFetch } from "@workspace/api-client-react";
 import type { VesselIdentity } from "./identity";
 
 export type SessionSettings = {
@@ -18,11 +19,18 @@ export function buildInviteUrl(inviteCode: string, _hostPubkey?: string): string
   return `${window.location.origin}${base}/join/${encodeURIComponent(inviteCode)}`;
 }
 
+type CreatedSessionResponse = {
+  id: string;
+  inviteCode: string;
+};
+
 export async function createSession(
   identity: VesselIdentity,
-  settings: SessionSettings
+  settings: SessionSettings,
 ): Promise<CreatedSession> {
-  const response = await fetch(`${API_BASE}/sessions`, {
+  // customFetch attaches the NIP-98 Authorization header automatically via the
+  // installed AuthHeaderProvider, so the signed request reaches the server.
+  const session = await customFetch<CreatedSessionResponse>(`${API_BASE}/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -32,13 +40,6 @@ export async function createSession(
     }),
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to create session: ${text || response.statusText}`);
-  }
-
-  const session = await response.json();
-
   return {
     sessionId: session.id,
     inviteCode: session.inviteCode,
@@ -47,11 +48,13 @@ export async function createSession(
   };
 }
 
+type JoinedSessionResponse = { id: string };
+
 export async function joinSession(
   sessionIdOrInvite: string,
-  identity: VesselIdentity
+  identity: VesselIdentity,
 ): Promise<{ sessionId: string }> {
-  const response = await fetch(
+  const session = await customFetch<JoinedSessionResponse>(
     `${API_BASE}/sessions/${encodeURIComponent(sessionIdOrInvite)}/join`,
     {
       method: "POST",
@@ -60,27 +63,16 @@ export async function joinSession(
         guestName: identity.displayName,
         guestPubkey: identity._pubkey,
       }),
-    }
+    },
   );
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to join session: ${text || response.statusText}`);
-  }
-
-  const session = await response.json();
   return { sessionId: session.id };
 }
 
 export async function cancelSession(sessionId: string): Promise<void> {
-  const response = await fetch(
+  await customFetch<null>(
     `${API_BASE}/sessions/${encodeURIComponent(sessionId)}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
-  if (!response.ok && response.status !== 204) {
-    const text = await response.text();
-    throw new Error(`Failed to cancel session: ${text || response.statusText}`);
-  }
 }
 
 export function extractInviteCodeFromInput(input: string): string {

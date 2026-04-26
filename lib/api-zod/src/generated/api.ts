@@ -16,28 +16,13 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Register or retrieve user identity
- */
-export const CreateIdentityBody = zod.object({
-  pubkey: zod.string(),
-  displayName: zod.string(),
-  email: zod.string().nullish(),
-});
-
-export const CreateIdentityResponse = zod.object({
-  id: zod.string(),
-  pubkey: zod.string(),
-  displayName: zod.string(),
-  email: zod.string().nullish(),
-  createdAt: zod.coerce.date(),
-});
-
-/**
  * @summary List all sessions for the current user
  */
 export const ListSessionsQueryParams = zod.object({
   pubkey: zod.coerce.string(),
 });
+
+export const listSessionsResponseMaxParticipantsMax = 25;
 
 export const ListSessionsResponseItem = zod.object({
   id: zod.string(),
@@ -47,6 +32,13 @@ export const ListSessionsResponseItem = zod.object({
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
   participantCount: zod.number(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(listSessionsResponseMaxParticipantsMax)
+    .describe(
+      "Maximum number of participants allowed in the room (counts host + guests).",
+    ),
   participants: zod.array(
     zod.object({
       id: zod.string(),
@@ -65,10 +57,20 @@ export const ListSessionsResponse = zod.array(ListSessionsResponseItem);
 /**
  * @summary Create a new recording session
  */
+export const createSessionBodyMaxParticipantsMax = 25;
+
 export const CreateSessionBody = zod.object({
   title: zod.string(),
   hostPubkey: zod.string(),
   hostName: zod.string(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(createSessionBodyMaxParticipantsMax)
+    .optional()
+    .describe(
+      "Optional room size cap chosen by the host. Defaults to 8 if omitted.",
+    ),
 });
 
 /**
@@ -78,6 +80,8 @@ export const GetSessionParams = zod.object({
   sessionId: zod.coerce.string(),
 });
 
+export const getSessionResponseMaxParticipantsMax = 25;
+
 export const GetSessionResponse = zod.object({
   id: zod.string(),
   title: zod.string(),
@@ -86,6 +90,13 @@ export const GetSessionResponse = zod.object({
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
   participantCount: zod.number(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(getSessionResponseMaxParticipantsMax)
+    .describe(
+      "Maximum number of participants allowed in the room (counts host + guests).",
+    ),
   participants: zod.array(
     zod.object({
       id: zod.string(),
@@ -107,10 +118,22 @@ export const UpdateSessionParams = zod.object({
   sessionId: zod.coerce.string(),
 });
 
+export const updateSessionBodyMaxParticipantsMax = 25;
+
 export const UpdateSessionBody = zod.object({
   status: zod.enum(["waiting", "live", "ended"]).optional(),
   title: zod.string().optional(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(updateSessionBodyMaxParticipantsMax)
+    .optional()
+    .describe(
+      "New room size cap. Server clamps to be no less than the current participant count.",
+    ),
 });
+
+export const updateSessionResponseMaxParticipantsMax = 25;
 
 export const UpdateSessionResponse = zod.object({
   id: zod.string(),
@@ -120,6 +143,13 @@ export const UpdateSessionResponse = zod.object({
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
   participantCount: zod.number(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(updateSessionResponseMaxParticipantsMax)
+    .describe(
+      "Maximum number of participants allowed in the room (counts host + guests).",
+    ),
   participants: zod.array(
     zod.object({
       id: zod.string(),
@@ -153,6 +183,8 @@ export const JoinSessionBody = zod.object({
   guestPubkey: zod.string(),
 });
 
+export const joinSessionResponseMaxParticipantsMax = 25;
+
 export const JoinSessionResponse = zod.object({
   id: zod.string(),
   title: zod.string(),
@@ -161,6 +193,13 @@ export const JoinSessionResponse = zod.object({
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
   participantCount: zod.number(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(joinSessionResponseMaxParticipantsMax)
+    .describe(
+      "Maximum number of participants allowed in the room (counts host + guests).",
+    ),
   participants: zod.array(
     zod.object({
       id: zod.string(),
@@ -194,6 +233,19 @@ export const ListRecordingsResponseItem = zod.object({
   mimeType: zod.string(),
   blobHash: zod.string().nullish(),
   blobUrl: zod.string().nullish(),
+  audioBlobHash: zod.string().nullish(),
+  audioBlobUrl: zod.string().nullish(),
+  audioSizeBytes: zod.number().nullish(),
+  audioMimeType: zod.string().nullish(),
+  videoBlobHash: zod.string().nullish(),
+  videoBlobUrl: zod.string().nullish(),
+  videoSizeBytes: zod.number().nullish(),
+  videoMimeType: zod.string().nullish(),
+  screenBlobHash: zod.string().nullish(),
+  screenBlobUrl: zod.string().nullish(),
+  screenSizeBytes: zod.number().nullish(),
+  screenMimeType: zod.string().nullish(),
+  screenDurationSeconds: zod.number().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
   createdAt: zod.coerce.date(),
 });
@@ -212,6 +264,19 @@ export const CreateRecordingBody = zod.object({
   mimeType: zod.string(),
   blobHash: zod.string().nullish(),
   blobUrl: zod.string().nullish(),
+  audioBlobHash: zod.string().nullish(),
+  audioBlobUrl: zod.string().nullish(),
+  audioSizeBytes: zod.number().nullish(),
+  audioMimeType: zod.string().nullish(),
+  videoBlobHash: zod.string().nullish(),
+  videoBlobUrl: zod.string().nullish(),
+  videoSizeBytes: zod.number().nullish(),
+  videoMimeType: zod.string().nullish(),
+  screenBlobHash: zod.string().nullish(),
+  screenBlobUrl: zod.string().nullish(),
+  screenSizeBytes: zod.number().nullish(),
+  screenMimeType: zod.string().nullish(),
+  screenDurationSeconds: zod.number().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
 });
 
@@ -233,6 +298,19 @@ export const GetRecordingResponse = zod.object({
   mimeType: zod.string(),
   blobHash: zod.string().nullish(),
   blobUrl: zod.string().nullish(),
+  audioBlobHash: zod.string().nullish(),
+  audioBlobUrl: zod.string().nullish(),
+  audioSizeBytes: zod.number().nullish(),
+  audioMimeType: zod.string().nullish(),
+  videoBlobHash: zod.string().nullish(),
+  videoBlobUrl: zod.string().nullish(),
+  videoSizeBytes: zod.number().nullish(),
+  videoMimeType: zod.string().nullish(),
+  screenBlobHash: zod.string().nullish(),
+  screenBlobUrl: zod.string().nullish(),
+  screenSizeBytes: zod.number().nullish(),
+  screenMimeType: zod.string().nullish(),
+  screenDurationSeconds: zod.number().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
   createdAt: zod.coerce.date(),
 });
@@ -269,6 +347,8 @@ export const GetRecentActivityQueryParams = zod.object({
   limit: zod.coerce.number().default(getRecentActivityQueryLimitDefault),
 });
 
+export const getRecentActivityResponseRecentSessionsItemMaxParticipantsMax = 25;
+
 export const GetRecentActivityResponse = zod.object({
   recentRecordings: zod.array(
     zod.object({
@@ -282,6 +362,19 @@ export const GetRecentActivityResponse = zod.object({
       mimeType: zod.string(),
       blobHash: zod.string().nullish(),
       blobUrl: zod.string().nullish(),
+      audioBlobHash: zod.string().nullish(),
+      audioBlobUrl: zod.string().nullish(),
+      audioSizeBytes: zod.number().nullish(),
+      audioMimeType: zod.string().nullish(),
+      videoBlobHash: zod.string().nullish(),
+      videoBlobUrl: zod.string().nullish(),
+      videoSizeBytes: zod.number().nullish(),
+      videoMimeType: zod.string().nullish(),
+      screenBlobHash: zod.string().nullish(),
+      screenBlobUrl: zod.string().nullish(),
+      screenSizeBytes: zod.number().nullish(),
+      screenMimeType: zod.string().nullish(),
+      screenDurationSeconds: zod.number().nullish(),
       status: zod.enum(["processing", "ready", "error"]),
       createdAt: zod.coerce.date(),
     }),
@@ -295,6 +388,13 @@ export const GetRecentActivityResponse = zod.object({
       status: zod.enum(["waiting", "live", "ended"]),
       inviteCode: zod.string(),
       participantCount: zod.number(),
+      maxParticipants: zod
+        .number()
+        .min(1)
+        .max(getRecentActivityResponseRecentSessionsItemMaxParticipantsMax)
+        .describe(
+          "Maximum number of participants allowed in the room (counts host + guests).",
+        ),
       participants: zod.array(
         zod.object({
           id: zod.string(),

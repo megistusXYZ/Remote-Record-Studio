@@ -1,0 +1,54 @@
+What nostr / privacy people will quietly dislike
+1. "Logs IP addresses for about a month." This is the single biggest one. To a privacy-native user, that sentence reads as:
+
+"We have a [pubkey ↔ IP] join table for 30 days." That's a deanonymization vector. Pubkey is forever; IP ties it to a household, a workplace, a Starbucks. Once the link exists in any log, it can be subpoenaed, leaked, or stolen.
+"For abuse prevention" sounds like the standard hand-wave that every centralized service makes before becoming a surveillance hop. They've heard it from Discord, from Cloudflare, from every "we're not really a server" startup. It triggers a "here we go again" reflex.
+30 days is long. The privacy norm is hours, not weeks. Tor exit node operators famously keep nothing.
+2. "Tells the right two browsers how to find each other." The friendly version of WebRTC signaling. What they hear: "the server learns who's in a room with whom, plus their public IPs at the moment they joined." Even without storing it long-term, the server sees the social graph of who-records-with-whom in real time. For journalists with sources, lawyers with clients, therapists, etc., that's already over the line.
+
+3. "Routes the small 'are you online' / 'you are muted' messages." A centralized control-plane proxy that sees presence + state in cleartext. Nostr-natives will say "why isn't this an encrypted DM (NIP-17 gift wraps) over relays you don't run?"
+
+4. "Remembers the names of your studios and sessions." This is a server-held mirror of metadata that nostr is literally designed for (parameterized replaceable events, kind 30000-range). To a purist this looks like reinventing nostr in Postgres. You can defend it pragmatically (your dashboard needs to load fast), but be ready for the question.
+
+5. The unsaid: there's no auth on these endpoints right now. Anyone who knows your pubkey can call /api/vault/summary?pubkey=... and learn how many sessions you have, your last activity, etc. That's not a "log retention" issue — that's a "the server is queryable by anyone" issue. This was already flagged by the earlier architect review. Privacy people will spot it within thirty seconds of opening DevTools.
+
+6. The framing itself is a yellow flag. "Receptionist, not the studio" is cute but slightly oversells. A receptionist who logs every visitor's photo for 30 days, knows who they came to see, and forwards their notes between rooms is… still a meaningful surveillance node. The honest version is "the receptionist sees the lobby, not the recording booth, and forgets the lobby quickly."
+
+Would nostr-vpn help?
+Honest answer: no, not really for Vessel. It's a cool project but solving an adjacent problem. Quick read of what it is:
+
+A Tailscale-style mesh VPN for native devices: Rust + userspace WireGuard (boringtun), with Nostr relays used only for peer discovery / signaling. Ships as a desktop app, Android APK, CLI.
+The whole point is creating WireGuard tunnels between machines you control, not anonymizing browser traffic to a third-party web service.
+Why that doesn't map onto Vessel:
+
+Browsers can't run WireGuard. Vessel is a web app. Even if a participant installed nvpn on their laptop, their Chrome tab doesn't route through it unless they configure split-tunneling, which 99% of users won't do.
+It wouldn't hide them from Vessel's server anyway. A VPN tunnel terminates somewhere; from vessel.app's perspective, the request still arrives from some IP. A normal commercial VPN or Tor solves the same "hide my IP from Vessel" problem with one-click UX. nvpn is overkill (and the wrong shape) for that.
+The peer-to-peer angle is already handled by WebRTC. Once browsers are connected, audio goes peer-to-peer. nvpn would just be a slower, harder-to-set-up alternative transport for the signaling step.
+So it's a great link to have read, but it's not the lever to pull here.
+
+What would actually help (cheapest → biggest impact)
+These are not overkill, they're table stakes for the audience you're targeting:
+
+A. Stop logging IPs centrally. This is the biggest single win for vibes and substance. Options, in order of how much you have to change:
+
+Don't write IP to your application logs at all. Let the edge (Cloudflare / Replit / whatever) handle DoS rate-limiting; that retention is their policy, not yours, and you can document "we don't keep them; the CDN does for X days." This is honest and shifts the optics.
+Replace IP-based abuse prevention with something nostr-native. Lightning challenge (zap a sat to create a session), proof-of-work tag on the create-session request, or NIP-13 difficulty. Costs the spammer, costs the legit user nothing visible, and doesn't require your server to know who they are.
+If you must log them, hash them with a daily rotating salt and rotate within 24h. "Log a salted hash, rotate the salt nightly" is a well-understood pattern that lets you rate-limit within a day window without retaining a join key to a real identity.
+B. Add NIP-98 HTTP auth on the API. Every request signs an event proving "I am the holder of this pubkey." Then /vault/summary?pubkey=X only works when the requester is X. This closes the "anyone can scrape anyone's vault" gap and is the single change that takes Vessel from "open mailbox" to "actually owned by the user." It's also the kind of thing nostr users expect and will check for.
+
+C. Move ephemeral signaling off your server. WebRTC offers/answers and "muted/unmuted" don't need to go through Vessel — they can be NIP-17 gift-wrapped DMs between participants over public relays. Server stops seeing the control plane entirely. This is a bigger lift but it's the move that makes "we're just the receptionist" literally true instead of metaphorically true.
+
+D. Update the user-facing copy. Even before you do A-C, the blurb itself can be reassuring without lying. Something like:
+
+"Vessel keeps a tiny lobby — your studio names, who joined, and the coordinates browsers need to find each other. Audio never touches our server. We don't store your IP address; abuse prevention happens at the network edge and rotates within a day. You can walk out with everything you've made, change storage providers, or run your own version of this server entirely."
+
+That re-frame alone defuses 80% of the suspicion, if you can make A and the "walk out" part true.
+
+E. Document self-hosting / replaceability. Right now the "the server is replaceable" claim is implicit (the architecture supports it). A one-page "how to run your own Vessel API and point your client at it" doc converts skeptics into evangelists. It's also the strongest counter to "but you're still a centralized service" — the answer becomes "you're free to leave, with your data, in fifteen minutes."
+
+F. Be transparent in the UI. A small "What does Vessel's server see?" link in Settings → Privacy that lists literally what's in the database (session names, host pubkey, participant pubkeys, join timestamps, invite codes — nothing else) earns more trust than any marketing copy. Privacy people love being shown the schema.
+
+My recommendation for "feel safe without overkill"
+If you only do three things, do A2 + B + D: drop IP logging from your app entirely (let the edge handle abuse), put real signed-event auth on the API so endpoints can't be scraped, and rewrite the blurb to be specific about what's stored and what's not. That trio takes you from "trust us" to "verify us" — which is the only language this audience speaks. Everything else (C, E, F) is icing that you can ship over time.
+
+nvpn is genuinely interesting tech, just aimed at a different layer than the one Vessel lives on. Worth a star, not a dependency.

@@ -63,7 +63,7 @@ and points at infrastructure you can swap out at any time.
 
 | Concern | Protocol | Default endpoint |
 |---|---|---|
-| Live in-studio transport | Media-over-QUIC (MoQ) over WebTransport | `wss://relay.quic.video` |
+| Live in-studio transport | Media-over-QUIC (MoQ) over WebTransport | `https://relay.quic.video` |
 | Finalized file storage | Blossom (HTTP blob server) | `https://blossom.primal.net` |
 | Share manifests + identity | Nostr relays (NIP-94 / parameterized replaceable events kind 1063, 30563) | `wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.nostr.band` |
 | Local cache (per-participant raw chunks) | IndexedDB via `idb` |  — |
@@ -142,7 +142,7 @@ fly deploy
 Then point `VITE_MOQ_RELAY_URL` at your Fly app:
 
 ```
-VITE_MOQ_RELAY_URL=wss://your-app-name.fly.dev
+VITE_MOQ_RELAY_URL=https://your-app-name.fly.dev
 ```
 
 See [github.com/kixelated/moq-rs](https://github.com/kixelated/moq-rs) for the
@@ -187,7 +187,7 @@ VITE_NOSTR_RELAYS=wss://relay.your-domain.example,wss://relay.damus.io
 Once you've configured all three, your `.env.local` looks like:
 
 ```
-VITE_MOQ_RELAY_URL=wss://moq.your-domain.example
+VITE_MOQ_RELAY_URL=https://moq.your-domain.example
 VITE_BLOSSOM_SERVER=https://blobs.your-domain.example
 VITE_NOSTR_RELAYS=wss://relay.your-domain.example
 VITE_APP_NAME=Vessel

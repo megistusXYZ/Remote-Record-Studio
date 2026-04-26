@@ -10,6 +10,7 @@ export const sessionsTable = pgTable("sessions", {
   status: text("status").notNull().default("waiting"),
   inviteCode: text("invite_code").notNull().unique(),
   participantCount: integer("participant_count").notNull().default(1),
+  maxParticipants: integer("max_participants").notNull().default(8),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   endedAt: timestamp("ended_at", { withTimezone: true }),

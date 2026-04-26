@@ -8,6 +8,21 @@ export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
+/**
+ * Provider that returns a fully-formed `Authorization` header value for a
+ * specific request (including the auth scheme — e.g. `"Nostr <base64>"` for
+ * NIP-98 signed requests).
+ *
+ * Called per-request because schemes like NIP-98 bind the auth payload to
+ * the exact method + URL of the outgoing request. Returning `null` lets
+ * the request go out without an Authorization header (the server is then
+ * free to 401 it).
+ */
+export type AuthHeaderProvider = (info: {
+  method: string;
+  url: string;
+}) => Promise<string | null> | string | null;
+
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
@@ -17,6 +32,7 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _authHeaderProvider: AuthHeaderProvider | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -42,6 +58,22 @@ export function setBaseUrl(url: string | null): void {
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
+}
+
+/**
+ * Register a provider that supplies a complete `Authorization` header value
+ * (including the scheme prefix, e.g. `"Nostr <base64>"`) for every outgoing
+ * request. Use this for schemes that bind the credential to the request
+ * itself, like NIP-98 HTTP Auth.
+ *
+ * If both an `AuthHeaderProvider` and an `AuthTokenGetter` are set, the
+ * provider takes precedence — bearer tokens are only attached when no
+ * provider is registered.
+ *
+ * Pass `null` to clear the provider.
+ */
+export function setAuthHeaderProvider(provider: AuthHeaderProvider | null): void {
+  _authHeaderProvider = provider;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -76,6 +108,35 @@ function resolveUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (isUrl(input)) return input.toString();
   return input.url;
+}
+
+/**
+ * Best-effort absolutization of the request URL for use by an auth header
+ * provider. Schemes like NIP-98 bind to the absolute URL the request hits,
+ * so we resolve relative paths against the current document origin (or the
+ * configured `_baseUrl`) when possible. Falls back to the input unchanged
+ * when no origin is available (e.g. unusual runtimes).
+ */
+function absolutizeUrlForAuth(url: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) return url;
+  if (_baseUrl && /^[a-z][a-z0-9+.-]*:\/\//i.test(_baseUrl)) {
+    try {
+      return new URL(url, _baseUrl).toString();
+    } catch {
+      // fall through
+    }
+  }
+  if (typeof globalThis !== "undefined") {
+    const loc = (globalThis as { location?: { origin?: string } }).location;
+    if (loc?.origin) {
+      try {
+        return new URL(url, loc.origin).toString();
+      } catch {
+        // fall through
+      }
+    }
+  }
+  return url;
 }
 
 function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
@@ -349,16 +410,29 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
-  if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
+  const resolvedUrl = resolveUrl(input);
+
+  // Attach an Authorization header if the caller did not set one explicitly.
+  // Prefer the per-request provider (used by NIP-98 signed requests, where
+  // the credential binds to method+url) over the bearer-token getter.
+  if (!headers.has("authorization")) {
+    if (_authHeaderProvider) {
+      const headerValue = await _authHeaderProvider({
+        method,
+        url: absolutizeUrlForAuth(resolvedUrl),
+      });
+      if (headerValue) {
+        headers.set("authorization", headerValue);
+      }
+    } else if (_authTokenGetter) {
+      const token = await _authTokenGetter();
+      if (token) {
+        headers.set("authorization", `Bearer ${token}`);
+      }
     }
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const requestInfo = { method, url: resolvedUrl };
 
   const response = await fetch(input, { ...init, method, headers });
 

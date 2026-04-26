@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useGetSession, useJoinSession } from "@workspace/api-client-react";
 import { useIdentity } from "../../hooks/use-identity";
-import { deriveAvatarColorFromPubkey, getInitials } from "../../lib/identity";
+import { useAvatarColor } from "../../hooks/use-avatar-color";
+import { AvatarMark } from "../AvatarMark";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ export function GuestJoinScreen({
   const { data: session, isLoading: isSessionLoading, isError: isSessionError } = useGetSession(inviteCode);
   const joinSessionMutation = useJoinSession();
   const { displayName, createGuestIdentity } = useIdentity();
+  const avatarColor = useAvatarColor(session?.hostPubkey ?? null);
 
   const [name, setName] = useState("");
   const [consent, setConsent] = useState(false);
@@ -87,8 +89,6 @@ export function GuestJoinScreen({
   }
 
   const hostFirstName = session.hostName.split(" ")[0];
-  const avatarColor = deriveAvatarColorFromPubkey(session.hostPubkey);
-  const initials = getInitials(session.hostName);
 
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-vessel-bg-base text-vessel-text-primary px-4 selection:bg-vessel-accent/30 selection:text-vessel-accent">
@@ -112,13 +112,15 @@ export function GuestJoinScreen({
           </h2>
 
           <div
-            className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg"
-            style={{
-              backgroundColor: avatarColor,
-              boxShadow: `0 0 20px ${avatarColor}40`,
-            }}
+            className="rounded-full"
+            style={{ boxShadow: `0 0 20px ${avatarColor}40` }}
           >
-            {initials}
+            <AvatarMark
+              pubkey={session.hostPubkey ?? null}
+              displayName={session.hostName}
+              className="w-20 h-20 shadow-lg"
+              initialsClassName="text-2xl"
+            />
           </div>
 
           <div className="w-full h-px bg-vessel-border my-10" />

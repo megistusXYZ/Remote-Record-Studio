@@ -3,7 +3,7 @@ import { VesselCard } from "../vessel-ui/VesselCard";
 
 export function LobbyEmptyState() {
   return (
-    <VesselCard className="p-10 text-center">
+    <VesselCard className="p-6 sm:p-8 text-center border-dashed border-vessel-border/70">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -11,10 +11,10 @@ export function LobbyEmptyState() {
         className="flex flex-col items-center"
       >
         <MicOnStandIllustration />
-        <h4 className="font-display text-lg font-bold text-vessel-text-primary mt-6 mb-2">
-          Your studio is empty
+        <h4 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary mt-4 sm:mt-5 mb-1.5">
+          No sessions yet
         </h4>
-        <p className="text-vessel-text-secondary text-sm max-w-[280px] leading-relaxed">
+        <p className="text-vessel-text-secondary text-sm max-w-[260px] leading-relaxed">
           Start a session to invite guests and record together.
         </p>
       </motion.div>
