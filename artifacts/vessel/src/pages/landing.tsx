@@ -23,6 +23,79 @@ import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_17770
 import pirateCrewSketch from "@assets/Gemini_Generated_Image_sctiuasctiuascti_1777089542804.png";
 import seascapeSketch from "@assets/Gemini_Generated_Image_b0di8ib0di8ib0di_1777089861634.png";
 
+/** Provider-comparison data driving the "How Vessel stacks up." section.
+ *  Single source of truth for both the mobile stacked-card layout and
+ *  the md+ table layout. `icon` controls the inline check/cross glyph;
+ *  null = bare text only. */
+type ComparisonCell = { value: string; icon: "check" | "cross" | null };
+type ComparisonRow = {
+  label: string;
+  vessel: ComparisonCell;
+  riverside: ComparisonCell;
+  zoom: ComparisonCell;
+};
+
+const COMPARISON_ROWS: ComparisonRow[] = [
+  {
+    label: "Local recording quality",
+    vessel: { value: "Lossless", icon: null },
+    riverside: { value: "Lossless", icon: null },
+    zoom: { value: "Compressed", icon: null },
+  },
+  {
+    label: "Monthly cost",
+    vessel: { value: "Free", icon: null },
+    riverside: { value: "$15–$100/mo", icon: null },
+    zoom: { value: "$15–$20/mo", icon: null },
+  },
+  {
+    label: "You own your files",
+    vessel: { value: "Always", icon: null },
+    riverside: { value: "Platform-stored", icon: null },
+    zoom: { value: "Platform-stored", icon: null },
+  },
+  {
+    label: "You pick where files live",
+    vessel: { value: "Yes", icon: "check" },
+    riverside: { value: "No", icon: "cross" },
+    zoom: { value: "No", icon: "cross" },
+  },
+  {
+    label: "Guests need an account",
+    vessel: { value: "No", icon: "check" },
+    riverside: { value: "Yes", icon: "cross" },
+    zoom: { value: "Yes", icon: "cross" },
+  },
+  {
+    label: "Works on spotty wi-fi",
+    vessel: { value: "Yes", icon: "check" },
+    riverside: { value: "Yes", icon: "check" },
+    zoom: { value: "No", icon: "cross" },
+  },
+];
+
+function CellGlyph({
+  icon,
+  tone,
+}: {
+  icon: ComparisonCell["icon"];
+  tone: "accent" | "muted";
+}) {
+  if (icon === "check") {
+    return (
+      <Check
+        size={14}
+        className={tone === "accent" ? "text-vessel-accent" : "text-vessel-text-muted"}
+        aria-hidden="true"
+      />
+    );
+  }
+  if (icon === "cross") {
+    return <X size={14} className="text-vessel-red/70" aria-hidden="true" />;
+  }
+  return null;
+}
+
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const { displayName, isLoaded } = useIdentity();
@@ -530,14 +603,66 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Comparison Table */}
-      <section className="relative z-10 py-24 px-6 bg-vessel-bg-surface/30">
+      {/* Comparison: stacked-card layout on mobile, traditional
+          side-by-side table on tablet+. The mobile layout drops the
+          horizontal scroll (which used to hide the accent Vessel
+          column off-screen) and instead leads with the Vessel answer
+          inside each per-feature card. */}
+      <section className="relative z-10 py-20 sm:py-24 px-4 sm:px-6 bg-vessel-bg-surface/30">
         <div className="max-w-4xl mx-auto">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}>
-            <h2 className="font-display text-3xl font-bold mb-12 text-center">How Vessel stacks up.</h2>
-            
-            <div className="overflow-x-auto rounded-2xl border border-vessel-border bg-vessel-bg-elevated/50 backdrop-blur-sm">
-              <table className="w-full text-left border-collapse min-w-[600px]">
+            <h2 className="font-display text-3xl sm:text-4xl font-bold mb-8 sm:mb-12 text-center">
+              How Vessel stacks up.
+            </h2>
+
+            {/* Mobile: stacked feature cards */}
+            <div className="md:hidden space-y-3" data-testid="comparison-cards-mobile">
+              {COMPARISON_ROWS.map((row, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-vessel-border bg-vessel-bg-elevated/60 backdrop-blur-sm p-4"
+                >
+                  <p className="text-xs font-mono-vessel uppercase tracking-[0.14em] text-vessel-text-muted mb-3">
+                    {row.label}
+                  </p>
+                  <ul className="flex flex-col gap-1.5">
+                    {/* Vessel — accent-tinted highlight row, on top so
+                        thumbs-scrolling readers see our answer first. */}
+                    <li className="flex items-center justify-between gap-3 rounded-xl bg-vessel-accent/[0.08] border border-vessel-accent/25 px-3 py-2.5">
+                      <span className="text-[11px] font-mono-vessel uppercase tracking-[0.14em] text-vessel-accent">
+                        Vessel
+                      </span>
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-vessel-accent text-right">
+                        <CellGlyph icon={row.vessel.icon} tone="accent" />
+                        {row.vessel.value}
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between gap-3 px-3 py-2">
+                      <span className="text-[11px] font-mono-vessel uppercase tracking-[0.14em] text-vessel-text-muted">
+                        Riverside
+                      </span>
+                      <span className="flex items-center gap-1.5 text-sm text-vessel-text-secondary text-right">
+                        <CellGlyph icon={row.riverside.icon} tone="muted" />
+                        {row.riverside.value}
+                      </span>
+                    </li>
+                    <li className="flex items-center justify-between gap-3 px-3 py-2">
+                      <span className="text-[11px] font-mono-vessel uppercase tracking-[0.14em] text-vessel-text-muted">
+                        Zoom
+                      </span>
+                      <span className="flex items-center gap-1.5 text-sm text-vessel-text-secondary text-right">
+                        <CellGlyph icon={row.zoom.icon} tone="muted" />
+                        {row.zoom.value}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet+: traditional comparison table */}
+            <div className="hidden md:block rounded-2xl border border-vessel-border bg-vessel-bg-elevated/50 backdrop-blur-sm overflow-hidden">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-vessel-border">
                     <th className="p-6 font-medium text-vessel-text-secondary w-1/3">Feature</th>
@@ -547,31 +672,25 @@ export default function LandingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-vessel-border/50 text-sm">
-                  {[
-                    { label: "Local recording quality", v: "Lossless", r: "Lossless", z: "Compressed" },
-                    { label: "Monthly cost", v: "Free", r: "$15–$100/mo", z: "$15–$20/mo" },
-                    { label: "You own your files", v: "Always", r: "Platform-stored", z: "Platform-stored" },
-                    { label: "You pick where files live", v: "Yes", vCheck: true, r: "No", rCross: true, z: "No", zCross: true },
-                    { label: "Guests need an account", v: "No", vCheck: true, r: "Yes", rCross: true, z: "Yes", zCross: true },
-                    { label: "Works on spotty wi-fi", v: "Yes", vCheck: true, r: "Yes", rCheck: true, z: "No", zCross: true }
-                  ].map((row, i) => (
+                  {COMPARISON_ROWS.map((row, i) => (
                     <tr key={i} className="hover:bg-vessel-bg-surface/50 transition-colors">
                       <td className="p-6 font-medium text-vessel-text-primary">{row.label}</td>
-                      <td className="p-6 text-vessel-accent font-medium flex items-center gap-2">
-                        {row.vCheck && <Check size={16} />}
-                        {row.v}
-                      </td>
-                      <td className="p-6 text-vessel-text-secondary">
+                      <td className="p-6 text-vessel-accent font-medium">
                         <span className="flex items-center gap-2">
-                          {row.rCross && <X size={16} className="text-vessel-red/70" />}
-                          {row.rCheck && <Check size={16} className="text-vessel-text-muted" />}
-                          {row.r}
+                          <CellGlyph icon={row.vessel.icon} tone="accent" />
+                          {row.vessel.value}
                         </span>
                       </td>
                       <td className="p-6 text-vessel-text-secondary">
                         <span className="flex items-center gap-2">
-                          {row.zCross && <X size={16} className="text-vessel-red/70" />}
-                          {row.z}
+                          <CellGlyph icon={row.riverside.icon} tone="muted" />
+                          {row.riverside.value}
+                        </span>
+                      </td>
+                      <td className="p-6 text-vessel-text-secondary">
+                        <span className="flex items-center gap-2">
+                          <CellGlyph icon={row.zoom.icon} tone="muted" />
+                          {row.zoom.value}
                         </span>
                       </td>
                     </tr>
