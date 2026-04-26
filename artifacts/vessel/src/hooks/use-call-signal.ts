@@ -649,6 +649,40 @@ export function useCallSignal({
     };
   }, [enabled, sessionId, identity, publishSigned]);
 
+  // ── Immediate presence republish on local A/V state changes ──
+  // Without this, a peer toggling their mic, camera or screen-share has
+  // to wait up to HEARTBEAT_MS (5s) for the next regular heartbeat before
+  // anyone else sees the change. That makes mute/unmute and camera
+  // on/off feel broken from the listeners' perspective.
+  //
+  // We mirror the shape used by toggleHand() / the host-lower-hand
+  // handler: sign and publish a fresh presence beat the moment the local
+  // flag flips. This also fires once on mount alongside the heartbeat
+  // loop's inaugural beat — that's a harmless ~50-byte duplicate (peers
+  // dedupe by event id) and not worth the complexity of suppressing.
+  useEffect(() => {
+    if (!enabled || !sessionId || !identity) return;
+    const tmpl = buildEventTemplate(KIND_PRESENCE, sessionId, {
+      displayName: myNameRef.current,
+      micEnabled: myMicEnabled,
+      cameraEnabled: myCameraEnabled,
+      handRaised: handRaisedRef.current,
+      handRaisedAtMs: handRaisedAtRef.current,
+      screenSharing: myScreenSharing,
+      screenSharingStartedAtMs: myScreenStartedAtRef.current,
+      quality: myQualityRef.current,
+    });
+    void publishSigned(tmpl);
+  }, [
+    enabled,
+    sessionId,
+    identity,
+    myMicEnabled,
+    myCameraEnabled,
+    myScreenSharing,
+    publishSigned,
+  ]);
+
   // ── Pruning loop — flag stale peers, then drop after the longer TTL ──
   // Two-stage to give "Reconnecting…" UX time to surface before the row
   // disappears, matching the 3-strikes feel called out in the spec.
