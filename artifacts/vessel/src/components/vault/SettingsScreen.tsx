@@ -37,6 +37,7 @@ import {
 } from "../../lib/storage-config";
 import { MoqClient } from "../../lib/moq";
 import { notifyRelayUrlChanged } from "../../hooks/use-live-transport";
+import observationCabinSketch from "@assets/Gemini_Generated_Image_v77zp1v77zp1v77z_1777173537021.png";
 import { VaultSidebar } from "./VaultSidebar";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
@@ -243,12 +244,28 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   return (
     <div className="flex h-[100dvh] bg-vessel-bg-base text-vessel-text-primary">
       <VaultSidebar active="settings" />
-      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
-        <header className="sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border z-10 px-4 sm:px-8 py-4 sm:py-0 sm:h-[72px] flex items-center">
+      <main className="relative flex-1 min-w-0 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
+        {/* Same observation-cabin backdrop used on My Vault and
+            Shared with me — keeps the sense of place consistent
+            across the whole signed-in shell. */}
+        <div
+          className="pointer-events-none fixed inset-0 z-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${observationCabinSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+          }}
+          aria-hidden="true"
+        />
+
+        <header className="relative z-10 sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border px-4 sm:px-8 py-4 sm:py-0 sm:h-[72px] flex items-center">
           <h1 className="font-display text-3xl font-bold text-vessel-text-primary">Settings</h1>
         </header>
 
-        <div className="px-8 py-6 max-w-2xl space-y-6">
+        <div className="relative z-10 px-8 py-6 max-w-2xl space-y-6">
           <VesselCard>
             <div className="p-6 space-y-6">
               <h2 className="font-display text-lg font-bold text-vessel-text-primary">General</h2>
