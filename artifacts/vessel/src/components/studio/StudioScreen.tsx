@@ -13,6 +13,7 @@ import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
 import { RecordingDot } from "../vessel-ui/RecordingDot";
 import { VesselBadge } from "../vessel-ui/VesselBadge";
+import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
 import { SpotlightView, type SpotlightTile } from "./SpotlightView";
@@ -1004,9 +1005,7 @@ export function StudioScreen({
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-vessel-accent/10 flex items-center justify-center">
-                  <div className="w-[2.5px] h-[2.5px] rounded-full bg-vessel-accent" />
-                </div>
+                <VesselBrandIcon className="w-6 h-6 text-vessel-accent shrink-0" />
                 <span className="font-display font-bold text-sm tracking-tight">Vessel</span>
               </div>
               <span className="text-vessel-text-muted">/</span>
