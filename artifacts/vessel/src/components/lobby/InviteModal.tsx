@@ -62,7 +62,7 @@ export function InviteModal({
           overflow-hidden
         "
       >
-        <DialogHeader className="text-left space-y-1">
+        <DialogHeader className="text-left space-y-1 min-w-0 w-full">
           <DialogTitle className="font-display text-xl sm:text-2xl text-vessel-text-primary">
             Invite guests
           </DialogTitle>
@@ -71,7 +71,11 @@ export function InviteModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-5 space-y-5">
+        {/* w-full + min-w-0: DialogContent is a CSS grid, and grid
+            items default to min-width: auto. Without this, the long
+            invite URL inside grows the grid item past max-w, throwing
+            the centered QR off to the side. */}
+        <div className="mt-5 space-y-5 w-full min-w-0">
           {/* QR — primary visual */}
           <div className="flex flex-col items-center gap-2">
             <div className="rounded-2xl p-3 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
