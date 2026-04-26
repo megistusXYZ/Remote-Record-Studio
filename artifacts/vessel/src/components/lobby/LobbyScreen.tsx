@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Copy, QrCode, Users, Check, Trash2 } from "lucide-react";
-import { StudioSproutIcon } from "../icons/StudioSproutIcon";
 import { LobbyEmptyState } from "./LobbyEmptyState";
 import { WaitingForGuestsEmpty } from "./WaitingForGuestsEmpty";
 import {
@@ -167,18 +166,13 @@ export function LobbyScreen({
               </div>
 
               <VesselCard className="p-5 sm:p-6 md:p-8 mb-4 sm:mb-6 border-vessel-accent/30 shadow-[0_0_40px_rgba(0,212,170,0.08)]">
-                <div className="flex items-center gap-3 sm:gap-4 mb-5 sm:mb-6">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-vessel-accent/10 flex items-center justify-center shrink-0">
-                    <StudioSproutIcon className="w-6 h-6 sm:w-7 sm:h-7 text-vessel-accent" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h2 className="font-display text-xl sm:text-2xl font-bold text-vessel-text-primary leading-tight mb-1">
-                      Start a new studio session
-                    </h2>
-                    <p className="text-vessel-text-secondary text-sm sm:text-base">
-                      Create a private room, invite your guests, and record in studio quality.
-                    </p>
-                  </div>
+                <div className="mb-5 sm:mb-6">
+                  <h2 className="font-display text-xl sm:text-2xl font-bold text-vessel-text-primary leading-tight mb-1">
+                    Start a new studio session
+                  </h2>
+                  <p className="text-vessel-text-secondary text-sm sm:text-base">
+                    Create a private room, invite your guests, and record in studio quality.
+                  </p>
                 </div>
                 <div className="flex flex-col gap-3 sm:gap-4">
                   <Input
