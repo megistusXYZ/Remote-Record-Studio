@@ -163,23 +163,36 @@ function FilmstripTile({ tile }: { tile: SpotlightTile }) {
             Connecting…
           </span>
         </div>
-      ) : tile.cameraStream && tile.cameraEnabled ? (
-        <video
-          ref={ref}
-          autoPlay
-          playsInline
-          muted={tile.isLocal}
-          className="w-full h-full object-cover"
-        />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-vessel-bg-elevated">
-          <AvatarMark
-            pubkey={tile.pubkey}
-            displayName={tile.displayName}
-            className="w-10 h-10 sm:w-12 sm:h-12"
-            initialsClassName="text-xs"
-          />
-        </div>
+        <>
+          {/* Keep the <video> mounted whenever a stream exists, even
+              while the camera is disabled — see the matching note in
+              VideoTile. Tearing it down on every camera-off forces a
+              fresh stream attach + keyframe wait, which manifests as
+              a long black gap before the camera reappears. */}
+          {tile.cameraStream && (
+            <video
+              ref={ref}
+              autoPlay
+              playsInline
+              muted={tile.isLocal}
+              className={cn(
+                "absolute inset-0 w-full h-full object-cover",
+                !tile.cameraEnabled && "invisible",
+              )}
+            />
+          )}
+          {(!tile.cameraStream || !tile.cameraEnabled) && (
+            <div className="absolute inset-0 flex items-center justify-center bg-vessel-bg-elevated">
+              <AvatarMark
+                pubkey={tile.pubkey}
+                displayName={tile.displayName}
+                className="w-10 h-10 sm:w-12 sm:h-12"
+                initialsClassName="text-xs"
+              />
+            </div>
+          )}
+        </>
       )}
       <div className="absolute bottom-1 left-1 right-1 flex items-center gap-1 z-10">
         <div className="bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-md min-w-0 flex-1">
@@ -394,15 +407,23 @@ function PresenterBubble({
       )}
       aria-label={`${presenter.displayName} camera (drag to reposition, arrow keys to snap to a corner, Enter to hide)`}
     >
-      {presenter.cameraStream && presenter.cameraEnabled ? (
+      {/* Same keep-mounted pattern as VideoTile / FilmstripTile —
+          unmounting the <video> on every camera-off forces a stream
+          re-attach + keyframe wait when toggling back on, producing a
+          long black gap. Avatar overlays the (blanked) video instead. */}
+      {presenter.cameraStream && (
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={presenter.isLocal}
-          className="w-full h-full object-cover"
+          className={cn(
+            "absolute inset-0 w-full h-full object-cover",
+            !presenter.cameraEnabled && "invisible",
+          )}
         />
-      ) : (
+      )}
+      {(!presenter.cameraStream || !presenter.cameraEnabled) && (
         <div className="absolute inset-0 flex items-center justify-center bg-vessel-bg-elevated">
           <AvatarMark
             pubkey={presenter.pubkey}

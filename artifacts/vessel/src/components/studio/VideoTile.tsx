@@ -62,34 +62,51 @@ export function VideoTile({
             Connecting...
           </span>
         </div>
-      ) : stream && cameraEnabled ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className="w-full h-full object-cover"
-        />
       ) : (
-        // Camera-off / no-stream state. The avatar scales with tile size
-        // (proportional, with explicit floors and ceilings) so that on a
-        // big single-participant tile it reads as a confident hero rather
-        // than a lonely 96px dot in the middle of the room. We also pad
-        // the bottom so the avatar never sits behind the bottom-left
-        // name pill or the bottom-right meter.
-        <div className="absolute inset-0 bg-vessel-bg-elevated flex items-center justify-center px-6 pt-6 pb-16">
-          <div className="flex flex-col items-center gap-3 sm:gap-4 max-w-full">
-            <AvatarMark
-              pubkey={participant.pubkey}
-              displayName={participant.displayName}
-              className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-44 lg:h-44 shadow-lg"
-              initialsClassName="text-2xl sm:text-3xl md:text-4xl lg:text-5xl"
+        <>
+          {/* Keep the <video> element mounted whenever a stream is
+              available — even while the camera is muted. Unmounting it
+              on every camera-off forces the browser to re-attach the
+              stream and wait for a fresh keyframe when the user toggles
+              back on, which shows up as a multi-second black hole
+              before video reappears. With the element kept alive, a
+              disabled track simply stops delivering frames; re-enabling
+              paints the next frame immediately. */}
+          {stream && (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted={isLocal}
+              className={cn(
+                "absolute inset-0 w-full h-full object-cover",
+                !cameraEnabled && "invisible",
+              )}
             />
-            <span className="hidden sm:block text-vessel-text-secondary text-sm md:text-base font-medium truncate max-w-[80%]">
-              {participant.displayName}
-            </span>
-          </div>
-        </div>
+          )}
+          {(!stream || !cameraEnabled) && (
+            // Camera-off / no-stream overlay. The avatar scales with
+            // tile size (proportional, with explicit floors and
+            // ceilings) so that on a big single-participant tile it
+            // reads as a confident hero rather than a lonely 96px dot
+            // in the middle of the room. We also pad the bottom so the
+            // avatar never sits behind the bottom-left name pill or
+            // the bottom-right meter.
+            <div className="absolute inset-0 bg-vessel-bg-elevated flex items-center justify-center px-6 pt-6 pb-16">
+              <div className="flex flex-col items-center gap-3 sm:gap-4 max-w-full">
+                <AvatarMark
+                  pubkey={participant.pubkey}
+                  displayName={participant.displayName}
+                  className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-44 lg:h-44 shadow-lg"
+                  initialsClassName="text-2xl sm:text-3xl md:text-4xl lg:text-5xl"
+                />
+                <span className="hidden sm:block text-vessel-text-secondary text-sm md:text-base font-medium truncate max-w-[80%]">
+                  {participant.displayName}
+                </span>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Bottom gradient overlay — only useful when there's actual video
