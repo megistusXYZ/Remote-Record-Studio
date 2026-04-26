@@ -57,7 +57,7 @@ const MAX_REACTION_HISTORY = 30;
 // Public free relays. The signaling channel is best-effort: as long as ONE
 // relay is reachable everyone sees each other. Falls back gracefully if all
 // are down — the studio still works, just without the live roster.
-const DEFAULT_SIGNAL_RELAYS = [
+export const DEFAULT_SIGNAL_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
   "wss://relay.nostr.band",

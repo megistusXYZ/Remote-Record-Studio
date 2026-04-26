@@ -61,6 +61,14 @@ router.post("/recordings", requireSignedRequest(), async (req, res): Promise<voi
       mimeType: parsed.data.mimeType,
       blobHash: parsed.data.blobHash ?? null,
       blobUrl: parsed.data.blobUrl ?? null,
+      audioBlobHash: parsed.data.audioBlobHash ?? null,
+      audioBlobUrl: parsed.data.audioBlobUrl ?? null,
+      audioSizeBytes: parsed.data.audioSizeBytes ?? null,
+      audioMimeType: parsed.data.audioMimeType ?? null,
+      videoBlobHash: parsed.data.videoBlobHash ?? null,
+      videoBlobUrl: parsed.data.videoBlobUrl ?? null,
+      videoSizeBytes: parsed.data.videoSizeBytes ?? null,
+      videoMimeType: parsed.data.videoMimeType ?? null,
       status: parsed.data.status,
     })
     .returning();

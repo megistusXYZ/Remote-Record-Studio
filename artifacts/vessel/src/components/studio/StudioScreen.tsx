@@ -23,6 +23,12 @@ import { useCreateRecording } from "@workspace/api-client-react";
 import { publishPersonalArchive } from "../../lib/session-archive";
 import { rememberPersonalReceipt } from "../../lib/personal-receipts";
 import {
+  deriveHostRowStorageState,
+  publishPersonalArchivePointer,
+  shouldPublishPersonalArchive,
+  useHostAggregatedTracks,
+} from "../../hooks/use-host-aggregated-tracks";
+import {
   readStoredJoinWithMic,
   readStoredJoinWithCamera,
 } from "../../hooks/use-join-prefs";
@@ -70,15 +76,19 @@ export function StudioScreen({
   isStartingRecording,
   isStoppingRecording,
 }: StudioScreenProps) {
-  // Initialize from the user's persisted "how I join" prefs. We use
-  // lazy initialization so the prefs are read exactly once at mount —
-  // a later change in Settings should not yank a live call's mic/cam
-  // state out from under the user.
   const [micEnabled, setMicEnabled] = useState(() => readStoredJoinWithMic());
   const [cameraEnabled, setCameraEnabled] = useState(() => readStoredJoinWithCamera());
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSessionComplete, setShowSessionComplete] = useState(false);
+  const [sessionEndedAtMs, setSessionEndedAtMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (session.status === "ended") {
+      setSessionEndedAtMs((prev) => prev ?? Date.now());
+    } else {
+      setSessionEndedAtMs(null);
+    }
+  }, [session.status]);
   const [personalArchive, setPersonalArchive] = useState<PersonalArchiveStatus>({ status: "idle" });
   const [showRoster, setShowRoster] = useState(false);
   const { toast } = useToast();
@@ -108,8 +118,6 @@ export function StudioScreen({
     micEnabled,
   });
 
-  // Real WebTransport-backed live preview. Drives both the connection-quality
-  // dot in the header and the per-tile remote video for other participants.
   const liveTransport = useLiveTransport({
     sessionId: session.id,
     selfPubkey: currentPubkey,
@@ -118,17 +126,10 @@ export function StudioScreen({
   });
   const connQuality = liveTransport.quality;
 
-  // ─── Ephemeral signaling channel ────────────────────────────────────────
-  // Heartbeats every 5s with our mic/cam/quality, prunes peers that go quiet
-  // for 15s. Powers the live RosterSidePanel (presence, raise hand, chat,
-  // host "ask to mute"). Disabled once the session ends so we don't keep
-  // chatting on relays after the call is over.
   const signalQuality: ConnectionQuality =
     connQuality === "good" || connQuality === "fair" || connQuality === "poor"
       ? connQuality
       : "unknown";
-  // The host's pubkey is needed to authenticate inbound mute prompts —
-  // anything signed by a non-host is silently dropped by the hook.
   const hostPubkey = useMemo(
     () => session.participants.find((p) => p.role === "host")?.pubkey ?? null,
     [session.participants],
@@ -144,9 +145,6 @@ export function StudioScreen({
     hostPubkey,
   });
 
-  // Surface incoming "ask to mute" requests from the host as a friendly
-  // toast — never force the device. Acknowledged on display so we don't
-  // re-fire if the same id sticks around in state.
   useEffect(() => {
     if (!callSignal.incomingMuteRequest) return;
     const req = callSignal.incomingMuteRequest;
@@ -156,7 +154,6 @@ export function StudioScreen({
     callSignal.acknowledgeMuteRequest();
   }, [callSignal, toast]);
 
-  // Build a presence-by-pubkey map for the roster panel.
   const presenceByPubkey = useMemo(() => {
     const m = new Map<string, (typeof callSignal.peers)[number]>();
     for (const p of callSignal.peers) m.set(p.pubkey, p);
@@ -179,8 +176,6 @@ export function StudioScreen({
     [callSignal.peers],
   );
 
-  // Surface "the host lowered your hand" as a calm toast. Acknowledged on
-  // display so the same id can't re-fire if it lingers in state.
   useEffect(() => {
     if (!callSignal.handLoweredByHost) return;
     toast({
@@ -189,12 +184,6 @@ export function StudioScreen({
     callSignal.acknowledgeHandLowered();
   }, [callSignal, toast]);
 
-  // ─── Self mic-level analyzer ────────────────────────────────────────────
-  // Drives the soft pulse on the self-row mic dot in the roster panel.
-  // Runs only while the local stream + mic are live; tears down cleanly on
-  // device swap or mic-mute. We sample at ~15Hz (the analyzer FFT is fast
-  // enough that this is essentially free), and gate state updates so React
-  // only re-renders when the smoothed level meaningfully changes.
   const [myMicLevel, setMyMicLevel] = useState(0);
   useEffect(() => {
     if (!localStream || !micEnabled) {
@@ -239,8 +228,6 @@ export function StudioScreen({
       let sum = 0;
       for (let i = 0; i < buffer.length; i++) sum += buffer[i];
       const rms = sum / buffer.length / 255; // 0..1
-      // Only push to state if the level actually shifted; this keeps the
-      // mic dot's pulse stable rather than re-rendering 15× per second.
       if (Math.abs(rms - lastEmitted) > 0.01) {
         lastEmitted = rms;
         setMyMicLevel(rms);
@@ -291,9 +278,6 @@ export function StudioScreen({
     return () => clearInterval(interval);
   }, [session.status]);
 
-  // Auto-start the local recorder once the session is live and the local stream is ready.
-  // Sets the ref to `true` BEFORE start to prevent double-fire on rapid re-renders, but
-  // resets it on failure so the user can retry by re-toggling devices.
   useEffect(() => {
     if (
       session.status === "live" &&
@@ -310,7 +294,6 @@ export function StudioScreen({
     }
   }, [session.status, localStream, recording]);
 
-  // Reset persistence guards when the session id changes (e.g., a new session in the same tab).
   useEffect(() => {
     recordingStartedRef.current = false;
     recordingPersistedRef.current = false;
@@ -320,9 +303,6 @@ export function StudioScreen({
     setPersonalArchive({ status: "idle" });
   }, [session.id]);
 
-  // After sync completes, persist the recording metadata to the API once.
-  // We capture the mutation promise on a ref so navigation handlers can await it
-  // before unmounting (avoids losing tracks for guests who get redirected).
   useEffect(() => {
     if (
       recording.result &&
@@ -343,6 +323,14 @@ export function StudioScreen({
             mimeType: r.meta.mimeType,
             blobHash: r.blobHash || null,
             blobUrl: r.blobUrl,
+            audioBlobHash: r.audio?.blobHash || null,
+            audioBlobUrl: r.audio?.blobUrl ?? null,
+            audioSizeBytes: r.audio?.sizeBytes ?? null,
+            audioMimeType: r.audio?.mimeType ?? null,
+            videoBlobHash: r.video?.blobHash || null,
+            videoBlobUrl: r.video?.blobUrl ?? null,
+            videoSizeBytes: r.video?.sizeBytes ?? null,
+            videoMimeType: r.video?.mimeType ?? null,
             status: "ready",
           },
         })
@@ -353,26 +341,27 @@ export function StudioScreen({
     }
   }, [recording.result, recording.syncStatus, createRecordingMutation, session.id, session.title, currentPubkey, displayName]);
 
-  // After sync completes, publish this device's personal single-track archive.
-  // Each participant — host AND every guest — gets their own pointer signed by
-  // an ephemeral key held only on this device. The published receipt link is
-  // surfaced in SessionComplete with copy / open / revoke calls to action.
-  // Runs once per session.id; failures degrade gracefully (the local copy is
-  // unaffected and the user can always re-share from /vault).
+  const acceptedPubkeys = useMemo(
+    () => session.participants.map((p) => p.pubkey).filter(Boolean),
+    [session.participants],
+  );
+  const hostAgg = useHostAggregatedTracks({
+    sessionId: isHost ? session.id : null,
+    enabled: isHost,
+    acceptedPubkeys,
+    sessionEndedAtMs,
+  });
+
   useEffect(() => {
     if (
       !recording.result ||
       personalArchivePublishedRef.current ||
-      recording.syncStatus !== "complete"
+      !shouldPublishPersonalArchive(recording.syncStatus, recording.result) ||
+      !identity
     ) {
       return;
     }
     const r = recording.result;
-    if (!r.blobUrl || !r.blobHash) {
-      // Without an upload URL + hash there's nothing to publish — the recording
-      // is local-only. Mark as not-applicable by leaving status idle.
-      return;
-    }
     personalArchivePublishedRef.current = true;
     setPersonalArchive({ status: "publishing" });
 
@@ -402,6 +391,24 @@ export function StudioScreen({
             mimeType: r.meta.mimeType,
             sizeBytes: r.meta.sizeBytes,
             durationSeconds: r.meta.durationSeconds,
+            audio:
+              r.audio && r.audio.remoteUrl
+                ? {
+                    url: r.audio.remoteUrl,
+                    hash: r.audio.blobHash || null,
+                    sizeBytes: r.audio.sizeBytes,
+                    mimeType: r.audio.mimeType,
+                  }
+                : null,
+            video:
+              r.video && r.video.remoteUrl
+                ? {
+                    url: r.video.remoteUrl,
+                    hash: r.video.blobHash || null,
+                    sizeBytes: r.video.sizeBytes,
+                    mimeType: r.video.mimeType,
+                  }
+                : null,
           },
         );
         if (result.publish.successCount === 0) {
@@ -430,6 +437,22 @@ export function StudioScreen({
           successCount: result.publish.successCount,
           totalCount: result.publish.totalCount,
         });
+
+        // Broadcast pointer (retried with backoff inside the helper).
+        try {
+          await publishPersonalArchivePointer({
+            signer: identity._signer,
+            sessionId: session.id,
+            shareUrl: result.shareUrl,
+          });
+        } catch (pointerErr) {
+          console.warn("personal-archive pointer publish failed", pointerErr);
+          toast({
+            variant: "destructive",
+            description:
+              "Couldn't notify the host of your archive automatically. Share the link manually if needed — your local copy is safe.",
+          });
+        }
       } catch (err) {
         console.error("Failed to publish personal archive", err);
         setPersonalArchive({
@@ -452,11 +475,10 @@ export function StudioScreen({
     currentPubkey,
     displayName,
     isHost,
+    toast,
   ]);
 
-  // Guests: when the host ends the session externally and a guest is mid-recording,
-  // show the SessionComplete (guest variant) so their track is finalized + persisted
-  // before they navigate away. Also signal the parent to suppress the auto-redirect.
+  // Guests: host-ended session while mid-record → finalize before redirect.
   useEffect(() => {
     if (
       !isHost &&
@@ -493,9 +515,7 @@ export function StudioScreen({
     }
   };
 
-  // Keyboard shortcuts: M = mic, V = camera, Space = record (host).
-  // Skip when an input is focused, when the SessionComplete overlay is shown,
-  // or when the invite modal is open (Escape handles modal close natively).
+  // Keyboard shortcuts: M = mic, V = camera, Space = record (host), R = roster.
   const shortcutsEnabled = !showSessionComplete && !showInviteModal;
   const shortcuts = useMemo<Shortcut[]>(
     () => [
@@ -520,25 +540,19 @@ export function StudioScreen({
         },
       },
       {
-        // Toggle the live roster side panel.
         key: "r",
         handler: () => setShowRoster((v) => !v),
       },
       {
-        // Raise / lower hand for both host and guests.
         key: "h",
         handler: () => callSignal.toggleHand(),
       },
     ],
-    // handleStopRecording / handleStartRecording are stable enough — re-binding on
-    // every render is fine because the hook strips and re-attaches the listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isHost, session.status, callSignal.toggleHand]
   );
   useKeyboardShortcuts(shortcuts, shortcutsEnabled);
 
-  // Wait for the metadata POST to complete (or fail) before navigating away,
-  // so we don't lose track records on unmount.
   const awaitPersistence = async () => {
     if (persistPromiseRef.current) {
       try {
@@ -568,7 +582,6 @@ export function StudioScreen({
     onStartNewSession();
   };
 
-  // Guest "Close" button — finalize persistence then navigate to their vault.
   const handleGuestClose = async () => {
     await awaitPersistence();
     setShowSessionComplete(false);
@@ -579,25 +592,18 @@ export function StudioScreen({
     void onLeave();
   };
 
-  // Build the SessionComplete tracks array (currently only the local user's track is captured).
-  // `storageState` mirrors recording.syncStatus so the per-track chip surfaces
-  // whether the track landed on the participant's storage server or fell back
-  // to local-only.
   const localParticipant = session.participants.find((p) => p.pubkey === currentPubkey);
   const trackStorageState: "remote" | "local-only" | "unknown" =
     recording.syncStatus === "complete"
       ? "remote"
       : recording.syncStatus === "partial-failure"
-      ? // If at least one mid-recording slice made it through, treat the
-        // track as remotely persisted even if the final-blob upload failed —
-        // user can recover from slices.
-        (recording.result && recording.result.incrementalSaved > 0)
+      ? (recording.result && recording.result.incrementalSaved > 0)
         ? "remote"
         : "local-only"
       : "unknown";
 
-  const sessionCompleteTracks: Track[] = recording.result && localParticipant
-    ? [{
+  const localTrack: Track | null = recording.result && localParticipant
+    ? {
         participantId: localParticipant.id,
         participantName: localParticipant.displayName,
         participantPubkey: localParticipant.pubkey,
@@ -608,9 +614,24 @@ export function StudioScreen({
         mimeType: recording.result.meta.mimeType,
         hasVideo: recording.result.meta.hasVideo,
         storageState: trackStorageState,
-      }]
+        combinedBlobUrl: recording.result.blobUrl,
+        combinedRemoteUrl: recording.result.remoteUrl,
+        combinedBlobHash: recording.result.blobHash || null,
+        audioBlobUrl: recording.result.audio?.blobUrl ?? null,
+        audioRemoteUrl: recording.result.audio?.remoteUrl ?? null,
+        audioBlob: recording.result.audio?.blob ?? null,
+        audioMimeType: recording.result.audio?.mimeType ?? null,
+        audioSizeBytes: recording.result.audio?.sizeBytes ?? 0,
+        audioBlobHash: recording.result.audio?.blobHash || null,
+        videoOnlyBlob: recording.result.video?.blob ?? null,
+        videoOnlyLocalUrl: recording.result.video?.localBlobUrl ?? null,
+        videoOnlyRemoteUrl: recording.result.video?.remoteUrl ?? null,
+        videoOnlyMimeType: recording.result.video?.mimeType ?? null,
+        videoOnlySizeBytes: recording.result.video?.sizeBytes ?? 0,
+        videoOnlyBlobHash: recording.result.video?.blobHash || null,
+      }
     : localParticipant
-    ? [{
+    ? {
         participantId: localParticipant.id,
         participantName: localParticipant.displayName,
         participantPubkey: localParticipant.pubkey,
@@ -621,8 +642,89 @@ export function StudioScreen({
         mimeType: "video/webm",
         hasVideo: true,
         storageState: "unknown",
-      }]
-    : [];
+      }
+    : null;
+
+  const sessionCompleteTracks: Track[] = useMemo(() => {
+    const rows: Track[] = [];
+    if (localTrack) rows.push(localTrack);
+    if (isHost) {
+      const localPubkey = localParticipant?.pubkey ?? currentPubkey;
+      for (const agg of hostAgg.aggregated) {
+        if (agg.participantPubkey === localPubkey) continue;
+        const t = agg.recipientTrack;
+        const isVideoTrack = t.url ? t.mimeType.startsWith("video/") : false;
+        rows.push({
+          participantId: agg.participantPubkey,
+          participantName: t.participantName,
+          participantPubkey: agg.participantPubkey,
+          recordingId: t.recordingId,
+          blob: null,
+          durationSeconds: t.durationSeconds,
+          sizeBytes: t.sizeBytes,
+          mimeType: t.mimeType,
+          hasVideo: isVideoTrack,
+          storageState: deriveHostRowStorageState({
+            isVideoTrack,
+            combinedRemoteUrl: t.url ?? null,
+            audioSiblingRemoteUrl: t.audio?.url ?? null,
+            videoSiblingRemoteUrl: t.video?.url ?? null,
+          }),
+          combinedBlobUrl: t.url,
+          combinedRemoteUrl: t.url,
+          combinedBlobHash: t.hash,
+          audioBlobUrl: t.audio?.url ?? null,
+          audioRemoteUrl: t.audio?.url ?? null,
+          audioMimeType: t.audio?.mimeType ?? null,
+          audioSizeBytes: t.audio?.sizeBytes ?? 0,
+          audioBlobHash: t.audio?.hash ?? null,
+          videoOnlyBlob: null,
+          videoOnlyLocalUrl: null,
+          videoOnlyRemoteUrl: t.video?.url ?? null,
+          videoOnlyMimeType: t.video?.mimeType ?? null,
+          videoOnlySizeBytes: t.video?.sizeBytes ?? 0,
+          videoOnlyBlobHash: t.video?.hash ?? null,
+        });
+      }
+    }
+    return rows;
+  }, [localTrack, isHost, hostAgg.aggregated, localParticipant?.pubkey, currentPubkey]);
+
+  const expectedParticipants = useMemo(() => {
+    if (!isHost) return [];
+    const phase: "listening" | "timeout" = hostAgg.isWaiting ? "listening" : "timeout";
+    const localPubkey = localParticipant?.pubkey ?? currentPubkey;
+    const seen = new Set<string>();
+    const list: Array<{
+      pubkey: string;
+      displayName: string;
+      state: "listening" | "timeout";
+      resolveError?: string;
+    }> = [];
+    const append = (pk: string) => {
+      if (pk === localPubkey || seen.has(pk)) return;
+      seen.add(pk);
+      const p = session.participants.find((sp) => sp.pubkey === pk);
+      list.push({
+        pubkey: pk,
+        displayName: p?.displayName ?? "Participant",
+        state: phase,
+        resolveError: hostAgg.resolveErrors.get(pk),
+      });
+    };
+    hostAgg.waitingForPubkeys.forEach(append);
+    hostAgg.resolveErrors.forEach((_msg, pk) => append(pk));
+    return list;
+  }, [
+    isHost,
+    hostAgg.isWaiting,
+    hostAgg.waitingForPubkeys,
+    hostAgg.resolveErrors,
+    session.participants,
+    localParticipant?.pubkey,
+    currentPubkey,
+  ]);
+
 
   const connQualityColor =
     connQuality === "good" ? "bg-vessel-accent" :
@@ -747,17 +849,7 @@ export function StudioScreen({
             {session.participants.map((p) => {
               const isLocal = p.pubkey === currentPubkey;
               const remoteStream = isLocal ? undefined : liveTransport.remoteStreams.get(p.pubkey);
-              // Only flip to "live" once a frame has actually been decoded —
-              // a stream object is created the moment the publisher's header
-              // arrives, well before any payload bytes flow.
               const remoteIsLive = !isLocal && liveTransport.remoteReady.has(p.pubkey);
-              // Remote peers broadcast their mic/camera state on the signaling
-              // channel every few seconds. Use that as the source of truth so
-              // when a peer mutes or turns off their camera, every viewer sees
-              // the change reflected on their tile (badge + avatar fallback +
-              // silenced meter) instead of staring at a stale stream.
-              // Default the toggles to ON before we've heard the first beat
-              // so a freshly-joined peer doesn't briefly flash as muted.
               const peerPresence = isLocal ? null : presenceByPubkey.get(p.pubkey);
               const tileMicEnabled = isLocal
                 ? micEnabled
@@ -774,11 +866,6 @@ export function StudioScreen({
                   isConnecting={!isLocal && liveTransport.isConnected && !remoteIsLive}
                   micEnabled={tileMicEnabled}
                   cameraEnabled={tileCameraEnabled}
-                  // Local tile rides the real analyzer so the meter pulses
-                  // with the user's actual voice (and drops to 0 the instant
-                  // they hit mute). Remote tiles don't have a per-peer
-                  // analyzer yet, so they stay at a calm baseline when the
-                  // peer's mic is on and drop to 0 when they mute.
                   audioLevel={
                     isLocal
                       ? (micEnabled ? myMicLevel : 0)
@@ -837,10 +924,6 @@ export function StudioScreen({
             toast({ description: "Sent a polite mute request." });
           }}
           onLowerHand={(pubkey) => {
-            // When the host clicks the inline ✕ on their *own* raised
-            // row, just toggle locally — there's no point publishing a
-            // host→self moderation event (we'd ignore our own signal
-            // via the loopback guard anyway).
             if (pubkey === currentPubkey) {
               if (callSignal.handRaised) callSignal.toggleHand();
               return;
@@ -870,9 +953,18 @@ export function StudioScreen({
           open={showSessionComplete}
           isHost={isHost}
           hostName={session.hostName}
+          sessionTitle={session.title}
+          sessionDate={sessionEndedAtMs ? new Date(sessionEndedAtMs) : new Date()}
           syncStatus={recording.syncStatus}
           syncProgress={recording.syncProgress}
           tracks={sessionCompleteTracks}
+          expectedParticipants={
+            isHost &&
+            (recording.syncStatus === "complete" || recording.syncStatus === "partial-failure")
+              ? expectedParticipants
+              : []
+          }
+          personalArchive={personalArchive}
           onViewVault={handleViewVault}
           onStartNew={handleStartNew}
           onClose={handleGuestClose}

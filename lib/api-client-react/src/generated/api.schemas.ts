@@ -136,6 +136,14 @@ export interface Recording {
   mimeType: string;
   blobHash?: string | null;
   blobUrl?: string | null;
+  audioBlobHash?: string | null;
+  audioBlobUrl?: string | null;
+  audioSizeBytes?: number | null;
+  audioMimeType?: string | null;
+  videoBlobHash?: string | null;
+  videoBlobUrl?: string | null;
+  videoSizeBytes?: number | null;
+  videoMimeType?: string | null;
   status: RecordingStatus;
   createdAt: string;
 }
@@ -159,6 +167,14 @@ export interface CreateRecordingBody {
   mimeType: string;
   blobHash?: string | null;
   blobUrl?: string | null;
+  audioBlobHash?: string | null;
+  audioBlobUrl?: string | null;
+  audioSizeBytes?: number | null;
+  audioMimeType?: string | null;
+  videoBlobHash?: string | null;
+  videoBlobUrl?: string | null;
+  videoSizeBytes?: number | null;
+  videoMimeType?: string | null;
   status: CreateRecordingBodyStatus;
 }
 

@@ -18,7 +18,7 @@ const DEFAULT_MIME_TYPES = [
   "audio/webm",
 ];
 
-function pickSupportedMimeType(preferred?: string[]): string {
+export function pickSupportedMimeType(preferred?: string[]): string {
   const candidates = preferred && preferred.length ? preferred : DEFAULT_MIME_TYPES;
   if (typeof MediaRecorder === "undefined") return "";
   for (const m of candidates) {
@@ -26,6 +26,12 @@ function pickSupportedMimeType(preferred?: string[]): string {
   }
   return "";
 }
+
+export const __test__ = {
+  DEFAULT_MIME_TYPES,
+  AUDIO_MIME_PREFERENCES: () => AUDIO_MIME_PREFERENCES,
+  VIDEO_ONLY_MIME_PREFERENCES: () => VIDEO_ONLY_MIME_PREFERENCES,
+};
 
 export class ChunkedRecorder {
   private mediaRecorder: MediaRecorder | null = null;
@@ -138,6 +144,13 @@ export class ChunkedRecorder {
     return this.chunks.length;
   }
 
+  /** Snapshot of the chunk at `index`, or null if out of bounds. Public,
+   *  typed accessor used by the upload pipeline so callers don't have to
+   *  reach into private state via type escapes. */
+  getChunkAt(index: number): Blob | null {
+    return this.chunks[index] ?? null;
+  }
+
   getFinalBlob(): Blob | null {
     return this.finalBlob;
   }
@@ -145,5 +158,243 @@ export class ChunkedRecorder {
   getDurationSeconds(): number {
     if (this.startTime === 0) return 0;
     return Math.max(0, Math.round((Date.now() - this.startTime) / 1000));
+  }
+}
+
+// Dual-stream recorder: combined V+A + audio-only sibling + video-only
+// sibling, each on its own MediaRecorder. Sibling failures never abort
+// the combined path; no post-call transcoding required.
+
+export type DualRecorderResult = {
+  /** Combined video + audio blob. May be audio-only if no camera was on. */
+  combinedBlob: Blob;
+  combinedMimeType: string;
+  combinedSizeBytes: number;
+  /** Audio-only sibling blob. Null when no mic track was on, when the
+   *  audio-only recorder failed to initialize, or when the audio recorder
+   *  errored mid-call. The combined blob is always returned regardless. */
+  audioBlob: Blob | null;
+  audioMimeType: string | null;
+  audioSizeBytes: number;
+  /** Video-only sibling blob. A real video stream WITHOUT audio bytes —
+   *  recorded by a third MediaRecorder fed only the camera tracks. Null
+   *  when there's no camera, when the video-only recorder failed, or when
+   *  the browser doesn't support a video-only mime type. The combined
+   *  blob is unaffected either way. */
+  videoOnlyBlob: Blob | null;
+  videoOnlyMimeType: string | null;
+  videoOnlySizeBytes: number;
+  /** True when the source stream had a video track at start. Drives the
+   *  "Video + Audio" vs "Audio only" copy in the UI. */
+  hasVideo: boolean;
+  durationSeconds: number;
+  combinedChunkCount: number;
+  audioChunkCount: number;
+  videoOnlyChunkCount: number;
+  /** True when the audio-only recorder ran for the full duration. False
+   *  when it either never started or errored before stop(). */
+  audioRecordingOk: boolean;
+  /** True when the video-only recorder ran for the full duration. */
+  videoRecordingOk: boolean;
+};
+
+const AUDIO_MIME_PREFERENCES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+];
+
+// Try no-audio codec strings first so the container holds video bytes only.
+const VIDEO_ONLY_MIME_PREFERENCES = [
+  "video/webm;codecs=vp9",
+  "video/webm;codecs=vp8",
+  "video/webm",
+];
+
+/** Combined recorder + best-effort audio-only and video-only siblings.
+ *  Top-level listeners forward only the combined stream; sibling listeners
+ *  use `onAudio` / `onVideoOnly`. */
+export class DualChunkedRecorder {
+  private readonly combined = new ChunkedRecorder();
+  private audioOnly: ChunkedRecorder | null = null;
+  private videoOnly: ChunkedRecorder | null = null;
+  private audioStream: MediaStream | null = null;
+  private videoStream: MediaStream | null = null;
+  private hasVideo = false;
+  private audioStarted = false;
+  private videoStarted = false;
+
+  static isSupported(): boolean {
+    return ChunkedRecorder.isSupported();
+  }
+
+  /** Subscribe to the combined recorder's event stream. */
+  on(listener: RecorderListener): () => void {
+    return this.combined.on(listener);
+  }
+
+  /** Subscribe to the audio-only recorder's event stream. Safe to call
+   *  before start; the listener is buffered and attached when (and if) the
+   *  audio recorder initializes successfully. */
+  onAudio(listener: RecorderListener): () => void {
+    if (this.audioOnly) return this.audioOnly.on(listener);
+    this.pendingAudioListeners.push(listener);
+    return () => {
+      const i = this.pendingAudioListeners.indexOf(listener);
+      if (i >= 0) this.pendingAudioListeners.splice(i, 1);
+    };
+  }
+  private pendingAudioListeners: RecorderListener[] = [];
+
+  /** Subscribe to the video-only recorder's event stream. Same buffering
+   *  semantics as `onAudio`. */
+  onVideoOnly(listener: RecorderListener): () => void {
+    if (this.videoOnly) return this.videoOnly.on(listener);
+    this.pendingVideoListeners.push(listener);
+    return () => {
+      const i = this.pendingVideoListeners.indexOf(listener);
+      if (i >= 0) this.pendingVideoListeners.splice(i, 1);
+    };
+  }
+  private pendingVideoListeners: RecorderListener[] = [];
+
+  start(options: RecorderOptions): void {
+    const { stream } = options;
+    const videoTracks = stream.getVideoTracks();
+    const audioTracks = stream.getAudioTracks();
+    this.hasVideo = videoTracks.length > 0;
+
+    // Combined recorder — required.
+    this.combined.start(options);
+
+    // Audio-only sibling (best-effort).
+    if (audioTracks.length > 0) {
+      try {
+        const audioStream = new MediaStream(audioTracks);
+        const rec = new ChunkedRecorder();
+        for (const l of this.pendingAudioListeners) rec.on(l);
+        this.pendingAudioListeners = [];
+        rec.start({
+          stream: audioStream,
+          timesliceMs: options.timesliceMs,
+          preferredMimeTypes: AUDIO_MIME_PREFERENCES,
+        });
+        this.audioOnly = rec;
+        this.audioStream = audioStream;
+        this.audioStarted = true;
+      } catch (err) {
+        console.warn("Audio-only recorder failed to start; continuing with combined only.", err);
+        this.audioOnly = null;
+        this.audioStream = null;
+        this.audioStarted = false;
+      }
+    }
+
+    // Video-only sibling (best-effort).
+    if (videoTracks.length > 0) {
+      try {
+        const videoStream = new MediaStream(videoTracks);
+        const rec = new ChunkedRecorder();
+        for (const l of this.pendingVideoListeners) rec.on(l);
+        this.pendingVideoListeners = [];
+        rec.start({
+          stream: videoStream,
+          timesliceMs: options.timesliceMs,
+          preferredMimeTypes: VIDEO_ONLY_MIME_PREFERENCES,
+        });
+        this.videoOnly = rec;
+        this.videoStream = videoStream;
+        this.videoStarted = true;
+      } catch (err) {
+        console.warn("Video-only recorder failed to start; continuing without it.", err);
+        this.videoOnly = null;
+        this.videoStream = null;
+        this.videoStarted = false;
+      }
+    }
+  }
+
+  /** Stop all recorders and resolve with their blobs. The audio/video-only
+   *  blobs are null when their respective paths were never started or
+   *  errored mid-call. */
+  async stop(): Promise<DualRecorderResult> {
+    const combinedPromise = this.combined.stop();
+    const audioPromise: Promise<Blob | null> = this.audioOnly
+      ? this.audioOnly.stop().catch((err) => {
+          console.warn("Audio-only recorder stop() failed", err);
+          return null;
+        })
+      : Promise.resolve(null);
+    const videoOnlyPromise: Promise<Blob | null> = this.videoOnly
+      ? this.videoOnly.stop().catch((err) => {
+          console.warn("Video-only recorder stop() failed", err);
+          return null;
+        })
+      : Promise.resolve(null);
+
+    const [combinedBlob, audioBlob, videoOnlyBlob] = await Promise.all([
+      combinedPromise,
+      audioPromise,
+      videoOnlyPromise,
+    ]);
+
+    // Release the synthetic streams so the underlying tracks aren't
+    // double-held; the original local stream still owns the actual tracks.
+    this.audioStream = null;
+    this.videoStream = null;
+
+    const combinedMime = combinedBlob.type || "video/webm";
+    const audioRec = this.audioOnly;
+    const audioMime = audioBlob ? audioBlob.type || (audioRec?.getFinalBlob()?.type ?? "audio/webm") : null;
+    const videoRec = this.videoOnly;
+    const videoOnlyMime = videoOnlyBlob
+      ? videoOnlyBlob.type || (videoRec?.getFinalBlob()?.type ?? "video/webm")
+      : null;
+
+    return {
+      combinedBlob,
+      combinedMimeType: combinedMime,
+      combinedSizeBytes: combinedBlob.size,
+      audioBlob,
+      audioMimeType: audioMime,
+      audioSizeBytes: audioBlob ? audioBlob.size : 0,
+      videoOnlyBlob,
+      videoOnlyMimeType: videoOnlyMime,
+      videoOnlySizeBytes: videoOnlyBlob ? videoOnlyBlob.size : 0,
+      hasVideo: this.hasVideo,
+      durationSeconds: this.combined.getDurationSeconds(),
+      combinedChunkCount: this.combined.getChunkCount(),
+      audioChunkCount: audioRec?.getChunkCount() ?? 0,
+      videoOnlyChunkCount: videoRec?.getChunkCount() ?? 0,
+      audioRecordingOk: this.audioStarted && !!audioBlob,
+      videoRecordingOk: this.videoStarted && !!videoOnlyBlob,
+    };
+  }
+
+  getStatus(): "idle" | "recording" | "stopped" {
+    return this.combined.getStatus();
+  }
+
+  getDurationSeconds(): number {
+    return this.combined.getDurationSeconds();
+  }
+
+  /** Underlying combined recorder — exposed so `useRecording` can reach the
+   *  internal `chunks` array for incremental slice uploads (mirrors the
+   *  existing single-recorder behavior). */
+  getCombinedRecorder(): ChunkedRecorder {
+    return this.combined;
+  }
+
+  /** Underlying audio-only recorder, or null when audio recording was not
+   *  started. Same shape as the combined recorder so the upload queue can
+   *  treat both uniformly. */
+  getAudioRecorder(): ChunkedRecorder | null {
+    return this.audioOnly;
+  }
+
+  /** Underlying video-only recorder, or null when no camera was attached.
+   *  Local-only by design — exposed for diagnostics, not for upload. */
+  getVideoOnlyRecorder(): ChunkedRecorder | null {
+    return this.videoOnly;
   }
 }

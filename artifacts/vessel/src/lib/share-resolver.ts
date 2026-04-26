@@ -16,15 +16,30 @@ import {
  * key from the URL fragment. Pure-client; nothing is logged or POSTed.
  */
 
+/** A single per-stream blob descriptor inside a recipient track. */
+export type RecipientStream = {
+  url: string | null;
+  hash: string | null;
+  sizeBytes: number;
+  mimeType: string;
+};
+
 export type RecipientTrack = {
   recordingId: string;
   participantName: string;
   participantPubkey: string;
   durationSeconds: number;
+  /** Combined V+A blob's size. Mirrored at top level for backward
+   *  compatibility with v=1 recipients that only knew one stream. */
   sizeBytes: number;
   mimeType: string;
   url: string | null;
   hash: string | null;
+  /** Audio-only sibling blob (v≥2 manifests). Null when not present. */
+  audio: RecipientStream | null;
+  /** Video-only sibling blob (v≥3 manifests). Null when not present (legacy
+   *  manifests, no camera, or video-only sync failed on the host). */
+  video: RecipientStream | null;
   eventId: string | null;
 };
 
@@ -39,6 +54,44 @@ export type RecipientManifest = {
   /** When set, the URL was a per-track scope and only matching tracks are present. */
   scopedToTrackId?: string;
 };
+
+/** Pure: normalize one raw track entry from a v=1/2/3 manifest into a
+ *  RecipientTrack. v=1 carries only `{url, hash}`; v=2 adds `audio`; v=3
+ *  adds `video`. Older shapes parse cleanly here with safe defaults. */
+export function parseManifestTrack(raw: unknown): RecipientTrack {
+  const t = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const rawAudio = t.audio && typeof t.audio === "object" ? (t.audio as Record<string, unknown>) : null;
+  const audio: RecipientStream | null = rawAudio
+    ? {
+        url: rawAudio.url ? String(rawAudio.url) : null,
+        hash: rawAudio.hash ? String(rawAudio.hash) : null,
+        sizeBytes: Number(rawAudio.sizeBytes ?? 0),
+        mimeType: String(rawAudio.mimeType ?? "audio/webm"),
+      }
+    : null;
+  const rawVideo = t.video && typeof t.video === "object" ? (t.video as Record<string, unknown>) : null;
+  const video: RecipientStream | null = rawVideo
+    ? {
+        url: rawVideo.url ? String(rawVideo.url) : null,
+        hash: rawVideo.hash ? String(rawVideo.hash) : null,
+        sizeBytes: Number(rawVideo.sizeBytes ?? 0),
+        mimeType: String(rawVideo.mimeType ?? "video/webm"),
+      }
+    : null;
+  return {
+    recordingId: String(t.recordingId ?? ""),
+    participantName: String(t.participantName ?? "Unknown"),
+    participantPubkey: String(t.participantPubkey ?? ""),
+    durationSeconds: Number(t.durationSeconds ?? 0),
+    sizeBytes: Number(t.sizeBytes ?? 0),
+    mimeType: String(t.mimeType ?? "application/octet-stream"),
+    url: t.url ? String(t.url) : null,
+    hash: t.hash ? String(t.hash) : null,
+    audio,
+    video,
+    eventId: t.eventId ? String(t.eventId) : null,
+  };
+}
 
 export type ShareResolveErrorCode =
   | "missing_key"
@@ -281,19 +334,7 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
     throw new ShareResolveError("bad_format", "This archive looks corrupted.");
   }
 
-  let tracks = (body.tracks as any[]).map(
-    (t): RecipientTrack => ({
-      recordingId: String(t.recordingId ?? ""),
-      participantName: String(t.participantName ?? "Unknown"),
-      participantPubkey: String(t.participantPubkey ?? ""),
-      durationSeconds: Number(t.durationSeconds ?? 0),
-      sizeBytes: Number(t.sizeBytes ?? 0),
-      mimeType: String(t.mimeType ?? "application/octet-stream"),
-      url: t.url ? String(t.url) : null,
-      hash: t.hash ? String(t.hash) : null,
-      eventId: t.eventId ? String(t.eventId) : null,
-    }),
-  );
+  let tracks = (body.tracks as unknown[]).map(parseManifestTrack);
 
   if (trackId) {
     tracks = tracks.filter((t) => t.recordingId === trackId);

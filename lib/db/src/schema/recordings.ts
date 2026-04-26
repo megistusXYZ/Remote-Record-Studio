@@ -13,6 +13,22 @@ export const recordingsTable = pgTable("recordings", {
   mimeType: text("mime_type").notNull().default("audio/webm"),
   blobHash: text("blob_hash"),
   blobUrl: text("blob_url"),
+  // Audio-only sibling blob recorded in parallel by a second MediaRecorder.
+  // Lets the vault offer an honest "Audio only" download — no transcoding —
+  // alongside the combined V+A blob above. Always nullable: legacy rows and
+  // single-stream guests (no camera) keep working with just the main blob.
+  audioBlobHash: text("audio_blob_hash"),
+  audioBlobUrl: text("audio_blob_url"),
+  audioSizeBytes: integer("audio_size_bytes"),
+  audioMimeType: text("audio_mime_type"),
+  // Video-only sibling blob recorded in parallel by a third MediaRecorder.
+  // Same rationale as the audio sibling: the vault can offer a real "Video
+  // only" download (no audio bytes, no transcoding). Nullable for legacy
+  // rows and audio-only sessions.
+  videoBlobHash: text("video_blob_hash"),
+  videoBlobUrl: text("video_blob_url"),
+  videoSizeBytes: integer("video_size_bytes"),
+  videoMimeType: text("video_mime_type"),
   status: text("status").notNull().default("ready"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
