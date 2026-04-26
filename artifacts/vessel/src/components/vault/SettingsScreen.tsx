@@ -19,7 +19,6 @@ import {
   setStoredJoinWithMic,
   setStoredJoinWithCamera,
 } from "../../hooks/use-join-prefs";
-import { Switch } from "@/components/ui/switch";
 import {
   AVATAR_MARKS,
   type AvatarMarkId,
@@ -633,9 +632,13 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 }
 
 /**
- * "How you join sessions" — power-user defaults that mirror the
- * inline lobby toggles on each ParticipantCard. Stored under
+ * "How you join sessions" — defaults that mirror the inline lobby
+ * toggles on each ParticipantCard. Stored under
  * `vessel_join_with_mic` / `vessel_join_with_camera`.
+ *
+ * Uses a segmented On/Off control instead of a single switch so both
+ * states are *always visible* — fixes the "where's the toggle?"
+ * problem when a tiny dark switch in OFF state read as disabled.
  */
 function JoinDefaultsSection() {
   const joinWithMic = useStoredJoinWithMic();
@@ -647,35 +650,33 @@ function JoinDefaultsSection() {
         How you join sessions
       </label>
       <p className="text-xs text-vessel-text-muted">
-        Defaults that apply when you enter a recording. You can still
-        toggle in the lobby or with the in-call controls.
+        Choose what's on the moment you enter a recording. You can
+        always change your mind in the lobby or once you're in.
       </p>
-      <div className="mt-2 rounded-lg bg-vessel-bg-base border border-vessel-border divide-y divide-vessel-border">
+      <div className="mt-2 rounded-lg bg-vessel-bg-base border border-vessel-border divide-y divide-vessel-border overflow-hidden">
         <JoinDefaultRow
-          label="Join with microphone on"
-          description={
-            joinWithMic
-              ? "You'll arrive unmuted — others hear you immediately."
-              : "You'll arrive muted — unmute when you're ready."
-          }
+          title="Microphone"
+          onLabel="Unmuted"
+          offLabel="Muted"
+          onHint="Heard right away."
+          offHint="You decide when to unmute."
           checked={joinWithMic}
           onCheckedChange={setStoredJoinWithMic}
-          ActiveIcon={Mic}
-          MutedIcon={MicOff}
-          testId="switch-join-with-mic"
+          OnIcon={Mic}
+          OffIcon={MicOff}
+          testId="join-with-mic"
         />
         <JoinDefaultRow
-          label="Join with camera on"
-          description={
-            joinWithCamera
-              ? "Your camera turns on as soon as you enter."
-              : "Your camera stays off until you enable it."
-          }
+          title="Camera"
+          onLabel="On"
+          offLabel="Off"
+          onHint="Camera starts when you enter."
+          offHint="Camera stays off until you turn it on."
           checked={joinWithCamera}
           onCheckedChange={setStoredJoinWithCamera}
-          ActiveIcon={Video}
-          MutedIcon={VideoOff}
-          testId="switch-join-with-camera"
+          OnIcon={Video}
+          OffIcon={VideoOff}
+          testId="join-with-camera"
         />
       </div>
     </div>
@@ -683,52 +684,114 @@ function JoinDefaultsSection() {
 }
 
 function JoinDefaultRow({
-  label,
-  description,
+  title,
+  onLabel,
+  offLabel,
+  onHint,
+  offHint,
   checked,
   onCheckedChange,
-  ActiveIcon,
-  MutedIcon,
+  OnIcon,
+  OffIcon,
   testId,
 }: {
-  label: string;
-  description: string;
+  title: string;
+  onLabel: string;
+  offLabel: string;
+  onHint: string;
+  offHint: string;
   checked: boolean;
   onCheckedChange: (next: boolean) => void;
-  ActiveIcon: typeof Mic;
-  MutedIcon: typeof Mic;
+  OnIcon: typeof Mic;
+  OffIcon: typeof Mic;
   testId: string;
 }) {
-  const Icon = checked ? ActiveIcon : MutedIcon;
+  const Icon = checked ? OnIcon : OffIcon;
+  const hint = checked ? onHint : offHint;
+
   return (
-    <div className="flex items-center justify-between gap-3 p-3">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3">
       <div className="flex items-center gap-3 min-w-0">
-        <div
-          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border ${
-            checked
-              ? "bg-vessel-bg-elevated border-vessel-border"
-              : "bg-vessel-red/10 border-vessel-red/20"
-          }`}
-        >
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border bg-vessel-bg-elevated border-vessel-border">
           <Icon
             className={`w-4 h-4 ${
-              checked ? "text-vessel-accent" : "text-vessel-red"
+              checked ? "text-vessel-accent" : "text-vessel-text-muted"
             }`}
           />
         </div>
         <div className="min-w-0">
           <div className="text-sm font-medium text-vessel-text-primary">
-            {label}
+            {title}
           </div>
-          <div className="text-xs text-vessel-text-muted">{description}</div>
+          <div className="text-xs text-vessel-text-muted">{hint}</div>
         </div>
       </div>
-      <Switch
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        data-testid={testId}
-        aria-label={label}
-      />
+
+      {/* Segmented On/Off — both states always visible */}
+      <div
+        role="radiogroup"
+        aria-label={`${title} when joining`}
+        className="
+          inline-flex shrink-0 self-start sm:self-auto
+          rounded-full border border-vessel-border bg-vessel-bg-elevated
+          p-0.5
+        "
+      >
+        <SegmentedOption
+          selected={checked}
+          onClick={() => onCheckedChange(true)}
+          label={onLabel}
+          testId={`button-${testId}-on`}
+          tone="accent"
+        />
+        <SegmentedOption
+          selected={!checked}
+          onClick={() => onCheckedChange(false)}
+          label={offLabel}
+          testId={`button-${testId}-off`}
+          tone="muted"
+        />
+      </div>
     </div>
+  );
+}
+
+function SegmentedOption({
+  selected,
+  onClick,
+  label,
+  testId,
+  tone,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  label: string;
+  testId: string;
+  tone: "accent" | "muted";
+}) {
+  const selectedClasses =
+    tone === "accent"
+      ? "bg-vessel-accent text-vessel-bg-base shadow-sm"
+      : "bg-vessel-bg-base text-vessel-text-primary border border-vessel-border";
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onClick}
+      data-testid={testId}
+      className={`
+        min-w-[4.5rem] px-3 py-1.5 rounded-full text-xs font-semibold
+        transition-colors
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent
+        ${
+          selected
+            ? selectedClasses
+            : "text-vessel-text-muted hover:text-vessel-text-primary"
+        }
+      `}
+    >
+      {label}
+    </button>
   );
 }
