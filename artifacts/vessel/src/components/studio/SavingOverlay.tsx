@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { Check } from "lucide-react";
-import { getInitials, deriveAvatarColorFromPubkey } from "../../lib/identity";
+import { AvatarMark } from "../AvatarMark";
 
 export type SavingOverlayProps = {
   open: boolean;
@@ -45,18 +45,16 @@ export function SavingOverlay({
               {participants.map((p) => {
                 const prog = progressByParticipant[p.id] || { uploaded: 0, total: 100, done: false };
                 const pct = prog.total > 0 ? (prog.uploaded / prog.total) * 100 : 0;
-                const initials = getInitials(p.displayName);
-                const avatarColor = p.pubkey ? deriveAvatarColorFromPubkey(p.pubkey) : "#4a5568";
 
                 return (
                   <div key={p.id} className="flex items-center justify-between py-2">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-white/10"
-                        style={{ backgroundColor: avatarColor }}
-                      >
-                        <span className="text-white text-xs font-bold">{initials}</span>
-                      </div>
+                      <AvatarMark
+                        pubkey={p.pubkey ?? null}
+                        displayName={p.displayName}
+                        className="w-8 h-8 border border-white/10"
+                        initialsClassName="text-xs"
+                      />
                       <div className="text-sm">
                         <span className="font-medium text-vessel-text-primary mr-2">
                           {p.displayName}

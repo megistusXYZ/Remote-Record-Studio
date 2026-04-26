@@ -10,8 +10,6 @@ servers:
 tags:
   - name: health
     description: Health operations
-  - name: identity
-    description: User identity management
   - name: sessions
     description: Recording sessions
   - name: recordings
@@ -33,25 +31,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-
-  /identity:
-    post:
-      operationId: createIdentity
-      tags: [identity]
-      summary: Register or retrieve user identity
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateIdentityBody"
-      responses:
-        "200":
-          description: Identity created or fetched
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Identity"
 
   /sessions:
     get:
@@ -172,6 +151,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
+        "409":
+          description: Room is full — guest cannot join.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomFullError"
 
   /recordings:
     get:
@@ -304,41 +289,6 @@ components:
       required:
         - status
 
-    Identity:
-      type: object
-      properties:
-        id:
-          type: string
-        pubkey:
-          type: string
-        displayName:
-          type: string
-        email:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - pubkey
-        - displayName
-        - createdAt
-
-    CreateIdentityBody:
-      type: object
-      properties:
-        pubkey:
-          type: string
-        displayName:
-          type: string
-        email:
-          type: string
-          nullable: true
-      required:
-        - pubkey
-        - displayName
-
     Session:
       type: object
       properties:
@@ -357,6 +307,11 @@ components:
           type: string
         participantCount:
           type: integer
+        maxParticipants:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: Maximum number of participants allowed in the room (counts host + guests).
         participants:
           type: array
           items:
@@ -380,6 +335,7 @@ components:
         - status
         - inviteCode
         - participantCount
+        - maxParticipants
         - participants
         - createdAt
 
@@ -392,6 +348,11 @@ components:
           type: string
         hostName:
           type: string
+        maxParticipants:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: Optional room size cap chosen by the host. Defaults to 8 if omitted.
       required:
         - title
         - hostPubkey
@@ -405,6 +366,45 @@ components:
           enum: [waiting, live, ended]
         title:
           type: string
+        maxParticipants:
+          type: integer
+          minimum: 1
+          maximum: 25
+          description: New room size cap. Server clamps to be no less than the current participant count.
+
+    RoomFullPublicSession:
+      type: object
+      description: Minimal public-safe slice of session info returned with a 409 Room Full response so guests can see the host's name without leaking sensitive metadata.
+      properties:
+        title:
+          type: string
+        hostName:
+          type: string
+        participantCount:
+          type: integer
+        maxParticipants:
+          type: integer
+      required:
+        - title
+        - hostName
+        - participantCount
+        - maxParticipants
+
+    RoomFullError:
+      type: object
+      description: Returned when a guest tries to join a room that is at its participant cap.
+      properties:
+        error:
+          type: string
+          enum: [ROOM_FULL]
+        message:
+          type: string
+        session:
+          $ref: "#/components/schemas/RoomFullPublicSession"
+      required:
+        - error
+        - message
+        - session
 
     JoinSessionBody:
       type: object
@@ -466,6 +466,45 @@ components:
         blobUrl:
           type: string
           nullable: true
+        audioBlobHash:
+          type: string
+          nullable: true
+        audioBlobUrl:
+          type: string
+          nullable: true
+        audioSizeBytes:
+          type: integer
+          nullable: true
+        audioMimeType:
+          type: string
+          nullable: true
+        videoBlobHash:
+          type: string
+          nullable: true
+        videoBlobUrl:
+          type: string
+          nullable: true
+        videoSizeBytes:
+          type: integer
+          nullable: true
+        videoMimeType:
+          type: string
+          nullable: true
+        screenBlobHash:
+          type: string
+          nullable: true
+        screenBlobUrl:
+          type: string
+          nullable: true
+        screenSizeBytes:
+          type: integer
+          nullable: true
+        screenMimeType:
+          type: string
+          nullable: true
+        screenDurationSeconds:
+          type: integer
+          nullable: true
         status:
           type: string
           enum: [processing, ready, error]
@@ -506,6 +545,45 @@ components:
           nullable: true
         blobUrl:
           type: string
+          nullable: true
+        audioBlobHash:
+          type: string
+          nullable: true
+        audioBlobUrl:
+          type: string
+          nullable: true
+        audioSizeBytes:
+          type: integer
+          nullable: true
+        audioMimeType:
+          type: string
+          nullable: true
+        videoBlobHash:
+          type: string
+          nullable: true
+        videoBlobUrl:
+          type: string
+          nullable: true
+        videoSizeBytes:
+          type: integer
+          nullable: true
+        videoMimeType:
+          type: string
+          nullable: true
+        screenBlobHash:
+          type: string
+          nullable: true
+        screenBlobUrl:
+          type: string
+          nullable: true
+        screenSizeBytes:
+          type: integer
+          nullable: true
+        screenMimeType:
+          type: string
+          nullable: true
+        screenDurationSeconds:
+          type: integer
           nullable: true
         status:
           type: string

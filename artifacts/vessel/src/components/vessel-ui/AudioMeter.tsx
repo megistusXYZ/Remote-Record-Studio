@@ -6,12 +6,14 @@ interface AudioMeterProps extends React.HTMLAttributes<HTMLDivElement> {
   audioLevel?: number;
   barCount?: number;
   active?: boolean;
+  animated?: boolean;
 }
 
 export function AudioMeter({
   audioLevel = 0,
   barCount = 12,
   active = false,
+  animated = true,
   className,
   ...props
 }: AudioMeterProps) {
@@ -25,6 +27,8 @@ export function AudioMeter({
       {bars.map((_, i) => {
         const height = active ? 20 + Math.random() * 80 : 15;
         const animationDuration = 0.3 + Math.random() * 0.5;
+        const shouldAnimate = active && animated;
+        const staticHeight = active ? `${30 + ((i * 17) % 60)}%` : "15%";
 
         return (
           <motion.div
@@ -34,14 +38,14 @@ export function AudioMeter({
               active ? "bg-vessel-accent" : "bg-vessel-border-strong"
             )}
             animate={
-              active
+              shouldAnimate
                 ? {
                     height: ["20%", `${height}%`, "20%"],
                   }
-                : { height: "15%" }
+                : { height: staticHeight }
             }
             transition={
-              active
+              shouldAnimate
                 ? {
                     duration: animationDuration,
                     repeat: Infinity,

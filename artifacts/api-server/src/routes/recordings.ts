@@ -9,15 +9,22 @@ import {
   GetRecordingResponse,
   ListRecordingsResponseItem,
 } from "@workspace/api-zod";
+import {
+  getAuthPubkey,
+  rejectIfPubkeyMismatch,
+  requireSignedRequest,
+} from "../middlewares/require-signed-request";
 
 const router: IRouter = Router();
 
-router.get("/recordings", async (req, res): Promise<void> => {
+router.get("/recordings", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = ListRecordingsQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  if (rejectIfPubkeyMismatch(req, res, params.data.pubkey)) return;
 
   const conditions = [eq(recordingsTable.ownerPubkey, params.data.pubkey)];
   if (params.data.sessionId) {
@@ -33,12 +40,14 @@ router.get("/recordings", async (req, res): Promise<void> => {
   res.json(recordings.map((r) => ListRecordingsResponseItem.parse(r)));
 });
 
-router.post("/recordings", async (req, res): Promise<void> => {
+router.post("/recordings", requireSignedRequest(), async (req, res): Promise<void> => {
   const parsed = CreateRecordingBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  if (rejectIfPubkeyMismatch(req, res, parsed.data.ownerPubkey)) return;
 
   const [recording] = await db
     .insert(recordingsTable)
@@ -52,6 +61,19 @@ router.post("/recordings", async (req, res): Promise<void> => {
       mimeType: parsed.data.mimeType,
       blobHash: parsed.data.blobHash ?? null,
       blobUrl: parsed.data.blobUrl ?? null,
+      audioBlobHash: parsed.data.audioBlobHash ?? null,
+      audioBlobUrl: parsed.data.audioBlobUrl ?? null,
+      audioSizeBytes: parsed.data.audioSizeBytes ?? null,
+      audioMimeType: parsed.data.audioMimeType ?? null,
+      videoBlobHash: parsed.data.videoBlobHash ?? null,
+      videoBlobUrl: parsed.data.videoBlobUrl ?? null,
+      videoSizeBytes: parsed.data.videoSizeBytes ?? null,
+      videoMimeType: parsed.data.videoMimeType ?? null,
+      screenBlobHash: parsed.data.screenBlobHash ?? null,
+      screenBlobUrl: parsed.data.screenBlobUrl ?? null,
+      screenSizeBytes: parsed.data.screenSizeBytes ?? null,
+      screenMimeType: parsed.data.screenMimeType ?? null,
+      screenDurationSeconds: parsed.data.screenDurationSeconds ?? null,
       status: parsed.data.status,
     })
     .returning();
@@ -59,7 +81,7 @@ router.post("/recordings", async (req, res): Promise<void> => {
   res.status(201).json(GetRecordingResponse.parse(recording));
 });
 
-router.get("/recordings/:recordingId", async (req, res): Promise<void> => {
+router.get("/recordings/:recordingId", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = GetRecordingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -77,13 +99,31 @@ router.get("/recordings/:recordingId", async (req, res): Promise<void> => {
     return;
   }
 
+  // Only the owner may read recording metadata. We return 404 for non-owners
+  // to avoid leaking the existence of a recording id to outsiders.
+  if (recording.ownerPubkey !== getAuthPubkey(req)) {
+    res.status(404).json({ error: "Recording not found" });
+    return;
+  }
+
   res.json(GetRecordingResponse.parse(recording));
 });
 
-router.delete("/recordings/:recordingId", async (req, res): Promise<void> => {
+router.delete("/recordings/:recordingId", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = DeleteRecordingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [recording] = await db
+    .select()
+    .from(recordingsTable)
+    .where(eq(recordingsTable.id, params.data.recordingId))
+    .limit(1);
+
+  if (recording && recording.ownerPubkey !== getAuthPubkey(req)) {
+    res.status(404).json({ error: "Recording not found" });
     return;
   }
 

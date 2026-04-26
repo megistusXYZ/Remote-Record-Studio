@@ -1,4 +1,4 @@
-import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff } from "lucide-react";
+import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff, UserPlus } from "lucide-react";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -28,6 +28,24 @@ export type ControlBarProps = {
   onSelectCamera: (id: string) => void;
   onSelectMic: (id: string) => void;
   previewStream?: MediaStream | null;
+  /** Roster sidepanel toggle. When omitted the button is hidden. */
+  rosterOpen?: boolean;
+  onToggleRoster?: () => void;
+  /** Number of participants on the call (host + guests). Drives the badge. */
+  rosterCount?: number;
+  /** Number of raised hands among other participants — surfaced as an
+   *  attention-grabbing accent on the roster button. */
+  raisedHandsCount?: number;
+  /** Local raise-hand state (host AND guests). */
+  handRaised?: boolean;
+  onToggleHand?: () => void;
+  /** Screen-share controls. The button is hidden entirely when
+   *  `screenShareSupported` is false (mobile / unsupported browsers).
+   *  When omitted, the button is also hidden — keeps the control bar
+   *  unchanged for callers that haven't opted into the feature yet. */
+  screenShareSupported?: boolean;
+  isScreenSharing?: boolean;
+  onToggleScreenShare?: () => void;
 };
 
 function formatSeconds(s: number): string {
@@ -61,6 +79,15 @@ export function ControlBar({
   onSelectCamera,
   onSelectMic,
   previewStream,
+  rosterOpen,
+  onToggleRoster,
+  rosterCount,
+  raisedHandsCount = 0,
+  handRaised = false,
+  onToggleHand,
+  screenShareSupported = false,
+  isScreenSharing = false,
+  onToggleScreenShare,
 }: ControlBarProps) {
   const handleLeave = () => {
     if (window.confirm("Leave this session?")) {
@@ -184,19 +211,133 @@ export function ControlBar({
             </TooltipTrigger>
             <TooltipContent>{cameraEnabled ? "Turn off camera" : "Turn on camera"}</TooltipContent>
           </Tooltip>
+
+          {/* Raise hand — open to host AND guests. Accent fills the icon when
+              the hand is up. Press H elsewhere to toggle the same state. */}
+          {onToggleHand && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="button-toggle-hand"
+                  onClick={onToggleHand}
+                  aria-pressed={handRaised}
+                  aria-label={handRaised ? "Lower hand" : "Raise hand"}
+                  className={cn(
+                    "w-14 h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    handRaised
+                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
+                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
+                  )}
+                >
+                  <Hand className="w-6 h-6" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{handRaised ? "Lower hand (H)" : "Raise hand (H)"}</TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Share screen — desktop only. Hidden on mobile / tablet via the
+              `hidden md:flex` wrapper since browser screen-share APIs aren't
+              reliable on touch devices. The accent ring fills when sharing. */}
+          {onToggleScreenShare && screenShareSupported && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="button-toggle-screen-share"
+                  onClick={onToggleScreenShare}
+                  aria-pressed={isScreenSharing}
+                  aria-label={isScreenSharing ? "Stop sharing screen" : "Share screen"}
+                  className={cn(
+                    "hidden md:flex w-14 h-14 rounded-full border transition-all items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    isScreenSharing
+                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
+                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
+                  )}
+                >
+                  {isScreenSharing ? (
+                    <MonitorOff className="w-6 h-6" />
+                  ) : (
+                    <MonitorUp className="w-6 h-6" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isScreenSharing ? "Stop sharing screen" : "Share screen"}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {/* Right Group */}
         <div className="flex-1 flex items-center gap-2 justify-end">
-          <VesselButton
-            variant="ghost"
-            size="sm"
-            onClick={onOpenInvite}
-            data-testid="button-invite-from-studio"
-            className="hidden sm:inline-flex"
-          >
-            Invite
-          </VesselButton>
+          {onToggleRoster && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onToggleRoster}
+                  aria-pressed={!!rosterOpen}
+                  aria-label={rosterOpen ? "Close room panel" : "Open room panel"}
+                  data-testid="button-toggle-roster"
+                  className={cn(
+                    "relative w-10 h-10 rounded-full border flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    rosterOpen
+                      ? "bg-vessel-accent/15 border-vessel-accent/40 text-vessel-accent"
+                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-secondary",
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  {typeof rosterCount === "number" && rosterCount > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-vessel-bg-base border border-vessel-border text-[10px] font-mono-vessel text-vessel-text-primary flex items-center justify-center"
+                      data-testid="badge-roster-count"
+                    >
+                      {rosterCount}
+                    </span>
+                  )}
+                  {raisedHandsCount > 0 && (
+                    <span className="absolute -bottom-1 -right-1 w-4 h-4 pointer-events-none">
+                      {/* Subtle ping ring keeps the badge feeling "live"
+                          and draws the eye even when the floating
+                          notification pill is hidden (e.g. while the
+                          room panel is open). */}
+                      <span className="absolute inset-0 rounded-full bg-vessel-amber/50 animate-ping" />
+                      <span
+                        className="relative w-4 h-4 rounded-full bg-vessel-amber border border-vessel-bg-base flex items-center justify-center"
+                        data-testid="badge-raised-hands"
+                        aria-label={`${raisedHandsCount} hand${raisedHandsCount === 1 ? "" : "s"} raised`}
+                      >
+                        <Hand className="w-2.5 h-2.5 text-vessel-bg-base" />
+                      </span>
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {rosterOpen ? "Close room panel" : "Open room panel"}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {/* Mobile: icon-only so the action is reachable without leaving
+              the call. Desktop: full label for clarity. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <VesselButton
+                variant="ghost"
+                size="sm"
+                onClick={onOpenInvite}
+                data-testid="button-invite-from-studio"
+                aria-label="Invite guests"
+                className="px-2.5 sm:px-3"
+              >
+                <UserPlus className="w-4 h-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Invite</span>
+              </VesselButton>
+            </TooltipTrigger>
+            <TooltipContent>Invite guests</TooltipContent>
+          </Tooltip>
           <VesselButton
             variant="ghost"
             size="sm"

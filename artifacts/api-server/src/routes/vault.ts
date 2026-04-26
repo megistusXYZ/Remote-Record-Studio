@@ -10,15 +10,21 @@ import {
   ListSessionsResponseItem,
 } from "@workspace/api-zod";
 import { participantsTable } from "@workspace/db";
+import {
+  rejectIfPubkeyMismatch,
+  requireSignedRequest,
+} from "../middlewares/require-signed-request";
 
 const router: IRouter = Router();
 
-router.get("/vault/summary", async (req, res): Promise<void> => {
+router.get("/vault/summary", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = GetVaultSummaryQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  if (rejectIfPubkeyMismatch(req, res, params.data.pubkey)) return;
 
   const recordings = await db
     .select()
@@ -50,12 +56,14 @@ router.get("/vault/summary", async (req, res): Promise<void> => {
   res.json(GetVaultSummaryResponse.parse(summary));
 });
 
-router.get("/vault/recent", async (req, res): Promise<void> => {
+router.get("/vault/recent", requireSignedRequest(), async (req, res): Promise<void> => {
   const params = GetRecentActivityQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  if (rejectIfPubkeyMismatch(req, res, params.data.pubkey)) return;
 
   const limit = params.data.limit ?? 5;
 

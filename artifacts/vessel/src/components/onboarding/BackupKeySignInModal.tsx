@@ -9,9 +9,10 @@ interface BackupKeySignInModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  onUseNostr?: () => void;
 }
 
-export function BackupKeySignInModal({ open, onOpenChange, onSuccess }: BackupKeySignInModalProps) {
+export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr }: BackupKeySignInModalProps) {
   const { importFromBackup } = useIdentity();
   const [displayName, setDisplayName] = useState("");
   const [backupKey, setBackupKey] = useState("");
@@ -79,7 +80,7 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess }: BackupKe
                 onChange={(e) => setBackupKey(e.target.value)}
                 placeholder="nsec1..."
                 className="font-mono-vessel resize-none bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
-                rows={3}
+                rows={2}
               />
               <p className="text-xs text-vessel-text-muted">
                 Your backup key starts with 'nsec1' and is the only way to recover a studio on a new device.
@@ -105,6 +106,26 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess }: BackupKe
             </VesselButton>
           </DialogFooter>
         </form>
+
+        {onUseNostr && (
+          <div className="mt-4 pt-5 border-t border-vessel-border flex items-center justify-between gap-4">
+            <span className="text-xs text-vessel-text-muted">
+              Have a Nostr extension instead?
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                onUseNostr();
+              }}
+              className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-vessel-accent/10 border border-vessel-accent/30 text-vessel-accent hover:bg-vessel-accent/15 hover:border-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent shrink-0"
+              data-testid="link-switch-to-nostr"
+            >
+              <span>Sign in with Nostr</span>
+              <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

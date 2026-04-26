@@ -1,11 +1,21 @@
-import { useEffect, useCallback } from "react";
-import { useCreateIdentity } from "@workspace/api-client-react";
+import { useEffect, useCallback, useRef } from "react";
 import { useIdentityStore } from "../store/identityStore";
 import {
   createNewIdentity as createNewIdentityLib,
   createGuestIdentity as createGuestIdentityLib,
   importIdentityFromBackup as importIdentityFromBackupLib,
+  signInWithExtension as signInWithExtensionLib,
+  signInWithRemoteSigner as signInWithRemoteSignerLib,
+  isNostrExtensionAvailable,
+  persistDisplayNameChange,
+  tearDownSigner,
   type VesselIdentity,
+} from "../lib/identity";
+import { applyRemoteStorageChoiceIfMissing } from "../lib/storage-config";
+
+export {
+  startNostrConnectInvite,
+  type NostrConnectInvite,
 } from "../lib/identity";
 
 export type { VesselIdentity };
@@ -21,34 +31,33 @@ export function useIdentity() {
   const setIdentity = useIdentityStore((s) => s.setIdentity);
   const clearIdentity = useIdentityStore((s) => s.clearIdentity);
   const hydrate = useIdentityStore((s) => s.hydrate);
-  const createIdentityMutation = useCreateIdentity();
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  const persistOnServer = useCallback(
-    async (id: VesselIdentity) => {
-      if (id.isGuest) return;
-      try {
-        await createIdentityMutation.mutateAsync({
-          data: { pubkey: id._pubkey, displayName: id.displayName },
-        });
-      } catch (err) {
-        console.error("Failed to register identity with server:", err);
-      }
-    },
-    [createIdentityMutation]
-  );
+  // Once identity is loaded (either from sign-in or restored from local
+  // storage), best-effort fetch any published storage server list and apply
+  // it iff this device has no local choice yet. Local choice always wins —
+  // never silently overwritten. Runs at most once per pubkey per session.
+  const remoteStorageAppliedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!identity || identity.isGuest) return;
+    const pk = identity._pubkey;
+    if (remoteStorageAppliedRef.current.has(pk)) return;
+    remoteStorageAppliedRef.current.add(pk);
+    void applyRemoteStorageChoiceIfMissing(pk).catch(() => {
+      // Best-effort only; never block the UI on relay availability.
+    });
+  }, [identity]);
 
   const createNewIdentity = useCallback(
-    async (displayName: string, email?: string) => {
-      const id = await createNewIdentityLib(displayName, email);
+    async (displayName: string) => {
+      const id = await createNewIdentityLib(displayName);
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
   );
 
   const createGuestIdentity = useCallback(
@@ -64,10 +73,41 @@ export function useIdentity() {
     async (nsec: string, displayName: string) => {
       const id = await importIdentityFromBackupLib(nsec, displayName);
       setIdentity(id);
-      await persistOnServer(id);
       return id;
     },
-    [setIdentity, persistOnServer]
+    [setIdentity]
+  );
+
+  const signInWithExtension = useCallback(
+    async (displayName: string) => {
+      const id = await signInWithExtensionLib(displayName);
+      setIdentity(id);
+      return id;
+    },
+    [setIdentity]
+  );
+
+  const signInWithRemoteSigner = useCallback(
+    async (bunkerUri: string, displayName: string) => {
+      const id = await signInWithRemoteSignerLib(bunkerUri, displayName);
+      setIdentity(id);
+      return id;
+    },
+    [setIdentity]
+  );
+
+  /**
+   * Adopt an identity that the caller has already constructed (e.g. via
+   * `startNostrConnectInvite()` → `awaitConnection()`). Stores the identity
+   * in the Zustand store. Vessel does not register identities with any
+   * backend — there's no central account directory by design.
+   */
+  const adoptIdentity = useCallback(
+    async (id: VesselIdentity) => {
+      setIdentity(id);
+      return id;
+    },
+    [setIdentity]
   );
 
   const setDisplayName = useCallback(
@@ -78,14 +118,17 @@ export function useIdentity() {
       }
       const updated: VesselIdentity = { ...identity, displayName: name };
       setIdentity(updated);
-      await persistOnServer(updated);
+      await persistDisplayNameChange(updated);
     },
-    [identity, createNewIdentity, setIdentity, persistOnServer]
+    [identity, createNewIdentity, setIdentity]
   );
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    // Close any active signer transports (e.g. NIP-46 relay subscription)
+    // before clearing identity. Local recordings stored elsewhere are untouched.
+    await tearDownSigner(identity ?? null);
     clearIdentity();
-  }, [clearIdentity]);
+  }, [identity, clearIdentity]);
 
   return {
     identity,
@@ -93,11 +136,16 @@ export function useIdentity() {
     displayName: identity?.displayName,
     avatarColor: identity?.avatarColor,
     isGuest: identity?.isGuest ?? false,
+    signerType: identity?.signerType,
     isLoaded,
     setDisplayName,
     createNewIdentity,
     createGuestIdentity,
     importFromBackup,
+    signInWithExtension,
+    signInWithRemoteSigner,
+    adoptIdentity,
+    isNostrExtensionAvailable,
     signOut,
   };
 }
