@@ -19,8 +19,7 @@ import {
   type ChatMessage,
   type ConnectionQuality,
 } from "../../hooks/use-call-signal";
-import { getInitials } from "../../lib/identity";
-import { resolveAvatarColor, useStoredAvatarColor } from "../../hooks/use-avatar-color";
+import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
 import { cn } from "@/lib/utils";
 
@@ -150,7 +149,6 @@ export function RosterSidePanel({
   onSendReaction,
 }: RosterSidePanelProps) {
   const { pubkey: selfPubkey } = useIdentity();
-  const storedColor = useStoredAvatarColor();
   const [draft, setDraft] = useState("");
 
   // Build per-row state (combines DB-known participants + signaling).
@@ -323,8 +321,6 @@ export function RosterSidePanel({
                         row={row}
                         queuePosition={queuePosition}
                         isHost={isHost}
-                        selfPubkey={selfPubkey}
-                        storedColor={storedColor}
                         myMicLevel={myMicLevel}
                         onAskToMute={onAskToMute}
                         onLowerHand={onLowerHand}
@@ -360,8 +356,6 @@ function RosterRow({
   row,
   queuePosition,
   isHost,
-  selfPubkey,
-  storedColor,
   myMicLevel,
   onAskToMute,
   onLowerHand,
@@ -369,8 +363,6 @@ function RosterRow({
   row: RosterRowData;
   queuePosition: number | null;
   isHost: boolean;
-  selfPubkey: string | null | undefined;
-  storedColor: string | null;
   myMicLevel: number;
   onAskToMute: (pubkey: string) => void;
   onLowerHand: (pubkey: string) => void;
@@ -399,15 +391,12 @@ function RosterRow({
       data-stale={stale ? "true" : "false"}
       data-hand-raised={handRaised ? "true" : "false"}
     >
-      <div
-        className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-        style={{
-          backgroundColor: resolveAvatarColor(p.pubkey, selfPubkey, storedColor),
-        }}
+      <AvatarMark
+        pubkey={p.pubkey}
+        displayName={p.displayName}
+        className="w-9 h-9"
+        initialsClassName="text-xs"
       >
-        <span className="text-white text-xs font-bold">
-          {getInitials(p.displayName)}
-        </span>
         {handRaised && (
           <span
             className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-vessel-amber border-2 border-vessel-bg-surface flex items-center justify-center"
@@ -417,7 +406,7 @@ function RosterRow({
             <Hand className="w-2.5 h-2.5 text-vessel-bg-base" />
           </span>
         )}
-      </div>
+      </AvatarMark>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">

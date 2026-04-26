@@ -5,9 +5,8 @@ import { useIdentity } from "../../hooks/use-identity";
 import {
   downloadBackupFile,
   exportIdentityBackup,
-  getInitials,
 } from "../../lib/identity";
-import { useAvatarColor } from "../../hooks/use-avatar-color";
+import { AvatarMark } from "../AvatarMark";
 import { useToast } from "../../hooks/use-toast";
 import {
   DropdownMenu,
@@ -39,12 +38,10 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
   const [signingOut, setSigningOut] = useState(false);
   const [savingBackup, setSavingBackup] = useState(false);
   const [backupSaved, setBackupSaved] = useState(false);
-  const avatarColor = useAvatarColor(pubkey);
   const { toast } = useToast();
 
   if (!displayName || !pubkey) return null;
 
-  const initials = getInitials(displayName);
   const canDownloadBackup = signerType === "local" && !!identity;
 
   const handleSignOut = async () => {
@@ -153,12 +150,12 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             data-testid="button-account-settings-sidebar"
             aria-label={`Open account settings for ${displayName}`}
           >
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: avatarColor }}
-            >
-              <span className="text-white text-[10px] font-bold">{initials}</span>
-            </div>
+            <AvatarMark
+              pubkey={pubkey}
+              displayName={displayName}
+              className="w-7 h-7"
+              initialsClassName="text-[10px]"
+            />
             <div className="flex-1 min-w-0 text-left">
               <div className="text-vessel-text-primary truncate">{displayName}</div>
               <div className="text-xs text-vessel-text-muted">Account settings</div>
@@ -188,12 +185,12 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             data-testid="button-account-menu"
             aria-label="Account menu"
           >
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: avatarColor }}
-            >
-              <span className="text-white text-xs font-bold">{initials}</span>
-            </div>
+            <AvatarMark
+              pubkey={pubkey}
+              displayName={displayName}
+              className="w-8 h-8"
+              initialsClassName="text-xs"
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56" data-testid="menu-account">

@@ -87,7 +87,7 @@ export function AvatarMark({
   return (
     <div
       className={cn(
-        "rounded-full flex items-center justify-center shrink-0 relative overflow-hidden",
+        "rounded-full flex items-center justify-center shrink-0 relative",
         // Default size matches the most common usage in the roster.
         // Callers pass their own size class to override.
         !className?.match(/\bw-/) && "w-9 h-9",

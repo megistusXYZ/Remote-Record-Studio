@@ -1,6 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { getInitials } from "../../lib/identity";
-import { useAvatarColor } from "../../hooks/use-avatar-color";
+import { AvatarMark } from "../AvatarMark";
 import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { Mic, Video, MicOff, VideoOff } from "lucide-react";
 
@@ -26,9 +25,6 @@ export function ParticipantCard({
   micActive = true,
   cameraActive = true,
 }: ParticipantCardProps) {
-  const avatarColor = useAvatarColor(participant.pubkey);
-  const initials = getInitials(participant.displayName);
-
   let statusDotClass = "bg-vessel-accent";
   let statusText = "In the room";
   if (status === "joining") {
@@ -47,12 +43,12 @@ export function ParticipantCard({
       className="flex items-center p-4 rounded-xl bg-vessel-bg-surface border border-vessel-border"
       data-testid={`participant-${participant.id}`}
     >
-      <div
-        className="w-11 h-11 rounded-full flex items-center justify-center text-white text-base font-bold shrink-0 shadow-sm"
-        style={{ backgroundColor: avatarColor }}
-      >
-        {initials}
-      </div>
+      <AvatarMark
+        pubkey={participant.pubkey}
+        displayName={participant.displayName}
+        className="w-11 h-11 shadow-sm"
+        initialsClassName="text-base"
+      />
 
       <div className="flex-1 ml-4 overflow-hidden">
         <div className="flex items-center gap-2">

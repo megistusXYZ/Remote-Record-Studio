@@ -16,7 +16,7 @@ import {
   deleteRecordingBlob,
 } from "../../lib/recordings-storage";
 import { useToast } from "../../hooks/use-toast";
-import { getInitials } from "../../lib/identity";
+import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
 import {
   resolveAvatarColor,
@@ -335,9 +335,13 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                     </button>
                     {uniqueParticipants.map((p, i) => (
                       <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-vessel-bg-base border border-vessel-border mr-2 mb-2">
-                        <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: resolveAvatarColor(p.ownerPubkey, selfPubkey, storedColor) }}>
-                          <span className="text-white text-[8px] font-bold">{getInitials(p.participantName)[0]}</span>
-                        </div>
+                        <AvatarMark
+                          pubkey={p.ownerPubkey}
+                          displayName={p.participantName}
+                          className="w-4 h-4"
+                          initialsClassName="text-[8px]"
+                          initialsSingleChar
+                        />
                         <span className="text-xs text-vessel-text-secondary">{p.participantName}</span>
                       </div>
                     ))}
@@ -382,9 +386,12 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                 : { label: "On this device only", className: "text-vessel-text-muted bg-vessel-bg-base border-vessel-border", Icon: AlertTriangle };
                             return (
                               <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-vessel-bg-base transition-colors" data-testid={`row-track-${r.id}`}>
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: resolveAvatarColor(r.ownerPubkey, selfPubkey, storedColor) }}>
-                                  <span className="text-white text-xs font-bold">{getInitials(r.participantName)}</span>
-                                </div>
+                                <AvatarMark
+                                  pubkey={r.ownerPubkey}
+                                  displayName={r.participantName}
+                                  className="w-8 h-8"
+                                  initialsClassName="text-xs"
+                                />
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-medium text-vessel-text-primary truncate">{r.participantName}</div>
                                   <div className="text-xs text-vessel-text-muted font-mono-vessel">
