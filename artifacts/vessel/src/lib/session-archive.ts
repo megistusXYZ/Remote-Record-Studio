@@ -357,3 +357,176 @@ export async function publishSessionArchive(
 // the parameter is kept for callers and future analytics. Reference it once
 // here so TypeScript doesn't strip the import as unused.
 export type { VesselIdentity };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-participant ("personal") archives
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The host's archive (above) bundles every track. In addition to that, every
+// participant — including each guest — automatically gets their OWN single-
+// track archive at session end. Three properties matter:
+//
+//   1. The personal archive is signed by an ephemeral key generated and held
+//      only on the participant's device, so they (and only they) can later
+//      sign a deletion event and pull the link offline.
+//   2. The encrypted manifest contains exactly one track: their own. Even if
+//      a relay scraper somehow got past encryption they couldn't reconstruct
+//      the conversation from a personal archive alone.
+//   3. The personal share URL — together with an /r/:pointer receipt page —
+//      is what guests walk away with. It's the visible proof of the federated
+//      ownership model: "this is your audio, here's where it lives, here's
+//      how to take it down."
+//
+// Personal archives reuse the same publishing primitives (kind 30563 manifest
+// + kind 1063 file metadata) so the existing share-resolver already understands
+// them. The only difference is the manifest carries a single-track payload.
+
+export type PersonalArchiveInput = {
+  sessionId: string;
+  sessionTitle: string;
+  hostName: string;
+  endedAt: Date;
+  /** True if this archive belongs to the session host. Drives receipt copy. */
+  isHost: boolean;
+  /** Other people who were on the call (best-effort; just for the receipt). */
+  otherParticipantNames: string[];
+};
+
+export type PersonalArchiveResult = {
+  archiveId: string;
+  pointer: string;
+  /** /s/<pointer>#<key> — opens the existing recipient page. */
+  shareUrl: string;
+  /** /r/<pointer>#<key> — opens the friendly receipt page. */
+  receiptUrl: string;
+  manifestEventId: string;
+  archivedAt: string;
+  publish: {
+    relays: RelayPublishStatus[];
+    successCount: number;
+    totalCount: number;
+  };
+};
+
+function buildReceiptUrl(pointer: string, shareKeyEncoded: string): string {
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
+  return `${window.location.origin}${base}/r/${pointer}#${shareKeyEncoded}`;
+}
+
+/**
+ * Publish a single-track "personal" archive owned by the participant.
+ *
+ * Returns both the canonical share URL (pointing at the existing recipient
+ * page) and a receipt URL (`/r/:pointer`) that wraps the same manifest in a
+ * receipt-styled view with download + revoke calls to action.
+ *
+ * `identity` is unused for signing — we generate a fresh ephemeral key per
+ * archive — but is accepted to keep the call-site parallel with
+ * {@link publishSessionArchive} and to leave room for future analytics.
+ */
+export async function publishPersonalArchive(
+  identity: VesselIdentity | null,
+  input: PersonalArchiveInput,
+  track: TrackDescriptor,
+): Promise<PersonalArchiveResult> {
+  void identity;
+  if (!track) {
+    throw new Error("A recorded track is required to publish a personal archive");
+  }
+
+  const createdAt = Math.floor(Date.now() / 1000);
+  const ephemeralSecret = generateSecretKey();
+  const ephemeralPubkey = getPublicKey(ephemeralSecret);
+  const shareKey = generateShareKey();
+  const shareKeyEncoded = encodeShareKey(shareKey);
+  const identifier = generateRandomIdentifier(16);
+
+  const trackEvent = buildPublicTrackEvent(ephemeralSecret, track, createdAt);
+  const manifestEvent = await buildEncryptedManifestEvent({
+    ephemeralSecret,
+    shareKey,
+    identifier,
+    session: {
+      sessionId: input.sessionId,
+      sessionTitle: input.sessionTitle,
+      hostPubkey: track.participantPubkey,
+      hostName: input.hostName,
+      endedAt: input.endedAt,
+    },
+    trackEvents: [trackEvent],
+    trackDescriptors: [track],
+    createdAt,
+  });
+
+  const relays = getConfiguredRelays();
+  const pool = getRelayPool();
+
+  const allEvents = [manifestEvent, trackEvent];
+  const publishResults = await Promise.all(
+    allEvents.map((evt) => publishWithRetry(pool, relays, evt)),
+  );
+
+  const relayMap = new Map<string, RelayPublishStatus>();
+  for (const url of relays) relayMap.set(url, { url, ok: true });
+  for (const eventResults of publishResults) {
+    for (const r of eventResults) {
+      const prev = relayMap.get(r.from);
+      if (!prev) {
+        relayMap.set(r.from, { url: r.from, ok: r.ok, message: r.message });
+        continue;
+      }
+      if (!r.ok && prev.ok) {
+        prev.ok = false;
+        prev.message = r.message;
+      }
+    }
+  }
+  const relayStatuses = Array.from(relayMap.values());
+  const successCount = relayStatuses.filter((r) => r.ok).length;
+
+  const pointer = encodeSharePointer({
+    kind: KIND_SESSION_MANIFEST,
+    pubkey: ephemeralPubkey,
+    identifier,
+    relays,
+  });
+  const archiveId = buildArchiveFingerprint(manifestEvent.id);
+  const archivedAt = new Date(createdAt * 1000).toISOString();
+  const shareUrl = buildShareUrl(pointer, shareKeyEncoded);
+  const receiptUrl = buildReceiptUrl(pointer, shareKeyEncoded);
+
+  if (successCount > 0) {
+    rememberShareForRevoke({
+      archiveId,
+      pointer,
+      manifestEventId: manifestEvent.id,
+      ephemeralPubkey,
+      ephemeralSecretB64: encodeEphemeralSecret(ephemeralSecret),
+      identifier,
+      kind: KIND_SESSION_MANIFEST,
+      relays,
+      publishedAt: archivedAt,
+    });
+  }
+
+  // We intentionally don't `void` `input.isHost` / `otherParticipantNames`
+  // here — they're carried into the receipt UI through a separate
+  // localStorage record (see `personal-receipts.ts`) so the receipt page can
+  // render even after the manifest is revoked.
+  void input.isHost;
+  void input.otherParticipantNames;
+
+  return {
+    archiveId,
+    pointer,
+    shareUrl,
+    receiptUrl,
+    manifestEventId: manifestEvent.id,
+    archivedAt,
+    publish: {
+      relays: relayStatuses,
+      successCount,
+      totalCount: relayStatuses.length,
+    },
+  };
+}

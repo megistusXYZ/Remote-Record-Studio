@@ -13,10 +13,12 @@ import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
 import { ControlBar } from "./ControlBar";
-import { SessionComplete, type Track } from "./SessionComplete";
+import { SessionComplete, type Track, type PersonalArchiveStatus } from "./SessionComplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useCreateRecording } from "@workspace/api-client-react";
+import { publishPersonalArchive } from "../../lib/session-archive";
+import { rememberPersonalReceipt } from "../../lib/personal-receipts";
 
 export type StudioScreenProps = {
   session: {
@@ -66,14 +68,16 @@ export function StudioScreen({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSessionComplete, setShowSessionComplete] = useState(false);
+  const [personalArchive, setPersonalArchive] = useState<PersonalArchiveStatus>({ status: "idle" });
 
-  const { pubkey: currentPubkey, displayName } = useIdentity();
+  const { identity, pubkey: currentPubkey, displayName } = useIdentity();
   const recording = useRecording();
   const createRecordingMutation = useCreateRecording();
   const recordingStartedRef = useRef(false);
   const recordingPersistedRef = useRef(false);
   const persistPromiseRef = useRef<Promise<unknown> | null>(null);
   const guestEndingShownRef = useRef(false);
+  const personalArchivePublishedRef = useRef(false);
 
   const {
     cameras,
@@ -147,6 +151,8 @@ export function StudioScreen({
     recordingPersistedRef.current = false;
     persistPromiseRef.current = null;
     guestEndingShownRef.current = false;
+    personalArchivePublishedRef.current = false;
+    setPersonalArchive({ status: "idle" });
   }, [session.id]);
 
   // After sync completes, persist the recording metadata to the API once.
@@ -181,6 +187,107 @@ export function StudioScreen({
       persistPromiseRef.current = p;
     }
   }, [recording.result, recording.syncStatus, createRecordingMutation, session.id, session.title, currentPubkey, displayName]);
+
+  // After sync completes, publish this device's personal single-track archive.
+  // Each participant — host AND every guest — gets their own pointer signed by
+  // an ephemeral key held only on this device. The published receipt link is
+  // surfaced in SessionComplete with copy / open / revoke calls to action.
+  // Runs once per session.id; failures degrade gracefully (the local copy is
+  // unaffected and the user can always re-share from /vault).
+  useEffect(() => {
+    if (
+      !recording.result ||
+      personalArchivePublishedRef.current ||
+      recording.syncStatus !== "complete"
+    ) {
+      return;
+    }
+    const r = recording.result;
+    if (!r.blobUrl || !r.blobHash) {
+      // Without an upload URL + hash there's nothing to publish — the recording
+      // is local-only. Mark as not-applicable by leaving status idle.
+      return;
+    }
+    personalArchivePublishedRef.current = true;
+    setPersonalArchive({ status: "publishing" });
+
+    const others = session.participants
+      .filter((p) => p.pubkey !== currentPubkey)
+      .map((p) => p.displayName);
+    const ownerName = displayName || "You";
+
+    void (async () => {
+      try {
+        const result = await publishPersonalArchive(
+          identity,
+          {
+            sessionId: session.id,
+            sessionTitle: session.title,
+            hostName: session.hostName,
+            endedAt: new Date(),
+            isHost,
+            otherParticipantNames: others,
+          },
+          {
+            recordingId: r.recordingId,
+            participantPubkey: currentPubkey || "",
+            participantName: ownerName,
+            blobUrl: r.blobUrl,
+            blobHash: r.blobHash,
+            mimeType: r.meta.mimeType,
+            sizeBytes: r.meta.sizeBytes,
+            durationSeconds: r.meta.durationSeconds,
+          },
+        );
+        if (result.publish.successCount === 0) {
+          setPersonalArchive({
+            status: "error",
+            message: "No sharing servers accepted the receipt.",
+          });
+          return;
+        }
+        rememberPersonalReceipt({
+          archiveId: result.archiveId,
+          pointer: result.pointer,
+          sessionTitle: session.title,
+          isHost,
+          hostName: session.hostName,
+          otherParticipantNames: others,
+          receiptUrl: result.receiptUrl,
+          shareUrl: result.shareUrl,
+          publishedAt: result.archivedAt,
+          ownerPubkey: currentPubkey || "",
+        });
+        setPersonalArchive({
+          status: "ready",
+          archiveId: result.archiveId,
+          receiptUrl: result.receiptUrl,
+          successCount: result.publish.successCount,
+          totalCount: result.publish.totalCount,
+        });
+      } catch (err) {
+        console.error("Failed to publish personal archive", err);
+        setPersonalArchive({
+          status: "error",
+          message:
+            err instanceof Error
+              ? err.message
+              : "An unexpected problem prevented publishing.",
+        });
+      }
+    })();
+  }, [
+    recording.result,
+    recording.syncStatus,
+    identity,
+    session.id,
+    session.title,
+    session.hostName,
+    session.participants,
+    currentPubkey,
+    displayName,
+    isHost,
+  ]);
 
   // Guests: when the host ends the session externally and a guest is mid-recording,
   // show the SessionComplete (guest variant) so their track is finalized + persisted
