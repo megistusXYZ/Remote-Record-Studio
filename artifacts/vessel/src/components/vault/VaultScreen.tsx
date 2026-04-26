@@ -22,6 +22,7 @@ import {
   resolveAvatarColor,
   useStoredAvatarColor,
 } from "../../hooks/use-avatar-color";
+import observationCabinSketch from "@assets/Gemini_Generated_Image_v77zp1v77zp1v77z_1777173537021.png";
 import { VaultSidebar } from "./VaultSidebar";
 import { EmptyState } from "./EmptyState";
 import { ShareModal, type ShareModalRecording } from "./ShareModal";
@@ -256,8 +257,25 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   return (
     <div className="flex h-[100dvh] bg-vessel-bg-base text-vessel-text-primary">
       <VaultSidebar active="my-vault" myVaultCount={filteredSessions.length} />
-      <main className="flex-1 min-w-0 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
-        <header className="sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border z-10 px-4 sm:px-8 py-4 sm:py-0 sm:h-[72px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <main className="relative flex-1 min-w-0 overflow-y-auto pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
+        {/* Subtle "observation cabin" backdrop — same hand-drawn
+            family as the landing page sketches. Inverted for the
+            dark theme, vignette-masked so it fades into the edges
+            and never competes with the vault content. */}
+        <div
+          className="pointer-events-none fixed inset-0 z-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${observationCabinSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+          }}
+          aria-hidden="true"
+        />
+
+        <header className="relative z-10 sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border px-4 sm:px-8 py-4 sm:py-0 sm:h-[72px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-vessel-text-primary tracking-tight leading-none">My Vault</h1>
           <div className="relative w-full sm:w-auto">
             <Search className="w-4 h-4 text-vessel-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -271,7 +289,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
           </div>
         </header>
 
-        <div className="px-4 sm:px-6 md:px-8 py-6 space-y-4 max-w-5xl mx-auto">
+        <div className="relative z-10 px-4 sm:px-6 md:px-8 py-6 space-y-4 max-w-5xl mx-auto">
           {isLoading ? (
             <>
               <div className="h-44 rounded-xl bg-vessel-bg-surface/50 animate-pulse" />
