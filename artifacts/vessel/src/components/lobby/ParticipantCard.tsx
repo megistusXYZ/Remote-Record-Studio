@@ -1,7 +1,8 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { AvatarMark } from "../AvatarMark";
 import { VesselBadge } from "../vessel-ui/VesselBadge";
 import { Mic, Video, MicOff, VideoOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type ParticipantCardProps = {
   participant: {
@@ -15,6 +16,14 @@ export type ParticipantCardProps = {
   status?: "joining" | "in-the-room" | "ready";
   micActive?: boolean;
   cameraActive?: boolean;
+  /**
+   * When provided AND `isYou` is true, the mic indicator becomes a
+   * real button that toggles your "join with mic on" preference. When
+   * omitted, the dot stays as a read-only status indicator (used for
+   * other participants and any read-only context).
+   */
+  onToggleMic?: () => void;
+  onToggleCamera?: () => void;
 };
 
 export function ParticipantCard({
@@ -24,6 +33,8 @@ export function ParticipantCard({
   status = "in-the-room",
   micActive = true,
   cameraActive = true,
+  onToggleMic,
+  onToggleCamera,
 }: ParticipantCardProps) {
   let statusDotClass = "bg-vessel-accent";
   let statusText = "In the room";
@@ -33,6 +44,12 @@ export function ParticipantCard({
   } else if (status === "ready") {
     statusText = "Ready to record";
   }
+
+  // Only the *self* row gets interactive toggles. Other participants'
+  // cards remain read-only because we have no source of truth for
+  // their pending join prefs from outside their own browser.
+  const micInteractive = isYou && Boolean(onToggleMic);
+  const cameraInteractive = isYou && Boolean(onToggleCamera);
 
   return (
     <motion.div
@@ -70,21 +87,87 @@ export function ParticipantCard({
       </div>
 
       <div className="flex items-center gap-2 ml-4 shrink-0">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${micActive ? 'bg-vessel-bg-base border-vessel-border' : 'bg-vessel-red/10 border-vessel-red/20'}`}>
-          {micActive ? (
-            <Mic className="w-4 h-4 text-vessel-accent" />
-          ) : (
-            <MicOff className="w-4 h-4 text-vessel-red" />
-          )}
-        </div>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${cameraActive ? 'bg-vessel-bg-base border-vessel-border' : 'bg-vessel-red/10 border-vessel-red/20'}`}>
-          {cameraActive ? (
-            <Video className="w-4 h-4 text-vessel-accent" />
-          ) : (
-            <VideoOff className="w-4 h-4 text-vessel-red" />
-          )}
-        </div>
+        <DeviceIndicator
+          active={micActive}
+          interactive={micInteractive}
+          onToggle={onToggleMic}
+          ActiveIcon={Mic}
+          MutedIcon={MicOff}
+          label={micActive ? "Mic on — click to join muted" : "Mic muted — click to unmute"}
+          testId={`toggle-mic-${participant.id}`}
+        />
+        <DeviceIndicator
+          active={cameraActive}
+          interactive={cameraInteractive}
+          onToggle={onToggleCamera}
+          ActiveIcon={Video}
+          MutedIcon={VideoOff}
+          label={cameraActive ? "Camera on — click to join with camera off" : "Camera off — click to turn on"}
+          testId={`toggle-camera-${participant.id}`}
+        />
       </div>
     </motion.div>
+  );
+}
+
+type IconType = typeof Mic;
+
+function DeviceIndicator({
+  active,
+  interactive,
+  onToggle,
+  ActiveIcon,
+  MutedIcon,
+  label,
+  testId,
+}: {
+  active: boolean;
+  interactive: boolean;
+  onToggle?: () => void;
+  ActiveIcon: IconType;
+  MutedIcon: IconType;
+  label: string;
+  testId: string;
+}) {
+  const baseClasses = cn(
+    "w-8 h-8 rounded-full flex items-center justify-center border transition-colors",
+    active
+      ? "bg-vessel-bg-base border-vessel-border"
+      : "bg-vessel-red/10 border-vessel-red/20",
+  );
+
+  const Icon = active ? ActiveIcon : MutedIcon;
+  const iconClasses = cn(
+    "w-4 h-4",
+    active ? "text-vessel-accent" : "text-vessel-red",
+  );
+
+  if (!interactive) {
+    return (
+      <div className={baseClasses} aria-hidden="true">
+        <Icon className={iconClasses} />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      aria-label={label}
+      title={label}
+      data-testid={testId}
+      className={cn(
+        baseClasses,
+        "cursor-pointer hover:scale-110 active:scale-95 transition-transform",
+        active
+          ? "hover:border-vessel-accent/50 hover:bg-vessel-bg-elevated"
+          : "hover:border-vessel-red/40 hover:bg-vessel-red/15",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent focus-visible:ring-offset-2 focus-visible:ring-offset-vessel-bg-surface",
+      )}
+    >
+      <Icon className={iconClasses} />
+    </button>
   );
 }

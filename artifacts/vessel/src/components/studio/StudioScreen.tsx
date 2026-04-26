@@ -22,6 +22,10 @@ import { cn } from "@/lib/utils";
 import { useCreateRecording } from "@workspace/api-client-react";
 import { publishPersonalArchive } from "../../lib/session-archive";
 import { rememberPersonalReceipt } from "../../lib/personal-receipts";
+import {
+  readStoredJoinWithMic,
+  readStoredJoinWithCamera,
+} from "../../hooks/use-join-prefs";
 
 export type StudioScreenProps = {
   session: {
@@ -66,8 +70,12 @@ export function StudioScreen({
   isStartingRecording,
   isStoppingRecording,
 }: StudioScreenProps) {
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
+  // Initialize from the user's persisted "how I join" prefs. We use
+  // lazy initialization so the prefs are read exactly once at mount —
+  // a later change in Settings should not yank a live call's mic/cam
+  // state out from under the user.
+  const [micEnabled, setMicEnabled] = useState(() => readStoredJoinWithMic());
+  const [cameraEnabled, setCameraEnabled] = useState(() => readStoredJoinWithCamera());
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSessionComplete, setShowSessionComplete] = useState(false);
