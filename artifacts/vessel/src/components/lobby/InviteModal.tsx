@@ -17,38 +17,50 @@ export type InviteModalProps = {
   inviteCode: string;
 };
 
+type CopiedField = "url" | "code" | null;
+
 export function InviteModal({
   open,
   onOpenChange,
   inviteUrl,
   inviteCode,
 }: InviteModalProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<CopiedField>(null);
 
-  const handleCopy = () => {
+  const handleCopyUrl = () => {
     navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
+    setCopied("url");
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(inviteCode);
+    setCopied("code");
   };
 
   useEffect(() => {
     if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 2000);
+    const timer = setTimeout(() => setCopied(null), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
+
+  // Reset feedback when the modal closes so it doesn't reappear on reopen.
+  useEffect(() => {
+    if (!open) setCopied(null);
+  }, [open]);
 
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
           title: "Join my Vessel studio",
-          text: "Join my recording session on Vessel",
+          text: `Join my recording session on Vessel — code ${inviteCode}`,
           url: inviteUrl,
         });
-      } catch (err) {
-        handleCopy();
+      } catch {
+        handleCopyUrl();
       }
     } else {
-      handleCopy();
+      handleCopyUrl();
     }
   };
 
@@ -67,7 +79,7 @@ export function InviteModal({
             Invite guests
           </DialogTitle>
           <DialogDescription className="text-sm text-vessel-text-secondary">
-            Share the link or QR code — guests join in one tap, no account needed.
+            Share the code, link, or QR — guests join in one tap, no account needed.
           </DialogDescription>
         </DialogHeader>
 
@@ -95,10 +107,58 @@ export function InviteModal({
           </div>
 
           {/* Soft divider */}
-          <div
-            className="h-px bg-vessel-border/70"
-            aria-hidden="true"
-          />
+          <div className="h-px bg-vessel-border/70" aria-hidden="true" />
+
+          {/* Session code — short, easy to read aloud or text */}
+          <div className="space-y-2">
+            <label className="block text-[11px] uppercase tracking-[0.18em] text-vessel-text-muted">
+              Session code
+            </label>
+            <div className="flex items-stretch gap-2 min-w-0 bg-vessel-bg-base border border-vessel-border rounded-xl p-1.5 pl-3">
+              <div
+                className="
+                  font-mono-vessel text-base sm:text-lg tracking-[0.18em]
+                  text-vessel-text-primary
+                  flex-1 min-w-0
+                  self-center
+                  overflow-hidden text-ellipsis whitespace-nowrap
+                  uppercase
+                "
+                data-testid="text-invite-code"
+              >
+                {inviteCode}
+              </div>
+              <button
+                onClick={handleCopyCode}
+                className="
+                  shrink-0 inline-flex items-center justify-center gap-1.5
+                  px-3 py-2 min-w-[5.25rem]
+                  rounded-lg
+                  bg-vessel-bg-surface hover:bg-vessel-accent/10
+                  text-vessel-text-primary text-xs font-medium
+                  transition-colors
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent
+                "
+                data-testid="button-copy-invite-code"
+                aria-label={copied === "code" ? "Code copied" : "Copy session code"}
+              >
+                {copied === "code" ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-vessel-green" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="text-[11px] text-vessel-text-muted">
+              Guests can paste this on the home screen to join.
+            </p>
+          </div>
 
           {/* Invite link row — min-w-0 fixes flex truncation */}
           <div className="space-y-2">
@@ -119,7 +179,7 @@ export function InviteModal({
                 {inviteUrl}
               </div>
               <button
-                onClick={handleCopy}
+                onClick={handleCopyUrl}
                 className="
                   shrink-0 inline-flex items-center justify-center gap-1.5
                   px-3 py-2 min-w-[5.25rem]
@@ -130,9 +190,9 @@ export function InviteModal({
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent
                 "
                 data-testid="button-copy-invite-link"
-                aria-label={copied ? "Link copied" : "Copy invite link"}
+                aria-label={copied === "url" ? "Link copied" : "Copy invite link"}
               >
-                {copied ? (
+                {copied === "url" ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-vessel-green" />
                     <span>Copied</span>
