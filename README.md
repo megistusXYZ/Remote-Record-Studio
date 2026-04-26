@@ -32,14 +32,20 @@ you get to keep your own work. Vessel takes the opposite stance.
 - 🎙 **Studio-quality multi-track recording** — every participant captured
   locally, no compression artifacts from sketchy connections.
 - 🎥 **Up to 4K video per guest** when their camera and bandwidth can handle it.
-- 🔗 **One-link invites** — guests join from any modern browser. No app
-  install, no account.
+- 🖥 **Screen sharing** — present slides, demos, or a second camera feed
+  without leaving the studio.
+- 🔗 **One-link invites** — share by URL or QR code. Guests join from any
+  modern browser. No app install, no account.
+- 📱 **Installable PWA** — pin Vessel to your dock or home screen and launch
+  it like a native app. Works on desktop and mobile.
 - 📁 **Direct delivery** — finished tracks land with the host as soon as the
   session ends.
 - 🔐 **Federated identity** — participants own their own credentials and can
   carry them between Vessel instances.
+- 🎚 **Persistent device preferences** — Vessel remembers your mic, camera,
+  and join-muted choices between sessions.
 - 🌗 **Broadcast Dark UI** — built for late-night editing sessions and people
-  who hate flashbangs.
+  who hate flashbangs. Fully responsive from phone to ultrawide.
 - 📜 **Open formats only** — no proprietary container, no DRM, nothing you
   can't open in twenty years.
 
@@ -120,10 +126,12 @@ Vessel is actively in development. Some big rocks on the horizon:
 
 - [x] Multi-track local recording
 - [x] Federated identity & sign-in
-- [x] One-link guest invites
+- [x] One-link guest invites (with QR code)
+- [x] Screen sharing
+- [x] Installable PWA — guests can join from mobile or desktop browsers
 - [ ] Live transcript with speaker diarization
 - [ ] Native desktop apps (Windows / macOS / Linux)
-- [ ] Mobile guest joining (iOS / Android)
+- [ ] Native mobile apps (iOS / Android)
 - [ ] Plugin SDK for custom export pipelines
 
 See the [open issues](https://github.com/megistusXYZ/Remote-Record-Studio/issues) for the
