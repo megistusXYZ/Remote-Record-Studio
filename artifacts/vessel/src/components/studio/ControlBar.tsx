@@ -298,12 +298,19 @@ export function ControlBar({
                     </span>
                   )}
                   {raisedHandsCount > 0 && (
-                    <span
-                      className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-vessel-amber border border-vessel-bg-base flex items-center justify-center"
-                      data-testid="badge-raised-hands"
-                      aria-label={`${raisedHandsCount} hand${raisedHandsCount === 1 ? "" : "s"} raised`}
-                    >
-                      <Hand className="w-2.5 h-2.5 text-vessel-bg-base" />
+                    <span className="absolute -bottom-1 -right-1 w-4 h-4 pointer-events-none">
+                      {/* Subtle ping ring keeps the badge feeling "live"
+                          and draws the eye even when the floating
+                          notification pill is hidden (e.g. while the
+                          room panel is open). */}
+                      <span className="absolute inset-0 rounded-full bg-vessel-amber/50 animate-ping" />
+                      <span
+                        className="relative w-4 h-4 rounded-full bg-vessel-amber border border-vessel-bg-base flex items-center justify-center"
+                        data-testid="badge-raised-hands"
+                        aria-label={`${raisedHandsCount} hand${raisedHandsCount === 1 ? "" : "s"} raised`}
+                      >
+                        <Hand className="w-2.5 h-2.5 text-vessel-bg-base" />
+                      </span>
                     </span>
                   )}
                 </button>

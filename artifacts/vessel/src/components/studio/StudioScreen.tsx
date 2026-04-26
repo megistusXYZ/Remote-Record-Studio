@@ -17,6 +17,7 @@ import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
 import { SpotlightView, type SpotlightTile } from "./SpotlightView";
 import { ControlBar } from "./ControlBar";
+import { RaisedHandNotification } from "./RaisedHandNotification";
 import { RosterSidePanel, type RosterParticipant } from "./RosterSidePanel";
 import { SessionComplete, type Track, type PersonalArchiveStatus } from "./SessionComplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -354,10 +355,26 @@ export function StudioScreen({
     [session.participants, currentPubkey],
   );
 
-  const raisedHandsCount = useMemo(
-    () => callSignal.peers.filter((p) => p.handRaised).length,
+  // Peers with their hand currently up, sorted oldest-first by raise
+  // timestamp so the floating notification names whoever's been waiting
+  // the longest. Local user is excluded by virtue of `peers` already
+  // excluding self.
+  const raisedHandsList = useMemo(
+    () =>
+      callSignal.peers
+        .filter((p) => p.handRaised)
+        .sort(
+          (a, b) =>
+            (a.handRaisedAtMs ?? Number.POSITIVE_INFINITY) -
+            (b.handRaisedAtMs ?? Number.POSITIVE_INFINITY),
+        )
+        .map((p) => ({
+          pubkey: p.pubkey,
+          displayName: p.displayName || "Guest",
+        })),
     [callSignal.peers],
   );
+  const raisedHandsCount = raisedHandsList.length;
 
   useEffect(() => {
     if (!callSignal.handLoweredByHost) return;
@@ -1249,6 +1266,12 @@ export function StudioScreen({
           screenShareSupported={screenShare.isSupported}
           isScreenSharing={screenShare.isSharing}
           onToggleScreenShare={handleToggleScreenShare}
+        />
+
+        <RaisedHandNotification
+          raisedHands={raisedHandsList}
+          rosterOpen={showRoster}
+          onView={() => setShowRoster(true)}
         />
 
         <RosterSidePanel
