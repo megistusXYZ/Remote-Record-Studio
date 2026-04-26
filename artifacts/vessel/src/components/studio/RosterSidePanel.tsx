@@ -467,15 +467,18 @@ function RosterRow({
           testId={`dot-cam-${p.pubkey}`}
         />
         <QualityDot quality={quality} />
-        {/* Host-only inline actions on other participants. */}
-        {isHost && !isLocal && handRaised && (
+        {/* Host-only inline action: lower this row's hand. Available on
+            EVERY raised row including the host's own — when self, the
+            StudioScreen handler routes back through `toggleHand` instead
+            of publishing a host→self moderation event. */}
+        {isHost && handRaised && (
           <button
             type="button"
             onClick={() => onLowerHand(p.pubkey)}
             className="ml-1 w-6 h-6 rounded-full bg-vessel-bg-base border border-vessel-border text-vessel-text-secondary hover:text-vessel-text-primary hover:border-vessel-amber/40 hover:bg-vessel-amber/10 flex items-center justify-center transition-all opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vessel-amber/40"
             data-testid={`button-lower-hand-${p.pubkey}`}
-            title={`Lower ${p.displayName.split(" ")[0]}'s hand`}
-            aria-label={`Lower ${p.displayName}'s hand`}
+            title={isLocal ? "Lower your hand" : `Lower ${p.displayName.split(" ")[0]}'s hand`}
+            aria-label={isLocal ? "Lower your hand" : `Lower ${p.displayName}'s hand`}
           >
             <X className="w-3 h-3" />
           </button>

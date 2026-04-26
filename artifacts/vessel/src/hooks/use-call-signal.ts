@@ -351,21 +351,20 @@ export function useCallSignal({
                 typeof c.handRaisedAtMs === "number" && Number.isFinite(c.handRaisedAtMs)
                   ? c.handRaisedAtMs
                   : null;
-              // If the peer was previously down OR is just now sending a
-              // fresh timestamp, adopt it. Never let a peer rewrite its
-              // raise time in the past (anti-cut-the-line); we keep the
-              // earliest time we've seen.
+              // Anti-cut-the-line: once we've recorded a timestamp for
+              // this peer's current raise cycle, freeze it. A peer must
+              // not be able to "move up" the queue by retroactively
+              // publishing an earlier handRaisedAtMs. We accept a claim
+              // ONLY when (a) the peer was previously down (fresh raise)
+              // or (b) we haven't observed any timestamp yet for the
+              // current raise. After that the value is sticky until the
+              // hand goes back down (which clears it above).
               if (!existing?.handRaised) {
                 handRaisedAtMs = claimed ?? Date.now();
               } else if (handRaisedAtMs == null && claimed != null) {
                 handRaisedAtMs = claimed;
-              } else if (
-                handRaisedAtMs != null &&
-                claimed != null &&
-                claimed < handRaisedAtMs
-              ) {
-                handRaisedAtMs = claimed;
               }
+              // else: keep existing — refuse to rewrite backwards.
             }
             const updated: Peer = {
               pubkey: ev.pubkey,
@@ -712,6 +711,11 @@ export function useCallSignal({
   const lowerHandFor = useCallback(
     async (targetPubkey: string) => {
       if (!targetPubkey || !enabled || !sessionId || !identity) return;
+      // Host-only action — enforced at the boundary so non-host callers
+      // can't accidentally publish a moderation signal that other clients
+      // will (correctly) ignore. Recipients also re-verify the signature
+      // matches the host pubkey before honouring the request.
+      if (!hostPubkeyRef.current || hostPubkeyRef.current !== myPubkey) return;
       const tmpl = buildEventTemplate(
         KIND_LOWER_HAND_REQUEST,
         sessionId,
@@ -737,6 +741,9 @@ export function useCallSignal({
 
   const lowerAllHands = useCallback(async () => {
     if (!enabled || !sessionId || !identity) return;
+    // Same boundary check as `lowerHandFor` — non-host clients shouldn't
+    // be publishing moderation signals at all.
+    if (!hostPubkeyRef.current || hostPubkeyRef.current !== myPubkey) return;
     const targets: string[] = [];
     peersRef.current.forEach((p) => {
       if (p.handRaised) targets.push(p.pubkey);
