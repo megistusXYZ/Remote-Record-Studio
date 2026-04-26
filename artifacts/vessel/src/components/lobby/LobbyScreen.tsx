@@ -14,6 +14,12 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useIdentity } from "../../hooks/use-identity";
+import {
+  useStoredJoinWithMic,
+  useStoredJoinWithCamera,
+  setStoredJoinWithMic,
+  setStoredJoinWithCamera,
+} from "../../hooks/use-join-prefs";
 import { buildInviteUrl, extractInviteCodeFromInput } from "../../lib/session";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
@@ -64,6 +70,8 @@ export function LobbyScreen({
 }: LobbyScreenProps) {
   const [, setLocation] = useLocation();
   const { pubkey, displayName } = useIdentity();
+  const joinWithMic = useStoredJoinWithMic();
+  const joinWithCamera = useStoredJoinWithCamera();
   
   const [newSessionTitle, setNewSessionTitle] = useState("");
   const [inviteInput, setInviteInput] = useState("");
@@ -365,16 +373,35 @@ export function LobbyScreen({
 
               <div className="space-y-3">
                 <AnimatePresence initial={false}>
-                  {session.participants.map((p, i) => (
-                    <ParticipantCard
-                      key={p.id}
-                      participant={p}
-                      isYou={p.pubkey === pubkey}
-                      index={i}
-                    />
-                  ))}
+                  {session.participants.map((p, i) => {
+                    const isSelf = p.pubkey === pubkey;
+                    return (
+                      <ParticipantCard
+                        key={p.id}
+                        participant={p}
+                        isYou={isSelf}
+                        index={i}
+                        // Show *your* current join prefs on your own
+                        // row; others stay as the optimistic default
+                        // until they're in the call.
+                        micActive={isSelf ? joinWithMic : undefined}
+                        cameraActive={isSelf ? joinWithCamera : undefined}
+                        onToggleMic={
+                          isSelf ? () => setStoredJoinWithMic(!joinWithMic) : undefined
+                        }
+                        onToggleCamera={
+                          isSelf
+                            ? () => setStoredJoinWithCamera(!joinWithCamera)
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
                 </AnimatePresence>
               </div>
+              <p className="mt-3 text-xs text-vessel-text-muted text-center">
+                Tap your mic or camera to choose how you'll join. We'll remember it for next time.
+              </p>
             </div>
 
             <div className="mt-8 text-center">

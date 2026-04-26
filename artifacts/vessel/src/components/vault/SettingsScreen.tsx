@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Settings, ChevronDown, Chrome, KeyRound, ShieldCheck, Loader2, CheckCircle2, AlertCircle, RotateCcw, Key } from "lucide-react";
+import { Settings, ChevronDown, Chrome, KeyRound, ShieldCheck, Loader2, CheckCircle2, AlertCircle, RotateCcw, Key, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useToast } from "../../hooks/use-toast";
 import { clearAllLocalRecordings } from "../../lib/recordings-storage";
@@ -13,6 +13,13 @@ import {
   setStoredAvatarIcon,
   useStoredAvatarIcon,
 } from "../../hooks/use-avatar-icon";
+import {
+  useStoredJoinWithMic,
+  useStoredJoinWithCamera,
+  setStoredJoinWithMic,
+  setStoredJoinWithCamera,
+} from "../../hooks/use-join-prefs";
+import { Switch } from "@/components/ui/switch";
 import {
   AVATAR_MARKS,
   type AvatarMarkId,
@@ -351,6 +358,8 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                 </div>
               </div>
 
+              <JoinDefaultsSection />
+
               <div className="space-y-1.5">
                 <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Sign-in method</label>
                 <div className="flex items-center justify-between gap-3 mt-2 p-3 rounded-lg bg-vessel-bg-base border border-vessel-border">
@@ -618,6 +627,107 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
         open={backupModalOpen}
         onOpenChange={setBackupModalOpen}
         identity={identity}
+      />
+    </div>
+  );
+}
+
+/**
+ * "How you join sessions" — power-user defaults that mirror the
+ * inline lobby toggles on each ParticipantCard. Stored under
+ * `vessel_join_with_mic` / `vessel_join_with_camera`.
+ */
+function JoinDefaultsSection() {
+  const joinWithMic = useStoredJoinWithMic();
+  const joinWithCamera = useStoredJoinWithCamera();
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">
+        How you join sessions
+      </label>
+      <p className="text-xs text-vessel-text-muted">
+        Defaults that apply when you enter a recording. You can still
+        toggle in the lobby or with the in-call controls.
+      </p>
+      <div className="mt-2 rounded-lg bg-vessel-bg-base border border-vessel-border divide-y divide-vessel-border">
+        <JoinDefaultRow
+          label="Join with microphone on"
+          description={
+            joinWithMic
+              ? "You'll arrive unmuted — others hear you immediately."
+              : "You'll arrive muted — unmute when you're ready."
+          }
+          checked={joinWithMic}
+          onCheckedChange={setStoredJoinWithMic}
+          ActiveIcon={Mic}
+          MutedIcon={MicOff}
+          testId="switch-join-with-mic"
+        />
+        <JoinDefaultRow
+          label="Join with camera on"
+          description={
+            joinWithCamera
+              ? "Your camera turns on as soon as you enter."
+              : "Your camera stays off until you enable it."
+          }
+          checked={joinWithCamera}
+          onCheckedChange={setStoredJoinWithCamera}
+          ActiveIcon={Video}
+          MutedIcon={VideoOff}
+          testId="switch-join-with-camera"
+        />
+      </div>
+    </div>
+  );
+}
+
+function JoinDefaultRow({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+  ActiveIcon,
+  MutedIcon,
+  testId,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+  ActiveIcon: typeof Mic;
+  MutedIcon: typeof Mic;
+  testId: string;
+}) {
+  const Icon = checked ? ActiveIcon : MutedIcon;
+  return (
+    <div className="flex items-center justify-between gap-3 p-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div
+          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border ${
+            checked
+              ? "bg-vessel-bg-elevated border-vessel-border"
+              : "bg-vessel-red/10 border-vessel-red/20"
+          }`}
+        >
+          <Icon
+            className={`w-4 h-4 ${
+              checked ? "text-vessel-accent" : "text-vessel-red"
+            }`}
+          />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-vessel-text-primary">
+            {label}
+          </div>
+          <div className="text-xs text-vessel-text-muted">{description}</div>
+        </div>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        data-testid={testId}
+        aria-label={label}
       />
     </div>
   );
