@@ -8,6 +8,11 @@ import {
   resolveAvatarIcon,
   useStoredAvatarIcon,
 } from "../hooks/use-avatar-icon";
+import {
+  DEFAULT_AVATAR_ICON_COLOR,
+  resolveAvatarIconColor,
+  useStoredAvatarIconColor,
+} from "../hooks/use-avatar-icon-color";
 import { getInitials } from "../lib/identity";
 import { getAvatarMark, type AvatarMarkId } from "./icons/avatar-marks";
 import { cn } from "../lib/utils";
@@ -32,6 +37,9 @@ export type AvatarMarkProps = {
   iconOverride?: AvatarMarkId | null;
   /** Optional override of the resolved color. Same picker-preview use. */
   colorOverride?: string | null;
+  /** Optional override of the foreground (mark / initials) color.
+   *  Same picker-preview use as `colorOverride`. */
+  iconColorOverride?: string | null;
   /** Optional children (e.g. status chips like the raised-hand badge)
    *  rendered absolutely-positioned over the avatar — preserves the
    *  composition pattern used by the live roster today. */
@@ -62,6 +70,7 @@ export function AvatarMark({
   initialsSingleChar,
   iconOverride,
   colorOverride,
+  iconColorOverride,
   children,
   title,
   ...rest
@@ -69,6 +78,7 @@ export function AvatarMark({
   const { pubkey: selfPubkey } = useIdentity();
   const storedColor = useStoredAvatarColor();
   const storedIcon = useStoredAvatarIcon();
+  const storedIconColor = useStoredAvatarIconColor();
 
   const color =
     colorOverride !== undefined && colorOverride !== null
@@ -78,7 +88,16 @@ export function AvatarMark({
     iconOverride !== undefined
       ? iconOverride
       : resolveAvatarIcon(pubkey, selfPubkey, storedIcon);
+  const iconColor =
+    iconColorOverride !== undefined && iconColorOverride !== null
+      ? iconColorOverride
+      : resolveAvatarIconColor(pubkey, selfPubkey, storedIconColor);
   const mark = getAvatarMark(iconId);
+  // Inline style only when the user has actually chosen something
+  // other than the default — keeps the rendered DOM clean for the
+  // 99% of avatars that use the white fallback.
+  const foregroundStyle =
+    iconColor !== DEFAULT_AVATAR_ICON_COLOR ? { color: iconColor } : undefined;
 
   const initials = initialsSingleChar
     ? getInitials(displayName).slice(0, 1)
@@ -105,6 +124,7 @@ export function AvatarMark({
             // 75% works at every size we use (16px → 96px).
             "w-3/4 h-3/4",
           )}
+          style={foregroundStyle}
         />
       ) : (
         <span
@@ -112,6 +132,7 @@ export function AvatarMark({
             "text-white font-bold leading-none select-none",
             initialsClassName ?? "text-xs",
           )}
+          style={foregroundStyle}
         >
           {initials}
         </span>
