@@ -751,6 +751,20 @@ export function StudioScreen({
               // a stream object is created the moment the publisher's header
               // arrives, well before any payload bytes flow.
               const remoteIsLive = !isLocal && liveTransport.remoteReady.has(p.pubkey);
+              // Remote peers broadcast their mic/camera state on the signaling
+              // channel every few seconds. Use that as the source of truth so
+              // when a peer mutes or turns off their camera, every viewer sees
+              // the change reflected on their tile (badge + avatar fallback +
+              // silenced meter) instead of staring at a stale stream.
+              // Default the toggles to ON before we've heard the first beat
+              // so a freshly-joined peer doesn't briefly flash as muted.
+              const peerPresence = isLocal ? null : presenceByPubkey.get(p.pubkey);
+              const tileMicEnabled = isLocal
+                ? micEnabled
+                : peerPresence?.micEnabled ?? true;
+              const tileCameraEnabled = isLocal
+                ? cameraEnabled
+                : (peerPresence?.cameraEnabled ?? true) && remoteIsLive;
               return (
                 <VideoTile
                   key={p.id}
@@ -758,9 +772,18 @@ export function StudioScreen({
                   stream={isLocal ? localStream : (remoteIsLive ? remoteStream : undefined)}
                   isLocal={isLocal}
                   isConnecting={!isLocal && liveTransport.isConnected && !remoteIsLive}
-                  micEnabled={isLocal ? micEnabled : true}
-                  cameraEnabled={isLocal ? cameraEnabled : remoteIsLive}
-                  audioLevel={isLocal ? (micEnabled ? 0.5 : 0) : 0.5}
+                  micEnabled={tileMicEnabled}
+                  cameraEnabled={tileCameraEnabled}
+                  // Local tile rides the real analyzer so the meter pulses
+                  // with the user's actual voice (and drops to 0 the instant
+                  // they hit mute). Remote tiles don't have a per-peer
+                  // analyzer yet, so they stay at a calm baseline when the
+                  // peer's mic is on and drop to 0 when they mute.
+                  audioLevel={
+                    isLocal
+                      ? (micEnabled ? myMicLevel : 0)
+                      : (tileMicEnabled ? 0.5 : 0)
+                  }
                 />
               );
             })}
