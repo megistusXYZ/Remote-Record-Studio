@@ -1,4 +1,4 @@
-import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff } from "lucide-react";
+import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff, UserPlus } from "lucide-react";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -320,15 +320,24 @@ export function ControlBar({
               </TooltipContent>
             </Tooltip>
           )}
-          <VesselButton
-            variant="ghost"
-            size="sm"
-            onClick={onOpenInvite}
-            data-testid="button-invite-from-studio"
-            className="hidden sm:inline-flex"
-          >
-            Invite
-          </VesselButton>
+          {/* Mobile: icon-only so the action is reachable without leaving
+              the call. Desktop: full label for clarity. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <VesselButton
+                variant="ghost"
+                size="sm"
+                onClick={onOpenInvite}
+                data-testid="button-invite-from-studio"
+                aria-label="Invite guests"
+                className="px-2.5 sm:px-3"
+              >
+                <UserPlus className="w-4 h-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Invite</span>
+              </VesselButton>
+            </TooltipTrigger>
+            <TooltipContent>Invite guests</TooltipContent>
+          </Tooltip>
           <VesselButton
             variant="ghost"
             size="sm"
