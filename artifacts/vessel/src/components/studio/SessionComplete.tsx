@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Loader2, Download, Link as LinkIcon, Cloud, CloudOff, AlertCircle } from "lucide-react";
+import { Check, Loader2, Download, Link as LinkIcon, Cloud, CloudOff, ShieldCheck, ExternalLink, ShieldOff } from "lucide-react";
 import { getInitials } from "../../lib/identity";
 import { useIdentity } from "../../hooks/use-identity";
 import {
@@ -27,6 +27,20 @@ export type Track = {
   storageState?: "remote" | "local-only" | "unknown";
 };
 
+/** Status of publishing this device's personal single-track archive. */
+export type PersonalArchiveStatus =
+  | { status: "idle" }
+  | { status: "publishing" }
+  | {
+      status: "ready";
+      /** Archive fingerprint — keyed match for the local revocation material. */
+      archiveId: string;
+      receiptUrl: string;
+      successCount: number;
+      totalCount: number;
+    }
+  | { status: "error"; message: string };
+
 export type SessionCompleteProps = {
   open: boolean;
   isHost: boolean;
@@ -34,6 +48,9 @@ export type SessionCompleteProps = {
   syncStatus: "idle" | "syncing" | "complete" | "partial-failure";
   syncProgress: { synced: number; total: number; percent: number; failed: number };
   tracks: Track[];
+  /** Per-device personal-archive publishing state. Surfaces a receipt link
+   *  with copy + open + revoke calls to action once publishing succeeds. */
+  personalArchive?: PersonalArchiveStatus;
   onViewVault: () => void;
   onStartNew: () => void;
   onClose?: () => void;
@@ -50,6 +67,145 @@ function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+/** Receipt card surfaced in both the host and guest variants of the
+ *  complete phase. Shows the per-device personal-archive URL once it has
+ *  been published, with copy / open / revoke calls to action. Renders
+ *  inline progress + error states so the user always knows what's happening
+ *  with their personal archive. */
+function PersonalReceiptCard({
+  personalArchive,
+  isHost,
+  hostName,
+  onCopy,
+  receiptArchiveId,
+}: {
+  personalArchive: PersonalArchiveStatus | undefined;
+  isHost: boolean;
+  hostName: string;
+  onCopy: (url: string) => void;
+  receiptArchiveId: string | null;
+}) {
+  if (!personalArchive || personalArchive.status === "idle") {
+    return null;
+  }
+
+  if (personalArchive.status === "publishing") {
+    return (
+      <div
+        className="w-full mb-6 p-4 rounded-xl bg-vessel-bg-base border border-vessel-border text-left flex items-center gap-3"
+        data-testid="receipt-card-publishing"
+      >
+        <Loader2 className="w-4 h-4 animate-spin text-vessel-accent shrink-0" />
+        <div className="text-sm text-vessel-text-secondary">
+          Publishing your personal receipt link…
+        </div>
+      </div>
+    );
+  }
+
+  if (personalArchive.status === "error") {
+    return (
+      <div
+        className="w-full mb-6 p-4 rounded-xl bg-vessel-bg-base border border-vessel-border text-left flex items-start gap-3"
+        data-testid="receipt-card-error"
+      >
+        <ShieldOff className="w-4 h-4 text-vessel-amber mt-0.5 shrink-0" />
+        <div className="text-sm text-vessel-text-secondary leading-relaxed">
+          We couldn't publish your personal receipt link.{" "}
+          <span className="text-vessel-text-muted">{personalArchive.message}</span>{" "}
+          Your local copy is unaffected.
+        </div>
+      </div>
+    );
+  }
+
+  const partial = personalArchive.successCount < personalArchive.totalCount;
+
+  return (
+    <div
+      className="w-full mb-6 p-5 rounded-xl bg-gradient-to-br from-vessel-accent/8 to-vessel-bg-base border border-vessel-accent/40 text-left"
+      data-testid="receipt-card-ready"
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <ShieldCheck className="w-4 h-4 text-vessel-accent shrink-0" />
+        <span className="text-xs font-mono-vessel text-vessel-accent uppercase tracking-wider font-semibold">
+          {isHost ? "Your archive receipt" : "Your personal receipt"}
+        </span>
+      </div>
+      <p className="text-sm text-vessel-text-secondary leading-relaxed mb-3">
+        {isHost ? (
+          <>
+            Save this link — it's your archive's receipt and the only way to take this share down later.
+          </>
+        ) : (
+          <>
+            This is your proof you owned this recording. {hostName} has access to your track until
+            you take it down — open this link any time to revoke.
+          </>
+        )}
+      </p>
+
+      <div className="flex items-center gap-2 mb-3">
+        <code
+          className="flex-1 min-w-0 px-3 py-2 rounded-md bg-vessel-bg-base border border-vessel-border font-mono-vessel text-xs text-vessel-text-primary truncate"
+          data-testid="text-receipt-url"
+          title={personalArchive.receiptUrl}
+        >
+          {personalArchive.receiptUrl.replace(/^https?:\/\//, "")}
+        </code>
+        <VesselButton
+          variant="ghost"
+          size="sm"
+          onClick={() => onCopy(personalArchive.receiptUrl)}
+          data-testid="button-copy-receipt"
+        >
+          <LinkIcon className="w-4 h-4" />
+        </VesselButton>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <a
+          href={personalArchive.receiptUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1"
+          data-testid="link-open-receipt"
+        >
+          <VesselButton variant="primary" size="sm" className="w-full">
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Open my receipt
+          </VesselButton>
+        </a>
+        {receiptArchiveId && (
+          <a
+            href={`/revoke/${encodeURIComponent(receiptArchiveId)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 sm:flex-none"
+            data-testid="link-revoke-from-complete"
+          >
+            <VesselButton
+              variant="ghost"
+              size="sm"
+              className="w-full hover:text-vessel-red hover:border-vessel-red/40 hover:bg-vessel-red/10"
+            >
+              <ShieldOff className="w-4 h-4 mr-2" />
+              Revoke
+            </VesselButton>
+          </a>
+        )}
+      </div>
+
+      {partial && (
+        <p className="text-[11px] text-vessel-text-muted mt-3 leading-relaxed">
+          Published to {personalArchive.successCount} of {personalArchive.totalCount} sharing
+          servers. The rest will catch up shortly.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function StorageStateChip({ state }: { state?: "remote" | "local-only" | "unknown" }) {
@@ -84,6 +240,7 @@ export function SessionComplete({
   syncStatus,
   syncProgress,
   tracks,
+  personalArchive,
   onViewVault,
   onStartNew,
   onClose,
@@ -154,6 +311,14 @@ export function SessionComplete({
     navigator.clipboard.writeText(window.location.origin + '/vault');
     toast({ description: "Copied!" });
   };
+
+  const handleCopyReceipt = (url: string) => {
+    navigator.clipboard.writeText(url);
+    toast({ description: "Receipt link copied — keep it somewhere safe." });
+  };
+
+  const receiptArchiveId =
+    personalArchive?.status === "ready" ? personalArchive.archiveId : null;
 
   const isSyncing = syncStatus === "syncing" || (syncStatus === "idle" && tracks.length === 0);
 
@@ -250,12 +415,12 @@ export function SessionComplete({
                   <>
                     <h2 className="font-display text-3xl font-bold mb-2 text-vessel-text-primary">Session complete.</h2>
                     <p className="text-sm text-vessel-text-secondary mb-8">Your recordings are ready. Each track is saved separately for studio-quality editing.</p>
-                    
-                    <div className="w-full space-y-3 mb-8 text-left">
+
+                    <div className="w-full space-y-3 mb-6 text-left">
                       {tracks.map((track) => (
                         <div key={track.participantId} className="p-4 rounded-xl bg-vessel-bg-base border border-vessel-border">
                           <div className="flex items-center gap-3 mb-3">
-                            <div 
+                            <div
                               className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
                               style={{ backgroundColor: resolveAvatarColor(track.participantPubkey, selfPubkey, storedColor) }}
                             >
@@ -270,9 +435,9 @@ export function SessionComplete({
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <VesselButton 
-                              variant="primary" 
-                              size="sm" 
+                            <VesselButton
+                              variant="primary"
+                              size="sm"
                               data-testid={`button-download-track-${track.participantId}`}
                               onClick={() => {
                                 if (track.blob) downloadBlob(track.blob, `${track.participantName.replace(/[^a-z0-9]/gi,'_')}_track.webm`);
@@ -282,8 +447,8 @@ export function SessionComplete({
                               <Download className="w-4 h-4 mr-2" />
                               Download Track
                             </VesselButton>
-                            <VesselButton 
-                              variant="ghost" 
+                            <VesselButton
+                              variant="ghost"
                               size="sm"
                               data-testid={`button-copy-track-link-${track.participantId}`}
                               onClick={handleCopyLink}
@@ -295,19 +460,27 @@ export function SessionComplete({
                         </div>
                       ))}
                     </div>
-                    
-                    <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-                      <VesselButton 
-                        variant="primary" 
-                        className="w-full sm:w-auto" 
+
+                    <PersonalReceiptCard
+                      personalArchive={personalArchive}
+                      isHost
+                      hostName={hostName}
+                      onCopy={handleCopyReceipt}
+                      receiptArchiveId={receiptArchiveId}
+                    />
+
+                    <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mt-2">
+                      <VesselButton
+                        variant="primary"
+                        className="w-full sm:w-auto"
                         onClick={onViewVault}
                         data-testid="button-view-vault"
                       >
                         View in My Vault &rarr;
                       </VesselButton>
-                      <VesselButton 
-                        variant="ghost" 
-                        className="w-full sm:w-auto" 
+                      <VesselButton
+                        variant="ghost"
+                        className="w-full sm:w-auto"
                         onClick={onStartNew}
                         data-testid="button-start-new"
                       >
@@ -318,22 +491,33 @@ export function SessionComplete({
                 ) : (
                   <>
                     <h2 className="font-display text-2xl font-bold mb-2 text-vessel-text-primary">Thanks for recording with {hostName}!</h2>
-                    <p className="text-sm text-vessel-text-secondary mb-6">{hostName} will receive your track. Nothing to do on your end.</p>
-                    <p className="text-xs text-vessel-text-muted mb-3">Want to keep your own copy?</p>
-                    
-                    <div className="flex flex-col gap-3 w-full">
+                    <p className="text-sm text-vessel-text-secondary mb-6">
+                      Your track is saved on your storage and a copy went to {hostName} for the edit.
+                    </p>
+
+                    <PersonalReceiptCard
+                      personalArchive={personalArchive}
+                      isHost={false}
+                      hostName={hostName}
+                      onCopy={handleCopyReceipt}
+                      receiptArchiveId={receiptArchiveId}
+                    />
+
+                    <div className="flex flex-col gap-3 w-full mt-2">
                       {tracks[0]?.blob && (
-                        <VesselButton 
-                          variant="ghost" 
+                        <VesselButton
+                          variant="ghost"
                           size="sm"
                           onClick={() => {
                             if (tracks[0]?.blob) downloadBlob(tracks[0].blob, `${tracks[0].participantName.replace(/[^a-z0-9]/gi,'_')}_track.webm`);
                           }}
+                          data-testid="button-guest-download-local"
                         >
-                          Download Your Track
+                          <Download className="w-4 h-4 mr-2" />
+                          Download from this device
                         </VesselButton>
                       )}
-                      <VesselButton 
+                      <VesselButton
                         variant="primary"
                         onClick={onClose}
                         data-testid="button-guest-close"

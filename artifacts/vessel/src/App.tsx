@@ -14,6 +14,8 @@ import NewSession from "./pages/session-new";
 import SessionStudio from "./pages/session-studio";
 import Join from "./pages/join";
 import ShareView from "./pages/share-view";
+import ReceiptPage from "./pages/receipt";
+import RevokeTrackPage from "./pages/revoke-track";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import HowItWorks from "./pages/how-it-works";
@@ -41,6 +43,8 @@ function Router() {
       <Route path="/session/:id" component={SessionStudio} />
       <Route path="/join/:inviteCode" component={Join} />
       <Route path="/s/:pointer" component={ShareView} />
+      <Route path="/r/:pointer" component={ReceiptPage} />
+      <Route path="/revoke/:archiveId" component={RevokeTrackPage} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/how-it-works" component={HowItWorks} />
