@@ -806,6 +806,14 @@ export function StudioScreen({
             toast({ description: "Sent a polite mute request." });
           }}
           onLowerHand={(pubkey) => {
+            // When the host clicks the inline ✕ on their *own* raised
+            // row, just toggle locally — there's no point publishing a
+            // host→self moderation event (we'd ignore our own signal
+            // via the loopback guard anyway).
+            if (pubkey === currentPubkey) {
+              if (callSignal.handRaised) callSignal.toggleHand();
+              return;
+            }
             void callSignal.lowerHandFor(pubkey);
           }}
           onLowerAllHands={() => {
