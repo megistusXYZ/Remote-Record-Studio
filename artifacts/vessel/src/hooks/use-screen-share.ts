@@ -29,6 +29,15 @@ export type ScreenShareError = {
   cancelled: boolean;
 };
 
+/** Discriminated result of a `start()` attempt. We deliberately return
+ *  the error inline (rather than asking callers to read it back from
+ *  React state) because state updates aren't visible in the same call
+ *  stack — so a freshly-failed start would otherwise see stale/null
+ *  error and silently swallow the failure. */
+export type ScreenShareStartResult =
+  | { stream: MediaStream; error: null }
+  | { stream: null; error: ScreenShareError };
+
 export type UseScreenShareResult = {
   /** True iff this browser exposes `getDisplayMedia` at all. */
   isSupported: boolean;
@@ -37,12 +46,16 @@ export type UseScreenShareResult = {
   /** True while the screen picker is open AND while the share is active. */
   isSharing: boolean;
   /** Most recent capture error, cleared on the next successful `start()`
-   *  or explicit `stop()`. */
+   *  or explicit `stop()`. Mirrored from the last `start()` result so
+   *  components can render persistent error UI; transient toasts should
+   *  use the value returned directly from `start()`. */
   error: ScreenShareError | null;
-  /** Open the OS screen picker. Resolves to the MediaStream on success,
-   *  null when the user cancelled or capture failed. Idempotent — calling
-   *  while already sharing returns the existing stream. */
-  start: (options?: { systemAudio?: boolean }) => Promise<MediaStream | null>;
+  /** Open the OS screen picker. Always resolves to a structured result —
+   *  `stream` is set on success, `error` on failure (including the user
+   *  cancelling the picker, indicated by `error.cancelled === true`).
+   *  Idempotent — calling while already sharing returns the existing
+   *  stream. */
+  start: (options?: { systemAudio?: boolean }) => Promise<ScreenShareStartResult>;
   /** Stop the active share and release tracks. Idempotent. */
   stop: () => void;
 };
@@ -128,13 +141,20 @@ export function useScreenShare(): UseScreenShareResult {
           cancelled: false,
         };
         setError(err);
-        return null;
+        return { stream: null, error: err };
       }
       if (activeStreamRef.current) {
         // Already sharing — return the existing stream.
-        return activeStreamRef.current;
+        return { stream: activeStreamRef.current, error: null };
       }
-      if (startInFlightRef.current) return null;
+      if (startInFlightRef.current) {
+        // Concurrent start() — treat as a silent cancel so we never
+        // surface a noisy toast for an accidental double-click.
+        return {
+          stream: null,
+          error: { message: "Screen share already starting.", cancelled: true },
+        };
+      }
       startInFlightRef.current = true;
       try {
         // Browsers ignore unknown constraints, so the explicit request for
@@ -163,11 +183,11 @@ export function useScreenShare(): UseScreenShareResult {
         setStream(captured);
         setIsSharing(true);
         setError(null);
-        return captured;
+        return { stream: captured, error: null };
       } catch (err) {
         const described = describeError(err);
         setError(described);
-        return null;
+        return { stream: null, error: described };
       } finally {
         startInFlightRef.current = false;
       }

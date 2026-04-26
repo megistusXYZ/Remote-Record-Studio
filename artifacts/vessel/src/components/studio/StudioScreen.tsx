@@ -12,6 +12,7 @@ import { getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
 import { RecordingDot } from "../vessel-ui/RecordingDot";
+import { SessionCodeBadge } from "../vessel-ui/SessionCodeBadge";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
 import { VideoGrid } from "./VideoGrid";
 import { VideoTile } from "./VideoTile";
@@ -204,15 +205,18 @@ export function StudioScreen({
 
   /** Start screen-sharing for real (helper used both by the direct path and
    *  the post-confirmation take-over path). Surfaces friendly toasts on
-   *  failure and silently ignores the user's own cancel of the OS picker. */
+   *  failure and silently ignores the user's own cancel of the OS picker.
+   *
+   *  Reads the error directly from the structured `start()` result rather
+   *  than the React state mirror — state updates aren't visible in the
+   *  same call stack, which would otherwise let a freshly-failed start
+   *  silently swallow the toast on the first failure. */
   const beginScreenShare = () => {
     void (async () => {
-      const captured = await screenShare.start();
-      if (!captured) {
-        const err = screenShare.error;
-        if (err && !err.cancelled) {
-          toast({ variant: "destructive", description: err.message });
-        }
+      const result = await screenShare.start();
+      if (result.stream) return;
+      if (!result.error.cancelled) {
+        toast({ variant: "destructive", description: result.error.message });
       }
     })();
   };
@@ -1031,9 +1035,10 @@ export function StudioScreen({
                 <span className="font-display font-bold text-sm tracking-tight">Vessel</span>
               </div>
               <span className="text-vessel-text-muted">/</span>
-              <span className="text-sm font-medium truncate max-w-[300px]">
+              <span className="text-sm font-medium truncate max-w-[240px]">
                 {session.title}
               </span>
+              <SessionCodeBadge code={session.inviteCode} />
             </div>
           </div>
 

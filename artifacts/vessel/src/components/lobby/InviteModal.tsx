@@ -7,6 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { VesselButton } from "../vessel-ui/VesselButton";
+import { SessionCodeChip } from "../vessel-ui/SessionCodeChip";
 import { QRCodeSVG } from "qrcode.react";
 import { Check, Copy, Share2 } from "lucide-react";
 
@@ -17,7 +18,7 @@ export type InviteModalProps = {
   inviteCode: string;
 };
 
-type CopiedField = "url" | "code" | null;
+type CopiedField = "url" | null;
 
 export function InviteModal({
   open,
@@ -30,11 +31,6 @@ export function InviteModal({
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(inviteUrl);
     setCopied("url");
-  };
-
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(inviteCode);
-    setCopied("code");
   };
 
   useEffect(() => {
@@ -110,55 +106,10 @@ export function InviteModal({
           <div className="h-px bg-vessel-border/70" aria-hidden="true" />
 
           {/* Session code — short, easy to read aloud or text */}
-          <div className="space-y-2">
-            <label className="block text-[11px] uppercase tracking-[0.18em] text-vessel-text-muted">
-              Session code
-            </label>
-            <div className="flex items-stretch gap-2 min-w-0 bg-vessel-bg-base border border-vessel-border rounded-xl p-1.5 pl-3">
-              <div
-                className="
-                  font-mono-vessel text-base sm:text-lg tracking-[0.18em]
-                  text-vessel-text-primary
-                  flex-1 min-w-0
-                  self-center
-                  overflow-hidden text-ellipsis whitespace-nowrap
-                  uppercase
-                "
-                data-testid="text-invite-code"
-              >
-                {inviteCode}
-              </div>
-              <button
-                onClick={handleCopyCode}
-                className="
-                  shrink-0 inline-flex items-center justify-center gap-1.5
-                  px-3 py-2 min-w-[5.25rem]
-                  rounded-lg
-                  bg-vessel-bg-surface hover:bg-vessel-accent/10
-                  text-vessel-text-primary text-xs font-medium
-                  transition-colors
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent
-                "
-                data-testid="button-copy-invite-code"
-                aria-label={copied === "code" ? "Code copied" : "Copy session code"}
-              >
-                {copied === "code" ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-vessel-green" />
-                    <span>Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-            </div>
-            <p className="text-[11px] text-vessel-text-muted">
-              Guests can paste this on the home screen to join.
-            </p>
-          </div>
+          <SessionCodeChip
+            code={inviteCode}
+            helperText="Guests can paste this on the home screen to join."
+          />
 
           {/* Invite link row — min-w-0 fixes flex truncation */}
           <div className="space-y-2">
