@@ -22,6 +22,11 @@ import {
   rejectIfPubkeyMismatch,
   requireSignedRequest,
 } from "../middlewares/require-signed-request";
+import {
+  sessionLookupIpLimiter,
+  sessionsCreateQuota,
+  sessionsJoinQuota,
+} from "../middlewares/rate-limit";
 
 // Server-side bounds for the per-session participant cap. Keep in sync with
 // the OpenAPI spec ({ minimum: 1, maximum: 25 }) and with the room-size
@@ -99,7 +104,9 @@ router.get("/sessions", requireSignedRequest(), async (req, res): Promise<void> 
 });
 
 // Creating a session writes the caller's pubkey as the host — auth required.
-router.post("/sessions", requireSignedRequest(), async (req, res): Promise<void> => {
+// Per-account quota runs after auth so it's keyed by the verified identity,
+// not by IP (so a podcaster behind a NAT isn't penalized by their roommate).
+router.post("/sessions", requireSignedRequest(), sessionsCreateQuota(), async (req, res): Promise<void> => {
   const parsed = CreateSessionBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -168,6 +175,12 @@ async function findSessionByIdOrInvite(idOrInvite: string) {
 // could enumerate sessions without auth.
 router.get(
   "/sessions/:sessionId",
+  // Tight per-IP cap on JUST this GET — the only unauthenticated
+  // DB-touching endpoint, and the obvious target for invite-code
+  // enumeration. Other methods on the same path (POST .../join,
+  // PATCH, DELETE) are not subject to this stricter limit; they
+  // have their own per-pubkey quotas.
+  sessionLookupIpLimiter(),
   attachOptionalSignedAuth(),
   async (req, res): Promise<void> => {
     const params = GetSessionParams.safeParse(req.params);
@@ -328,6 +341,7 @@ router.delete("/sessions/:sessionId", requireSignedRequest(), async (req, res): 
 router.post(
   "/sessions/:sessionId/join",
   requireSignedRequest(),
+  sessionsJoinQuota(),
   async (req, res): Promise<void> => {
     const params = JoinSessionParams.safeParse(req.params);
     if (!params.success) {

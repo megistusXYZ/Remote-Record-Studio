@@ -15,6 +15,10 @@ import {
   Film,
   Package,
   Hash,
+  FileText,
+  Subtitles,
+  Captions,
+  Braces,
 } from "lucide-react";
 import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
@@ -34,6 +38,13 @@ import {
   type TrackSelection,
   type TrackStreamKind,
 } from "../../lib/track-export";
+import {
+  buildTranscriptBlob,
+  pickOriginMs,
+  transcriptFilename,
+  type TranscriptExportFormat,
+} from "../../lib/transcript-export";
+import type { TranscriptFragment } from "../../hooks/use-call-signal";
 
 export type Track = {
   participantId: string;
@@ -133,6 +144,11 @@ export type SessionCompleteProps = {
   onViewVault: () => void;
   onStartNew: () => void;
   onClose?: () => void;
+  /** Live transcript fragments captured during the session, oldest-first.
+   *  When non-empty, the session-complete card surfaces a download row
+   *  so the user can grab the transcript in subtitle (SRT/VTT), JSON,
+   *  or plain-text form. Empty / undefined hides the row entirely. */
+  transcriptFragments?: TranscriptFragment[];
 };
 
 function formatDuration(seconds: number) {
@@ -645,6 +661,77 @@ function WaitingForRow({
   );
 }
 
+/** Compact card with one button per supported transcript export
+ *  format. Sits inside the success view so a host or guest can grab a
+ *  caption file (SRT/VTT), structured JSON for editors, or a plain
+ *  speaker:line .txt for show-notes. Hidden entirely when no fragments
+ *  were captured. */
+function TranscriptDownloadCard({
+  fragmentCount,
+  onDownload,
+}: {
+  fragmentCount: number;
+  onDownload: (format: TranscriptExportFormat) => void;
+}) {
+  return (
+    <div
+      className="w-full p-4 rounded-xl bg-vessel-bg-base border border-vessel-border text-left mb-3"
+      data-testid="card-transcript-download"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Captions className="w-4 h-4 text-vessel-accent" aria-hidden="true" />
+        <div className="text-sm font-medium text-vessel-text-primary">
+          Transcript
+        </div>
+        <div className="text-xs text-vessel-text-muted ml-auto">
+          {fragmentCount} {fragmentCount === 1 ? "line" : "lines"}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <VesselButton
+          variant="muted"
+          size="sm"
+          onClick={() => onDownload("srt")}
+          data-testid="button-transcript-srt"
+        >
+          <Subtitles className="w-4 h-4 mr-2" />
+          .srt
+        </VesselButton>
+        <VesselButton
+          variant="muted"
+          size="sm"
+          onClick={() => onDownload("vtt")}
+          data-testid="button-transcript-vtt"
+        >
+          <Subtitles className="w-4 h-4 mr-2" />
+          .vtt
+        </VesselButton>
+        <VesselButton
+          variant="muted"
+          size="sm"
+          onClick={() => onDownload("json")}
+          data-testid="button-transcript-json"
+        >
+          <Braces className="w-4 h-4 mr-2" />
+          .json
+        </VesselButton>
+        <VesselButton
+          variant="muted"
+          size="sm"
+          onClick={() => onDownload("txt")}
+          data-testid="button-transcript-txt"
+        >
+          <FileText className="w-4 h-4 mr-2" />
+          .txt
+        </VesselButton>
+      </div>
+      <p className="text-[11px] text-vessel-text-muted mt-3 leading-relaxed">
+        Captions are generated on-device — choose subtitles for video editors, JSON for downstream tools, or plain text for show notes.
+      </p>
+    </div>
+  );
+}
+
 export function SessionComplete({
   open,
   isHost,
@@ -659,6 +746,7 @@ export function SessionComplete({
   onViewVault,
   onStartNew,
   onClose,
+  transcriptFragments,
 }: SessionCompleteProps) {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -821,6 +909,38 @@ export function SessionComplete({
       setBusy(false);
     }
   };
+
+  // Transcript downloads. Origin is the wall-clock of the first
+  // fragment so SRT/VTT timestamps start near 00:00 instead of an
+  // unhelpful absolute Unix timestamp. Disabled when there are no
+  // fragments at all so the buttons don't tease at empty downloads.
+  const transcriptOriginMs = useMemo(
+    () =>
+      transcriptFragments && transcriptFragments.length > 0
+        ? pickOriginMs(transcriptFragments, null)
+        : 0,
+    [transcriptFragments],
+  );
+  const handleTranscriptDownload = (format: TranscriptExportFormat) => {
+    if (!transcriptFragments || transcriptFragments.length === 0) return;
+    try {
+      const blob = buildTranscriptBlob(
+        transcriptFragments,
+        format,
+        transcriptOriginMs,
+        sessionTitle,
+      );
+      const filename = transcriptFilename(sessionTitle, format, sessionDate);
+      downloadBlob(blob, filename);
+    } catch (err) {
+      console.error("Transcript download failed", err);
+      toast({
+        variant: "destructive",
+        description: "Couldn't build the transcript file. Try again in a moment.",
+      });
+    }
+  };
+  const hasTranscript = !!(transcriptFragments && transcriptFragments.length > 0);
 
   const toggleSelect = (participantId: string) => {
     setSelected((prev) => {
@@ -1096,6 +1216,13 @@ export function SessionComplete({
                       </div>
                     </div>
 
+                    {hasTranscript && (
+                      <TranscriptDownloadCard
+                        fragmentCount={transcriptFragments?.length ?? 0}
+                        onDownload={handleTranscriptDownload}
+                      />
+                    )}
+
                     <PersonalReceiptCard
                       personalArchive={personalArchive}
                       isHost
@@ -1144,6 +1271,13 @@ export function SessionComplete({
                         <TrackMetaRow track={tracks[0]} onCopy={handleCopyFileLink} />
                       </div>
                     ) : null}
+
+                    {hasTranscript && (
+                      <TranscriptDownloadCard
+                        fragmentCount={transcriptFragments?.length ?? 0}
+                        onDownload={handleTranscriptDownload}
+                      />
+                    )}
 
                     <div className="flex flex-col gap-3 w-full mt-2">
                       <VesselButton variant="primary" onClick={onClose} data-testid="button-guest-close">

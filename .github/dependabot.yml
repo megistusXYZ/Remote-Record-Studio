@@ -1,0 +1,59 @@
+# Vessel — Dependabot configuration.
+#
+# Goals:
+#   - Surface security advisories automatically without burying maintainers in
+#     individual PRs.
+#   - Keep CI / GitHub Actions pinned to known-good versions.
+#   - Minor and patch updates ship in grouped PRs (one per ecosystem per week)
+#     so review effort scales with major-version churn, not dependency count.
+#
+# Ecosystem: `pnpm` is supported via the `npm` package-ecosystem (Dependabot
+# reads pnpm-lock.yaml when present).
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+      security-patches:
+        applies-to: security-updates
+        update-types:
+          - "patch"
+          - "minor"
+          - "major"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"

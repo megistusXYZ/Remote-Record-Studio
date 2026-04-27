@@ -42,6 +42,71 @@ const crossOriginIsolationHeaders = {
     process.env.NODE_ENV === "production" ? "require-corp" : "credentialless",
 } as const;
 
+// Security headers applied to every static response served by the Vite dev
+// server and the production-style preview server. Designed to be safe by
+// default and to give the Vessel web client a strong posture even before a
+// CDN/WAF is in front of it.
+//
+// The Content-Security-Policy ships in REPORT-ONLY mode first (per the
+// Task #68 plan). Flip `VESSEL_CSP_ENFORCE=true` to send the enforcing
+// header instead — only do that after a week of clean Report-Only telemetry
+// so user-supplied storage / signaling origins have time to surface.
+//
+// `Referrer-Policy: no-referrer` is critical because share-link decryption
+// keys live in URL fragments — a referrer leak would compromise them.
+const cspDirectives = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "object-src 'none'",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob:",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  // 'unsafe-inline' on script-src is a temporary concession for the small
+  // JSON-LD <script> in index.html. The CSP is Report-Only today so this
+  // does not weaken anything in production yet — we'll either move that
+  // block to an external file or add a hash before flipping enforce.
+  "script-src 'self' 'unsafe-inline'",
+  // wss: is needed for signaling channels; https: covers user-chosen storage
+  // origins which we cannot enumerate at build time.
+  "connect-src 'self' https: wss:",
+  "worker-src 'self' blob:",
+] as const;
+const cspValue = cspDirectives.join("; ");
+const cspEnforce =
+  (process.env["VESSEL_CSP_ENFORCE"] ?? "false").toLowerCase() === "true";
+const cspHeader = cspEnforce
+  ? { "Content-Security-Policy": cspValue }
+  : { "Content-Security-Policy-Report-Only": cspValue };
+
+const securityHeaders = {
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  // Permissions-Policy: deny by default for sensors / payments / etc. We
+  // do NOT deny camera/microphone/display-capture — the studio needs them.
+  "Permissions-Policy": [
+    "accelerometer=()",
+    "ambient-light-sensor=()",
+    "autoplay=(self)",
+    "battery=()",
+    "geolocation=()",
+    "gyroscope=()",
+    "magnetometer=()",
+    "midi=()",
+    "payment=()",
+    "usb=()",
+    "interest-cohort=()",
+  ].join(", "),
+  ...cspHeader,
+} as const;
+
+const allHeaders = {
+  ...crossOriginIsolationHeaders,
+  ...securityHeaders,
+} as const;
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -136,7 +201,7 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
-    headers: crossOriginIsolationHeaders,
+    headers: allHeaders,
     fs: {
       strict: true,
     },
@@ -145,6 +210,6 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
-    headers: crossOriginIsolationHeaders,
+    headers: allHeaders,
   },
 });

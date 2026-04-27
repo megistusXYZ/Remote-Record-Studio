@@ -14,6 +14,7 @@ import {
   rejectIfPubkeyMismatch,
   requireSignedRequest,
 } from "../middlewares/require-signed-request";
+import { recordingsWriteQuota } from "../middlewares/rate-limit";
 
 const router: IRouter = Router();
 
@@ -40,7 +41,9 @@ router.get("/recordings", requireSignedRequest(), async (req, res): Promise<void
   res.json(recordings.map((r) => ListRecordingsResponseItem.parse(r)));
 });
 
-router.post("/recordings", requireSignedRequest(), async (req, res): Promise<void> => {
+// Recording metadata writes are gated by a per-pubkey quota so a runaway
+// client (or a malicious one with a leaked key) can't fill the table.
+router.post("/recordings", requireSignedRequest(), recordingsWriteQuota(), async (req, res): Promise<void> => {
   const parsed = CreateRecordingBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

@@ -14,15 +14,20 @@ import {
   Wifi,
   WifiOff,
   MessageCircle,
+  Captions,
+  Loader2,
 } from "lucide-react";
 import {
   type Peer,
   type ChatMessage,
   type ConnectionQuality,
+  type TranscriptFragment,
 } from "../../hooks/use-call-signal";
+import { sortFragments } from "../../lib/transcript-export";
 import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
  * RosterSidePanel — slide-in side panel showing live presence + chat.
@@ -92,6 +97,18 @@ export type RosterSidePanelProps = {
   chat: ChatMessage[];
   onSendChat: (text: string) => void;
   onSendReaction: (emoji: string) => void;
+  /** Live caption fragments from every speaker in the room, oldest-first.
+   *  The transcript tab assembles these into a per-speaker scrolling
+   *  feed so people can catch up on missed lines without rewinding the
+   *  call. */
+  transcripts?: TranscriptFragment[];
+  /** True when the local user has captions enabled. Drives a small CC
+   *  indicator on the Transcript tab so the user knows their own audio
+   *  is contributing to the feed. */
+  captionsActive?: boolean;
+  /** Optional human-readable status (e.g. "Loading captions engine…")
+   *  shown in the transcript empty-state when captions are warming up. */
+  captionsStatusLabel?: string | null;
 };
 
 const QUICK_REACTIONS = ["👏", "🎉", "❤️", "🔥", "😂", "👍"];
@@ -148,9 +165,13 @@ export function RosterSidePanel({
   chat,
   onSendChat,
   onSendReaction,
+  transcripts = [],
+  captionsActive = false,
+  captionsStatusLabel = null,
 }: RosterSidePanelProps) {
   const { pubkey: selfPubkey } = useIdentity();
   const [draft, setDraft] = useState("");
+  const [tab, setTab] = useState<"people" | "chat" | "transcript">("people");
 
   // Build per-row state (combines DB-known participants + signaling).
   const rows = useMemo<RosterRowData[]>(() => {
@@ -306,46 +327,112 @@ export function RosterSidePanel({
               )}
             </header>
 
-            {/* Roster list */}
-            <div className="overflow-y-auto px-2 py-2 max-h-[40vh] border-b border-vessel-border">
-              <ul className="space-y-1">
-                <AnimatePresence initial={false}>
-                  {sortedRows.map((row, idx) => {
-                    const queuePosition = row.handRaised
-                      ? sortedRows
-                          .slice(0, idx + 1)
-                          .filter((r) => r.handRaised).length
-                      : null;
-                    return (
-                      <RosterRow
-                        key={row.participant.pubkey}
-                        row={row}
-                        queuePosition={queuePosition}
-                        isHost={isHost}
-                        myMicLevel={myMicLevel}
-                        onAskToMute={onAskToMute}
-                        onLowerHand={onLowerHand}
-                      />
-                    );
-                  })}
-                </AnimatePresence>
-              </ul>
-            </div>
+            {/* Tabs split the panel into People / Chat / Transcript so
+                the live transcript has a permanent home alongside the
+                existing presence + chat surfaces. The composer is
+                scoped to the Chat tab; reactions stay with People where
+                they're discoverable next to the roster. */}
+            <Tabs
+              value={tab}
+              onValueChange={(v) => setTab(v as "people" | "chat" | "transcript")}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <TabsList
+                className="mx-3 mt-2 mb-1 grid grid-cols-3 h-9 bg-vessel-bg-base border border-vessel-border rounded-lg p-0.5 shrink-0"
+                data-testid="tabs-roster"
+              >
+                <TabsTrigger
+                  value="people"
+                  className="rounded-md text-xs data-[state=active]:bg-vessel-bg-surface data-[state=active]:text-vessel-text-primary text-vessel-text-secondary"
+                  data-testid="tab-people"
+                >
+                  People
+                </TabsTrigger>
+                <TabsTrigger
+                  value="chat"
+                  className="rounded-md text-xs data-[state=active]:bg-vessel-bg-surface data-[state=active]:text-vessel-text-primary text-vessel-text-secondary"
+                  data-testid="tab-chat"
+                >
+                  Chat
+                </TabsTrigger>
+                <TabsTrigger
+                  value="transcript"
+                  className="rounded-md text-xs data-[state=active]:bg-vessel-bg-surface data-[state=active]:text-vessel-text-primary text-vessel-text-secondary inline-flex items-center gap-1"
+                  data-testid="tab-transcript"
+                >
+                  Transcript
+                  {captionsActive && (
+                    <Captions
+                      className="w-3 h-3 text-vessel-accent"
+                      aria-label="Captions on"
+                    />
+                  )}
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Quick actions row — reactions only; the raise-hand button now
-                lives in the control bar so it's always reachable. */}
-            <div className="px-3 py-2 border-b border-vessel-border flex items-center justify-end">
-              <ReactionPicker onPick={onSendReaction} />
-            </div>
+              <TabsContent
+                value="people"
+                className="flex-1 flex flex-col min-h-0 mt-0"
+                data-testid="tabpanel-people"
+              >
+                <div className="flex-1 overflow-y-auto px-2 py-2">
+                  <ul className="space-y-1">
+                    <AnimatePresence initial={false}>
+                      {sortedRows.map((row, idx) => {
+                        const queuePosition = row.handRaised
+                          ? sortedRows
+                              .slice(0, idx + 1)
+                              .filter((r) => r.handRaised).length
+                          : null;
+                        return (
+                          <RosterRow
+                            key={row.participant.pubkey}
+                            row={row}
+                            queuePosition={queuePosition}
+                            isHost={isHost}
+                            myMicLevel={myMicLevel}
+                            onAskToMute={onAskToMute}
+                            onLowerHand={onLowerHand}
+                          />
+                        );
+                      })}
+                    </AnimatePresence>
+                  </ul>
+                </div>
+                {/* Reactions row stays anchored to the bottom of the
+                    People tab so the picker is always reachable next
+                    to the roster, regardless of how long the list is. */}
+                <div className="px-3 py-2 border-t border-vessel-border flex items-center justify-end shrink-0">
+                  <ReactionPicker onPick={onSendReaction} />
+                </div>
+              </TabsContent>
 
-            {/* Chat */}
-            <ChatThread chat={chat} selfPubkey={selfPubkey} />
+              <TabsContent
+                value="chat"
+                className="flex-1 flex flex-col min-h-0 mt-0"
+                data-testid="tabpanel-chat"
+              >
+                <ChatThread chat={chat} selfPubkey={selfPubkey} />
+                <ChatComposer
+                  draft={draft}
+                  setDraft={setDraft}
+                  onSend={handleSendChat}
+                />
+              </TabsContent>
 
-            <ChatComposer
-              draft={draft}
-              setDraft={setDraft}
-              onSend={handleSendChat}
-            />
+              <TabsContent
+                value="transcript"
+                className="flex-1 flex flex-col min-h-0 mt-0"
+                data-testid="tabpanel-transcript"
+              >
+                <TranscriptPane
+                  transcripts={transcripts}
+                  selfPubkey={selfPubkey}
+                  captionsActive={captionsActive}
+                  captionsStatusLabel={captionsStatusLabel}
+                />
+              </TabsContent>
+            </Tabs>
           </motion.aside>
         </>
       )}
@@ -764,6 +851,187 @@ function ChatBubble({ row }: { row: ChatRow }) {
           className="rounded-2xl rounded-bl-md px-3.5 py-2 text-sm leading-snug bg-vessel-bg-base text-vessel-text-primary border border-vessel-border break-words"
         >
           {m.text}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A single contiguous run of fragments from one speaker. We coalesce
+ *  consecutive fragments by the same speaker (within a short gap) into
+ *  one bubble so the transcript reads like a conversation rather than a
+ *  flood of 5-second slivers. */
+type TranscriptGroup = {
+  fromPubkey: string;
+  fromName: string;
+  text: string;
+  /** Earliest startMs of any fragment in the group. */
+  startMs: number;
+  /** Latest endMs of any fragment in the group. */
+  endMs: number;
+  /** Stable React key — id of the first fragment in the group. */
+  key: string;
+};
+
+/** Wall-clock gap that breaks a speaker's run of fragments into a new
+ *  bubble. Tuned so that natural pauses (e.g. waiting for someone else
+ *  to finish a question) start a fresh bubble while back-to-back chunks
+ *  stay merged. */
+const TRANSCRIPT_GROUP_BREAK_MS = 8 * 1000;
+
+function buildTranscriptGroups(fragments: TranscriptFragment[]): TranscriptGroup[] {
+  const sorted = sortFragments(fragments);
+  const groups: TranscriptGroup[] = [];
+  for (const f of sorted) {
+    const last = groups[groups.length - 1];
+    if (
+      last &&
+      last.fromPubkey === f.fromPubkey &&
+      f.startMs - last.endMs <= TRANSCRIPT_GROUP_BREAK_MS
+    ) {
+      // Extend the existing bubble. We separate joined chunks with a
+      // single space so the resulting line reads naturally even when
+      // the worker emitted leading/trailing whitespace inconsistently.
+      last.text = `${last.text} ${f.text}`.replace(/\s+/g, " ").trim();
+      last.endMs = Math.max(last.endMs, f.endMs);
+    } else {
+      groups.push({
+        fromPubkey: f.fromPubkey,
+        fromName: f.fromName,
+        text: f.text,
+        startMs: f.startMs,
+        endMs: f.endMs,
+        key: f.id,
+      });
+    }
+  }
+  return groups;
+}
+
+function TranscriptPane({
+  transcripts,
+  selfPubkey,
+  captionsActive,
+  captionsStatusLabel,
+}: {
+  transcripts: TranscriptFragment[];
+  selfPubkey: string | null | undefined;
+  captionsActive: boolean;
+  captionsStatusLabel: string | null;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Auto-scroll to the latest fragment whenever a new one lands. We
+  // track length only — content edits within a group don't trigger a
+  // jump that would yank the user away from manually scrolling back.
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [transcripts.length]);
+
+  const groups = useMemo(() => buildTranscriptGroups(transcripts), [transcripts]);
+
+  if (groups.length === 0) {
+    return (
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-3 py-3"
+        data-testid="list-transcript"
+      >
+        <TranscriptEmptyState
+          captionsActive={captionsActive}
+          captionsStatusLabel={captionsStatusLabel}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto px-3 py-3"
+      data-testid="list-transcript"
+    >
+      <div className="flex flex-col gap-3">
+        {groups.map((g) => (
+          <TranscriptBubble key={g.key} group={g} isSelf={g.fromPubkey === selfPubkey} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TranscriptEmptyState({
+  captionsActive,
+  captionsStatusLabel,
+}: {
+  captionsActive: boolean;
+  captionsStatusLabel: string | null;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center text-center py-10 px-4 gap-3"
+      data-testid="transcript-empty-state"
+    >
+      <div
+        aria-hidden="true"
+        className="w-11 h-11 rounded-full bg-vessel-accent/10 flex items-center justify-center"
+      >
+        {captionsActive && captionsStatusLabel ? (
+          <Loader2 className="w-5 h-5 text-vessel-accent animate-spin" />
+        ) : (
+          <Captions className="w-5 h-5 text-vessel-accent" />
+        )}
+      </div>
+      <p className="text-xs text-vessel-text-muted leading-relaxed max-w-[260px]">
+        {captionsActive
+          ? captionsStatusLabel
+            ? captionsStatusLabel
+            : "Listening for speech — captions will appear here as people talk."
+          : "Turn on live captions in the control bar to see a per-speaker transcript appear here."}
+      </p>
+    </div>
+  );
+}
+
+function TranscriptBubble({
+  group,
+  isSelf,
+}: {
+  group: TranscriptGroup;
+  isSelf: boolean;
+}) {
+  const time = formatChatTime(group.startMs);
+  return (
+    <div
+      className="flex items-start gap-2"
+      data-testid={`transcript-group-${group.key}`}
+      data-self={isSelf ? "true" : "false"}
+    >
+      <AvatarMark
+        pubkey={group.fromPubkey}
+        displayName={group.fromName}
+        className="w-7 h-7 shrink-0 mt-0.5"
+        initialsClassName="text-[10px]"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] text-vessel-text-muted mb-1 px-1 flex items-center gap-1.5 min-w-0">
+          <span className="font-medium text-vessel-text-secondary truncate">
+            {isSelf ? "You" : group.fromName}
+          </span>
+          <span>·</span>
+          <span className="shrink-0">{time}</span>
+        </div>
+        <div
+          title={time}
+          className={cn(
+            "rounded-2xl px-3.5 py-2 text-sm leading-snug break-words border",
+            isSelf
+              ? "bg-vessel-accent/10 text-vessel-text-primary border-vessel-accent/30"
+              : "bg-vessel-bg-base text-vessel-text-primary border-vessel-border",
+          )}
+        >
+          {group.text}
         </div>
       </div>
     </div>

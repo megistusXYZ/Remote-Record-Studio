@@ -1,5 +1,11 @@
 # Vessel
 
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-00d4aa.svg)](./LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-00d4aa.svg)](./CONTRIBUTING.md)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-00d4aa.svg)](./CODE_OF_CONDUCT.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/megistusXYZ/Remote-Record-Studio/ci.yml?branch=main&label=CI)](https://github.com/megistusXYZ/Remote-Record-Studio/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/megistusXYZ/Remote-Record-Studio?include_prereleases&sort=semver&label=release&color=00d4aa)](https://github.com/megistusXYZ/Remote-Record-Studio/releases/latest)
+
 > **Studio-quality remote recording. Open source. Your tape, your studio.**
 
 Vessel is a self-hostable, open-source platform for recording podcasts and
@@ -95,6 +101,11 @@ pnpm --filter @workspace/vessel run dev       # Web on :5173
 
 Open <http://localhost:5173>, create your studio, and you're recording.
 
+> **Running Vessel for the public?** Read [`OPERATIONS.md`](./OPERATIONS.md)
+> first. It covers CDN/WAF setup, security headers, the rate-limit
+> rollback switches, abuse-response runbooks, and the curl recipes for
+> verifying posture after each deploy.
+
 ## Project layout
 
 ```
@@ -129,7 +140,7 @@ Vessel is actively in development. Some big rocks on the horizon:
 - [x] One-link guest invites (with QR code)
 - [x] Screen sharing
 - [x] Installable PWA — guests can join from mobile or desktop browsers
-- [ ] Live transcript with speaker diarization
+- [x] Live transcript with speaker diarization
 - [ ] Native desktop apps (Windows / macOS / Linux)
 - [ ] Native mobile apps (iOS / Android)
 - [ ] Plugin SDK for custom export pipelines
@@ -139,7 +150,11 @@ weekly view.
 
 ## Contributing
 
-Pull requests are welcome and encouraged.
+Pull requests are welcome and encouraged. Please skim
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) before you open one — it covers
+the short version: sign your commits with `git commit -s` (we use the
+[Developer Certificate of Origin](https://developercertificate.org/)),
+follow the code style, and check the PR checklist.
 
 - For small fixes, just open a PR.
 - For anything bigger than a paragraph, please open an issue first so we
@@ -150,16 +165,63 @@ Pull requests are welcome and encouraged.
 If you're new to the codebase, look for issues tagged
 [`good first issue`](https://github.com/megistusXYZ/Remote-Record-Studio/labels/good%20first%20issue).
 
+A list of people who've already contributed lives in
+[`CONTRIBUTORS.md`](./CONTRIBUTORS.md).
+
+This project follows the
+[Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md). By
+participating, you agree to uphold it.
+
+### Maintainer setup (one-time, GitHub UI)
+
+A few things have to be enabled in the GitHub web UI by the repo owner —
+they can't be checked into the repo. Once the templates and CI workflow
+in this PR have landed on `main`, please:
+
+1. **Settings → Branches → Add branch protection rule** for `main`:
+   - Require a pull request before merging (with at least 1 approving review).
+   - Require status checks to pass: select the **`Typecheck`** check
+     from the new `CI` workflow.
+   - Require branches to be up to date before merging.
+   - (Recommended) Require signed commits, so DCO sign-off can be
+     verified cryptographically.
+   - Do **not** allow force pushes or deletions on `main`.
+2. **Settings → General → Pull Requests**: enable "Allow squash
+   merging" and disable merge commits if you prefer a linear history
+   (optional, but matches the rebased-on-main checklist in PRs).
+3. **Settings → Sponsors**: once a verified GitHub Sponsors account
+   exists, uncomment the `github:` line in
+   [`.github/FUNDING.yml`](./.github/FUNDING.yml).
+
 ## Security
 
-Found a vulnerability? Please **don't** open a public issue. Email
-`security@vessel.example` and we'll work with you on a coordinated
-disclosure.
+Found a vulnerability? Please **don't** open a public issue. See
+[`SECURITY.md`](./SECURITY.md) for the disclosure process and the
+private address to report it to.
 
 ## License
 
-[MIT](./LICENSE) — do what you like, just don't sue us if your podcast
-flops.
+Vessel is licensed under the **[GNU Affero General Public License v3.0 or
+later](./LICENSE)** (AGPL-3.0-or-later).
+
+In plain English:
+
+- You can run Vessel for any purpose, modify it, and self-host it. Free,
+  forever.
+- If you run a **modified** version as a network service, you must offer
+  your users the modified source code under the same license. (This is the
+  "AGPL clause" — it's what stops a closed-source SaaS from forking Vessel
+  and walking away with the code.)
+- Unmodified self-hosting has no source-disclosure obligation beyond what
+  the AGPL already grants the world.
+
+By contributing to Vessel, you agree that your contributions will be
+licensed under the AGPL-3.0-or-later. See [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+for details, including the Developer Certificate of Origin sign-off
+required on every commit.
+
+Third-party assets and acknowledgements are listed in
+[`NOTICE.md`](./NOTICE.md).
 
 ---
 

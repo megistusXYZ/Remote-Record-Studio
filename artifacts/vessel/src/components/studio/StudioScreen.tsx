@@ -8,6 +8,7 @@ import { useKeyboardShortcuts, type Shortcut } from "../../hooks/use-keyboard-sh
 import { useLiveTransport } from "../../hooks/use-live-transport";
 import { useCallSignal, type ConnectionQuality } from "../../hooks/use-call-signal";
 import { useScreenShare } from "../../hooks/use-screen-share";
+import { useCaptions } from "../../hooks/use-captions";
 import { getConnectionQualityLabel } from "../../lib/moq";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
@@ -158,6 +159,33 @@ export function StudioScreen({
   // sees it twice. Intentionally LocalStorage (not server-side): this
   // is a per-browser nudge, not a profile preference.
   const SCREEN_SHARE_HEADSUP_KEY = "vessel.studio.screen-share-headsup-seen.v1";
+  // First-run consent for live captions. Captions tap the local
+  // microphone with an on-device speech-to-text engine and broadcast
+  // the resulting fragments to peers — we surface the heads-up the
+  // first time the user toggles them on so they understand what's
+  // about to happen. Same per-browser LocalStorage convention as the
+  // screen-share heads-up above.
+  const CAPTIONS_CONSENT_KEY = "vessel.studio.captions-consent-seen.v1";
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [showCaptionsConsent, setShowCaptionsConsent] = useState(false);
+  const hasSeenCaptionsConsent = (): boolean => {
+    if (typeof window === "undefined") return true;
+    try {
+      return window.localStorage.getItem(CAPTIONS_CONSENT_KEY) === "1";
+    } catch {
+      // Private-mode browsers throw on localStorage access; treat as
+      // "already seen" so the user isn't trapped behind a dialog.
+      return true;
+    }
+  };
+  const markCaptionsConsentSeen = () => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(CAPTIONS_CONSENT_KEY, "1");
+    } catch {
+      // Same private-mode tolerance as the screen-share key.
+    }
+  };
   const [showScreenSharePrivacy, setShowScreenSharePrivacy] = useState(false);
   const hasSeenScreenSharePrivacy = (): boolean => {
     if (typeof window === "undefined") return true;
@@ -312,6 +340,114 @@ export function StudioScreen({
     }
     beginScreenShare();
   };
+
+  // Live captions: tap the local mic with an on-device speech-to-text
+  // engine and broadcast each fragment to peers via the room signaling
+  // channel. The hook idles when `enabled` is false, and shuts itself
+  // down again on session end so we never keep the engine warm in the
+  // background. Each fragment that arrives from the worker is also
+  // echoed locally inside `sendTranscript` for an immediate UI update.
+  const captions = useCaptions({
+    enabled: captionsEnabled && session.status !== "ended",
+    localStream,
+    onFragment: (fragment) => {
+      void callSignal.sendTranscript({
+        text: fragment.text,
+        startMs: fragment.startMs,
+        endMs: fragment.endMs,
+      });
+    },
+  });
+
+  // Human-readable status string for the CC button + transcript empty
+  // state. Returns null when there's nothing notable to surface (off,
+  // or steady-state running) so callers can decide what to render.
+  // CRITICAL: we deliberately never surface the worker's raw error
+  // message here — those strings can include implementation jargon
+  // (engine internals, runtime names) that violates our user-facing
+  // copy rules. Errors map to a single controlled, jargon-free string.
+  const CAPTIONS_GENERIC_ERROR = "Captions couldn't start on this device.";
+  const captionsStatusLabel = useMemo<string | null>(() => {
+    if (!captionsEnabled) return null;
+    switch (captions.status) {
+      case "loading":
+        return captions.loadProgress > 0
+          ? `Loading captions engine… ${Math.round(captions.loadProgress)}%`
+          : "Loading captions engine…";
+      case "error":
+        return CAPTIONS_GENERIC_ERROR;
+      case "off":
+        return "Starting captions engine…";
+      case "ready":
+        return "Listening for speech…";
+      case "running":
+        return null;
+      default:
+        return null;
+    }
+  }, [captionsEnabled, captions.status, captions.loadProgress]);
+
+  // Toast on terminal failures so the user knows captions silently
+  // bailed out instead of just sitting at a mysterious "off". We only
+  // fire the toast on the off→error edge to avoid spamming if the
+  // worker keeps re-emitting the same status. Same controlled-copy
+  // rule as the status label: never surface the raw worker message.
+  const lastCaptionsErroredRef = useRef(false);
+  useEffect(() => {
+    if (captions.status === "error" && !lastCaptionsErroredRef.current) {
+      lastCaptionsErroredRef.current = true;
+      toast({
+        variant: "destructive",
+        description: CAPTIONS_GENERIC_ERROR,
+      });
+      // Auto-disable so the CC button reflects the failed state instead
+      // of looking eternally "on" while the engine is dead.
+      setCaptionsEnabled(false);
+    }
+    if (captions.status !== "error") {
+      lastCaptionsErroredRef.current = false;
+    }
+  }, [captions.status, toast]);
+
+  // Snapshot the live transcript into a stable session-scoped buffer
+  // so it survives the moment the room signaling shuts down at session
+  // end. `useCallSignal` clears its own `transcripts` when its `enabled`
+  // flag flips to false (which we do on `session.status === "ended"`),
+  // so without this mirror the SessionComplete sheet would render with
+  // an empty transcript and hide its export buttons. We accumulate the
+  // freshest non-empty value seen and reset only when the room id
+  // changes.
+  const [transcriptsSnapshot, setTranscriptsSnapshot] = useState<typeof callSignal.transcripts>([]);
+  useEffect(() => {
+    setTranscriptsSnapshot([]);
+  }, [session.id]);
+  useEffect(() => {
+    if (callSignal.transcripts.length > 0) {
+      setTranscriptsSnapshot(callSignal.transcripts);
+    }
+  }, [callSignal.transcripts]);
+
+  const handleToggleCaptions = () => {
+    if (captionsEnabled) {
+      setCaptionsEnabled(false);
+      return;
+    }
+    if (!hasSeenCaptionsConsent()) {
+      setShowCaptionsConsent(true);
+      return;
+    }
+    setCaptionsEnabled(true);
+  };
+
+  const acknowledgeCaptionsConsent = () => {
+    markCaptionsConsentSeen();
+    setShowCaptionsConsent(false);
+    setCaptionsEnabled(true);
+  };
+
+  const captionsLoading =
+    captionsEnabled &&
+    (captions.status === "loading" || captions.status === "off" || captions.status === "ready");
 
   const acknowledgeScreenSharePrivacy = () => {
     markScreenSharePrivacySeen();
@@ -1230,6 +1366,7 @@ export function StudioScreen({
                       isConnecting={t.isConnecting}
                       micEnabled={t.micEnabled}
                       cameraEnabled={t.cameraEnabled}
+                      captionsActive={t.isLocal && captionsEnabled}
                       audioLevel={
                         t.isLocal
                           ? micEnabled
@@ -1277,6 +1414,10 @@ export function StudioScreen({
           screenShareSupported={screenShare.isSupported}
           isScreenSharing={screenShare.isSharing}
           onToggleScreenShare={handleToggleScreenShare}
+          captionsActive={captionsEnabled}
+          captionsLoading={captionsLoading}
+          captionsStatusLabel={captionsStatusLabel}
+          onToggleCaptions={handleToggleCaptions}
         />
 
         <RaisedHandNotification
@@ -1319,6 +1460,9 @@ export function StudioScreen({
           onSendReaction={(emoji) => {
             void callSignal.sendReaction(emoji);
           }}
+          transcripts={callSignal.transcripts}
+          captionsActive={captionsEnabled}
+          captionsStatusLabel={captionsStatusLabel}
         />
 
         <InviteModal
@@ -1366,6 +1510,53 @@ export function StudioScreen({
                 data-testid="button-screen-share-privacy-continue"
               >
                 Got it — pick a window
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog
+          open={showCaptionsConsent}
+          onOpenChange={(o) => {
+            if (!o) setShowCaptionsConsent(false);
+          }}
+        >
+          <AlertDialogContent data-testid="dialog-captions-consent">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Turn on live captions?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-vessel-text-secondary">
+                  <p>
+                    Captions are generated right here on your device — your
+                    audio is never sent to a third-party service.
+                  </p>
+                  <p>
+                    Each line you speak is shared with everyone in this
+                    room as text so they can follow along, and the
+                    transcript is available to download once the session
+                    ends.
+                  </p>
+                  <p className="text-vessel-text-muted">
+                    The first time you turn this on, your browser will
+                    download a small captions engine — that may take a
+                    moment. You'll only see this reminder once on this
+                    device.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => setShowCaptionsConsent(false)}
+                data-testid="button-captions-consent-cancel"
+              >
+                Not now
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={acknowledgeCaptionsConsent}
+                data-testid="button-captions-consent-continue"
+              >
+                Turn on captions
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1421,6 +1612,7 @@ export function StudioScreen({
           onViewVault={handleViewVault}
           onStartNew={handleStartNew}
           onClose={handleGuestClose}
+          transcriptFragments={transcriptsSnapshot}
         />
       </div>
     </TooltipProvider>

@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to share an idea. Vessel is small and
+        deliberate — not every good idea will fit, but every good idea is
+        worth discussing.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Please describe the underlying need, not the specific solution. The "why" matters more than the "what".
+      placeholder: As a podcaster recording a long interview, I'd like to mark interesting moments live so I can find them again in the editor.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+      description: A sketch of the feature you have in mind. Rough is fine.
+      placeholder: A "bookmark this moment" button on the studio toolbar that drops a timestamp into the session metadata.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other ways you've thought about solving this, and why they fall short.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Which part of Vessel does this touch?
+      multiple: true
+      options:
+        - Web client (artifacts/vessel)
+        - API server (artifacts/api-server)
+        - Shared libraries (lib/*)
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Are you willing to help?
+      options:
+        - label: I'd be willing to send a PR for this if we agree on the shape.
+        - label: I'd be willing to help test a PR for this.
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: Code of Conduct
+      options:
+        - label: I agree to follow the project's [Code of Conduct](../CODE_OF_CONDUCT.md).
+          required: true
