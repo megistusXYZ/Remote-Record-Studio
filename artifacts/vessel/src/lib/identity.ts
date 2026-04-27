@@ -359,7 +359,7 @@ async function signInWithBunkerUri(
     throw new Error("This bunker:// URL is malformed. Try copying it again.");
   }
   if (!parsed.relays || parsed.relays.length === 0) {
-    throw new Error("This connection URL is missing a relay. Ask your signer for a complete URL.");
+    throw new Error("This connection URL is incomplete. Ask your signer for a complete URL.");
   }
 
   const clientSecretKey = generateSecretKey();

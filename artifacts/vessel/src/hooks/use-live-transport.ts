@@ -256,7 +256,7 @@ export function useLiveTransport({
     if (!enabled || !isSupported || !sessionId || !selfPubkey) return;
 
     if (!relayUrl || !relayUrl.startsWith("https://")) {
-      setError("Live preview relay needs an https:// URL.");
+      setError("Live preview server needs an https:// URL.");
       return;
     }
 
@@ -308,7 +308,7 @@ export function useLiveTransport({
         await client.connect();
       } catch (err) {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : "Couldn't reach the live preview relay.";
+        const msg = err instanceof Error ? err.message : "Couldn't reach the live preview server.";
         setError(msg);
         setIsConnected(false);
       }

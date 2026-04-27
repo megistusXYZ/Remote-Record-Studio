@@ -566,8 +566,8 @@ export default function HowItWorks() {
             body={
               <p>
                 Our server hands both browsers an address for a thin
-                conversation relay &mdash; a small middleman whose only job is
-                to forward the live preview between you. It does not look
+                conversation server &mdash; a small middleman whose only job
+                is to forward the live preview between you. It does not look
                 inside, it does not save anything, and it never sees the
                 studio-quality recording.
               </p>
@@ -652,7 +652,7 @@ export default function HowItWorks() {
             icon={<SupportPersonIcon className="w-6 h-6" />}
             name="The receptionist"
             role="Tiny, polite, busy"
-            detail="Issues invites, keeps track of who is in which room, and points both browsers at a thin conversation relay so they can preview each other live. Never sees your audio."
+            detail="Issues invites, keeps track of who is in which room, and points both browsers at a thin conversation server so they can preview each other live. Never sees your audio."
           />
           <MachineCard
             icon={<FilePersonIcon className="w-6 h-6" />}
@@ -833,7 +833,7 @@ export default function HowItWorks() {
             <ul className="space-y-3 text-sm text-vessel-text-secondary leading-relaxed">
               {[
                 "Checks the wax-seal signature on every incoming request to confirm it is really you.",
-                "Hands out invite links and points the right browsers at the thin conversation relay so they can see and hear each other live.",
+                "Hands out invite links and points the right browsers at the thin conversation server so they can see and hear each other live.",
                 "Remembers the names of your studios and sessions so your dashboard isn\u2019t empty.",
                 "Routes the small \u201care you online?\u201d and \u201cyou are muted!\u201d type messages between participants.",
                 "Writes a tiny log line per request \u2014 request id, method, and path. No IP, no headers, no body.",
