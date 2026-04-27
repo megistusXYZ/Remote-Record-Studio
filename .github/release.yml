@@ -1,0 +1,52 @@
+# Configures the auto-generated release notes that GitHub builds when a
+# Release is published (or generated via the API with generate_release_notes).
+# Docs: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+#
+# PRs are grouped into the categories below based on their labels. A PR can
+# only land in one category — the first match wins, top-down. Anything that
+# doesn't match a category falls into "Other changes".
+
+changelog:
+  exclude:
+    labels:
+      - chore
+      - ignore-for-release
+      - dependencies
+    authors:
+      - dependabot
+      - dependabot[bot]
+      - renovate
+      - renovate[bot]
+
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking
+        - breaking-change
+
+    - title: New features
+      labels:
+        - feature
+        - enhancement
+
+    - title: Bug fixes
+      labels:
+        - bug
+        - fix
+
+    - title: Performance
+      labels:
+        - performance
+
+    - title: Security
+      labels:
+        - security
+
+    - title: Documentation
+      labels:
+        - documentation
+        - docs
+
+    - title: Other changes
+      labels:
+        - "*"

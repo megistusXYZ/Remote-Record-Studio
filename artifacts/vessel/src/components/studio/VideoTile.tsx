@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { MicOff } from "lucide-react";
+import { MicOff, Captions } from "lucide-react";
 import { AudioMeter } from "../vessel-ui/AudioMeter";
 import { AvatarMark } from "../AvatarMark";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,11 @@ export type VideoTileProps = {
   cameraEnabled: boolean;
   isConnecting?: boolean;
   audioLevel?: number;
+  /** True when the local user has captions enabled. Drives a small CC
+   *  indicator on the local tile so the speaker knows their audio is
+   *  being captioned (and therefore broadcast as transcript fragments
+   *  to everyone in the room). */
+  captionsActive?: boolean;
 };
 
 export function VideoTile({
@@ -27,6 +32,7 @@ export function VideoTile({
   cameraEnabled,
   isConnecting,
   audioLevel,
+  captionsActive = false,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -116,12 +122,32 @@ export function VideoTile({
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
       )}
 
-      {/* Top-left "LOCAL" badge */}
+      {/* Top-left "LOCAL" badge + (when active) a CC chip so the local
+          speaker can see at a glance that their audio is being captioned
+          and broadcast. The chip sits to the right of LOCAL so it never
+          competes for the same slot, and is gated to the local tile —
+          remote tiles render the per-speaker bubbles in the transcript
+          pane instead, not on the video itself. */}
       {isLocal && (
-        <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 bg-vessel-accent/20 border border-vessel-accent/40 px-1.5 py-0.5 sm:px-2 rounded-md">
-          <span className="text-[9px] sm:text-[10px] font-mono-vessel font-bold text-vessel-accent uppercase tracking-wider">
-            Local
-          </span>
+        <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 flex items-center gap-1.5">
+          <div className="bg-vessel-accent/20 border border-vessel-accent/40 px-1.5 py-0.5 sm:px-2 rounded-md">
+            <span className="text-[9px] sm:text-[10px] font-mono-vessel font-bold text-vessel-accent uppercase tracking-wider">
+              Local
+            </span>
+          </div>
+          {captionsActive && (
+            <div
+              className="flex items-center gap-1 bg-vessel-accent/20 border border-vessel-accent/40 px-1.5 py-0.5 sm:px-2 rounded-md"
+              data-testid="badge-captions-active"
+              aria-label="Captions on"
+              title="Live captions are on"
+            >
+              <Captions className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-vessel-accent" />
+              <span className="text-[9px] sm:text-[10px] font-mono-vessel font-bold text-vessel-accent uppercase tracking-wider">
+                CC
+              </span>
+            </div>
+          )}
         </div>
       )}
 

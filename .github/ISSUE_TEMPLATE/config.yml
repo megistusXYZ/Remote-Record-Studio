@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/megistusXYZ/Remote-Record-Studio/discussions
+    about: Have a question, idea, or want to talk through an approach? Please start a discussion instead of opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/megistusXYZ/Remote-Record-Studio/security/policy
+    about: Please do NOT open a public issue for security vulnerabilities. See SECURITY.md for the private disclosure process.

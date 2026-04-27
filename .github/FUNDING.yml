@@ -1,0 +1,18 @@
+# Funding sources for Vessel.
+#
+# Vessel is a sovereign, AGPL-licensed open-source project. We accept
+# funding from venues that align with that ethos: public-interest
+# foundations, grant programs, and individual sponsors. We do not run
+# token sales, do not accept "investments" via this channel, and do not
+# add anything that requires a custodial third party to take a cut.
+#
+# Maintainers: uncomment `github:` once a verified GitHub Sponsors
+# account is set up. Until then, the `custom:` list points contributors
+# at funders that already support open-source infrastructure work
+# matching Vessel's mission.
+
+# github: [megistusXYZ]
+
+custom:
+  - https://opensats.org/
+  - https://nlnet.nl/

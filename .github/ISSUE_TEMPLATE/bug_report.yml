@@ -1,0 +1,75 @@
+name: Bug report
+description: Something in Vessel isn't working the way it should.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. The more we can reproduce
+        what you saw, the faster we can fix it. If this is a security issue,
+        please **stop** and follow [SECURITY.md](../SECURITY.md) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug. What did you see?
+      placeholder: When I clicked "End session", the recording downloaded as a 0-byte file.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: I expected the full recording to be saved.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Walk us through it. Numbered steps are great.
+      placeholder: |
+        1. Create a studio at /studio/new
+        2. Invite a guest and start recording
+        3. Wait 30 seconds, then click "End session"
+        4. Observe the downloaded file is 0 bytes
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Git commit hash, release tag, or "running on main as of <date>".
+      placeholder: "e.g. v0.4.0 or commit a1b2c3d"
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did this happen?
+      options:
+        - The web client (artifacts/vessel)
+        - The API server (artifacts/api-server)
+        - A shared library (lib/*)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS (if relevant)
+      placeholder: "e.g. Firefox 130 on macOS 15, or Chrome 128 on Ubuntu 24.04"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste any console output, server logs, or screenshots that help. Please redact anything sensitive.
+      render: shell
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: Code of Conduct
+      options:
+        - label: I agree to follow the project's [Code of Conduct](../CODE_OF_CONDUCT.md).
+          required: true

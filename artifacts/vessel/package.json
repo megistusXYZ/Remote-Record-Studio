@@ -84,6 +84,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "@noble/hashes": "^2.2.0",
     "applesauce-core": "^5.2.0",
     "applesauce-react": "^5.1.0",
