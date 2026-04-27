@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Need full history so we can verify the tag is on main and so
           # the release-notes generator can diff against the previous tag.
