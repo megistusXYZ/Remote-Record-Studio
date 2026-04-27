@@ -20,7 +20,7 @@
     "express-rate-limit": "^8.4.1",
     "helmet": "^8.1.0",
     "nostr-tools": "^2.23.3",
-    "pino": "^9",
+    "pino": "^10",
     "pino-http": "^10"
   },
   "devDependencies": {
