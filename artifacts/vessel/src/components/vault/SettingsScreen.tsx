@@ -232,7 +232,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
     }
     localStorage.setItem("vessel_relay_url", relayUrl);
     notifyRelayUrlChanged();
-    toast({ title: "Saved", description: "Live preview relay updated." });
+    toast({ title: "Saved", description: "Live preview server updated." });
   };
 
   const handleRestoreDefaultRelay = () => {
@@ -601,13 +601,13 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Live preview relay</label>
+                    <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Live preview server</label>
                     <p className="text-xs text-vessel-text-muted">Powers the live video preview during recording. Recording quality is unaffected.</p>
                     <div className="flex gap-2 mt-2">
                       <Input
                         value={relayUrl}
                         onChange={e => setRelayUrl(e.target.value)}
-                        placeholder="https://relay.example.com"
+                        placeholder="https://preview.example.com"
                         className="bg-vessel-bg-base border-vessel-border text-vessel-text-primary"
                         data-testid="input-relay-url"
                       />
@@ -621,7 +621,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                         {relayReachability.kind === "checking" && (
                           <>
                             <Loader2 className="w-3.5 h-3.5 text-vessel-text-muted animate-spin shrink-0" />
-                            <span className="text-vessel-text-muted truncate">Testing relay...</span>
+                            <span className="text-vessel-text-muted truncate">Testing preview server...</span>
                           </>
                         )}
                         {relayReachability.kind === "ok" && (

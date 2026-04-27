@@ -315,7 +315,7 @@ export class MoqClient {
       await Promise.race([
         wt.ready,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Timed out reaching the relay.")), timeoutMs),
+          setTimeout(() => reject(new Error("Timed out reaching the preview server.")), timeoutMs),
         ),
         new Promise<never>((_, reject) => {
           if (!signal) return;
@@ -337,7 +337,7 @@ export class MoqClient {
         // ignore
       }
       const reason =
-        err instanceof Error ? err.message : "Couldn't reach the relay.";
+        err instanceof Error ? err.message : "Couldn't reach the preview server.";
       return { ok: false, reason };
     }
   }

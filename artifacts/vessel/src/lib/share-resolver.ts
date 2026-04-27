@@ -282,7 +282,7 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
         reject(
           new ShareResolveError(
             "not_found",
-            "We couldn't find this archive on any relay.",
+            "We couldn't find this archive on the network.",
           ),
         ),
       );
@@ -336,7 +336,7 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
         },
         error: (err: any) =>
           settle(() =>
-            reject(new ShareResolveError("network", err?.message || "Couldn't reach any relay.")),
+            reject(new ShareResolveError("network", err?.message || "Couldn't reach the network.")),
           ),
         complete: () => decide(),
       });
