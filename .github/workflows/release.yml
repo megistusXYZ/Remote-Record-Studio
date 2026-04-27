@@ -1,0 +1,108 @@
+name: Release
+
+# Cut a release by pushing a SemVer tag (e.g. v0.1.0, v1.2.3, v1.0.0-rc.1).
+# This workflow then:
+#   1. Verifies the tag is reachable from main.
+#   2. Builds the project so we don't tag a broken commit.
+#   3. Creates a GitHub Release with auto-generated notes from the PRs
+#      merged since the previous tag (categorized via .github/release.yml).
+#
+# To cut a release, see RELEASING.md.
+
+on:
+  push:
+    tags:
+      # GitHub Actions uses glob (not regex) here, so "+" is literal and
+      # character classes like [0-9] are limited. Match anything that looks
+      # like a version tag and validate the exact SemVer shape in-job below.
+      - "v*.*.*"
+      - "v*.*.*-*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # Need full history so we can verify the tag is on main and so
+          # the release-notes generator can diff against the previous tag.
+          fetch-depth: 0
+
+      - name: Validate SemVer tag shape
+        run: |
+          set -euo pipefail
+          # Accept vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease
+          # (prerelease = dot-separated alphanumeric/hyphen identifiers).
+          # The on.push.tags glob is permissive on purpose; this is the
+          # authoritative check.
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} is not a valid SemVer release tag."
+            echo "::error::Expected vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease (e.g. v1.2.3 or v1.2.3-rc.1)."
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} is a valid SemVer release tag."
+
+      - name: Verify tag is reachable from main
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} (${GITHUB_SHA}) is not reachable from origin/main."
+            echo "::error::Releases must be cut from commits that have already landed on main."
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} is on main. Proceeding."
+
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          IS_PRERELEASE: ${{ steps.prerelease.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          PRERELEASE_FLAG=""
+          if [ "${IS_PRERELEASE}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          # --generate-notes uses .github/release.yml to categorize PRs.
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes \
+            --verify-tag \
+            ${PRERELEASE_FLAG}
