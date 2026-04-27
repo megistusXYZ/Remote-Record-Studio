@@ -13,17 +13,24 @@ const SW = 1.6;
 const SW_FINE = 1.1;
 const BG = "#fafaf4";
 
-const LOOP = 8;
+const LOOP = 5.4;
 
 type Kf = { values: number[]; times: number[] };
 
+// Mouth keyframes are written so that:
+//   - the closed/resting scaleY never drops below 0.3 (otherwise the mouth
+//     literally vanishes at this size and reads as "no movement at all");
+//   - the open peaks (1.0) DWELL for ~80–120ms each instead of flashing for
+//     30ms, so a viewer's eye actually has time to notice each "syllable";
+//   - the host talks across the first half of the loop and the guest talks
+//     across the second half, giving a clear "back-and-forth" rhythm.
 const HOST_MOUTH: Kf = {
-  values: [0.18, 0.18, 1, 0.32, 0.95, 0.42, 1, 0.3, 0.9, 0.45, 0.85, 0.2, 0.18, 0.18, 0.18],
-  times:  [0,    0.05, 0.09, 0.13, 0.17, 0.21, 0.25, 0.29, 0.33, 0.37, 0.41, 0.45, 0.55, 0.8, 1],
+  values: [0.32, 0.32, 0.95, 1, 0.45, 0.92, 1, 0.4, 0.9, 1, 0.5, 0.85, 0.4, 0.32, 0.32, 0.32],
+  times:  [0,    0.04, 0.08, 0.13, 0.18, 0.22, 0.27, 0.31, 0.35, 0.4, 0.44, 0.48, 0.5, 0.54, 0.85, 1],
 };
 const GUEST_MOUTH: Kf = {
-  values: [0.18, 0.18, 0.18, 0.18, 1, 0.32, 0.95, 0.42, 1, 0.3, 0.9, 0.45, 0.85, 0.2, 0.18],
-  times:  [0,    0.2,  0.45, 0.55, 0.59, 0.63, 0.67, 0.71, 0.75, 0.79, 0.83, 0.87, 0.91, 0.95, 1],
+  values: [0.32, 0.32, 0.32, 0.32, 0.95, 1, 0.45, 0.92, 1, 0.4, 0.9, 1, 0.5, 0.85, 0.4, 0.32],
+  times:  [0,    0.18, 0.46, 0.5,  0.54, 0.59, 0.63, 0.67, 0.72, 0.76, 0.8, 0.85, 0.89, 0.93, 0.97, 1],
 };
 
 const HOST_HAND: Kf = {
@@ -269,16 +276,24 @@ export function SketchConversation({ role, className }: SketchConversationProps)
             <path d="M 165 92 Q 168 90 172 92" strokeWidth={SW_FINE} />
             <path d="M 161 96 Q 159 102 162 104" strokeWidth={SW_FINE} />
 
-            {/* Mouth: animated scaleY around its center; corner strokes
-                stay so the mouth never fully disappears when collapsed. */}
+            {/* Mouth: animated scaleY anchored at the TOP edge of the
+                mouth shape (transform-origin y = ellipse cy − ry), so the
+                mouth opens DOWNWARD like a real jaw drop instead of
+                expanding symmetrically around its center. The ellipse is
+                also intentionally larger (rx=7, ry=5) than the eyes/nose
+                so it's the first thing your eye lands on — at this image
+                scale a 10×7 viewBox shape renders at roughly 18×12 px on
+                screen, which is large enough to read as speech. The
+                static lip-corner strokes stay outside the motion group
+                so they anchor the corners while the jaw opens. */}
             <motion.g
-              style={{ transformOrigin: "160px 110px", transformBox: "view-box" } as React.CSSProperties}
+              style={{ transformOrigin: "160px 108px", transformBox: "view-box" } as React.CSSProperties}
               {...animProps(mouth, "scaleY")}
             >
-              <ellipse cx="160" cy="110" rx="5" ry="3.5" fill={STROKE} stroke="none" />
+              <ellipse cx="160" cy="113" rx="7" ry="5" fill={STROKE} stroke="none" />
             </motion.g>
-            <path d="M 155 110.5 L 156 111" strokeWidth={SW_FINE} />
-            <path d="M 164 111 L 165 110.5" strokeWidth={SW_FINE} />
+            <path d="M 152 109 L 154 109.5" strokeWidth={SW_FINE} />
+            <path d="M 166 109.5 L 168 109" strokeWidth={SW_FINE} />
 
             {/* Eyebrows */}
             <path d="M 148 86 Q 152 84 157 86" strokeWidth={SW_FINE} opacity="0.7" />
