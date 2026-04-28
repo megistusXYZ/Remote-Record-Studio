@@ -35,6 +35,9 @@ import { RecordingDot } from "../vessel-ui/RecordingDot";
 import { SignedOutEmpty } from "../onboarding/SignedOutEmpty";
 import { publishPersonalArchive } from "../../lib/session-archive";
 import { rememberPersonalReceipt } from "../../lib/personal-receipts";
+// Same hand-drawn captain's-bridge sketch the lobby/home page uses as its
+// backdrop — keeps the visual family consistent across the signed-in pages.
+import wheelhouseSketch from "@assets/Gemini_Generated_Image_zx4hpzx4hpzx4hpz_1777173879947.png";
 
 type Phase = "setup" | "recording" | "finalizing" | "done" | "error";
 
@@ -464,8 +467,29 @@ export function SoloRecordScreen() {
   }
 
   return (
-    <div className="min-h-full w-full">
-      <div className="container max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 md:py-12">
+    <div className="min-h-full w-full relative selection:bg-vessel-accent/30 selection:text-vessel-accent">
+      {/* Decorative backdrop — twin accent glows in opposite corners plus a
+          soft, radial-masked sketch behind the content. Fixed so it stays put
+          as the page scrolls; pointer-events-none and aria-hidden so it never
+          intercepts clicks or shows up in assistive tech. Mirrors the lobby
+          page so signed-in screens share one visual language. */}
+      <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+        <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-vessel-accent/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-vessel-accent/5 rounded-full blur-[100px] translate-x-1/3 translate-y-1/3" />
+        <div
+          className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
+          style={{
+            backgroundImage: `url(${wheelhouseSketch})`,
+            filter: "invert(1) grayscale(1)",
+            maskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse at center, black 35%, transparent 80%)",
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 container max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 md:py-12">
         <div className="mb-6 sm:mb-8">
           <p className="font-mono-vessel text-[11px] uppercase tracking-[0.18em] text-vessel-accent mb-2">
             Quick Record
