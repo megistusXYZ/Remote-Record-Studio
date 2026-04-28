@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Copy, QrCode, Users, Check, Trash2, Mic } from "lucide-react";
+import { ArrowRight, Copy, QrCode, Users, Check, Trash2 } from "lucide-react";
 import { LobbyEmptyState } from "./LobbyEmptyState";
 import { WaitingForGuestsEmpty } from "./WaitingForGuestsEmpty";
 import {
@@ -198,9 +198,6 @@ export function LobbyScreen({
 
               <VesselCard className="p-5 sm:p-6 mb-4 sm:mb-6 border-vessel-border hover:border-vessel-accent/30 transition-colors">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
-                  <div className="w-12 h-12 rounded-2xl bg-vessel-accent/10 border border-vessel-accent/30 flex items-center justify-center shrink-0">
-                    <Mic className="w-5 h-5 text-vessel-accent" />
-                  </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary leading-tight mb-1">
                       Or just record on your own
