@@ -90,8 +90,28 @@ vi.mock("../../hooks/use-screen-share", () => ({
   useScreenShare: () => screenShareState,
 }));
 
+/**
+ * Background-effect stub. We don't load MediaPipe in tests — the hook is
+ * fully mocked. Default state: supported, idle, passthrough.
+ */
+const bgEffectState = {
+  outputStream: null as MediaStream | null,
+  isLoading: false,
+  error: null as string | null,
+  isSupported: true,
+};
+vi.mock("../../hooks/use-background-effect", () => ({
+  useBackgroundEffect: ({ source }: { source: MediaStream | null }) => ({
+    ...bgEffectState,
+    // Default behavior: passthrough (output === source) so the recorder
+    // receives the same stream the original camera produced.
+    outputStream: bgEffectState.outputStream ?? source,
+  }),
+}));
+
+const toastMock = vi.fn();
 vi.mock("../../hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 const setLocationMock = vi.fn();
@@ -137,6 +157,11 @@ beforeEach(() => {
   publishPersonalArchiveMock.mockReset();
   rememberPersonalReceiptMock.mockReset();
   setLocationMock.mockReset();
+  toastMock.mockReset();
+  bgEffectState.outputStream = null;
+  bgEffectState.isLoading = false;
+  bgEffectState.error = null;
+  bgEffectState.isSupported = true;
   // jsdom doesn't ship a clipboard. Stub it so auto-copy doesn't throw.
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -190,10 +215,58 @@ describe("SoloRecordScreen — copy", () => {
       "npub",
       "AES",
       "Whisper",
+      // Background-effect specific jargon — UI must say "Background", "Blur",
+      // "Custom image", "Original" — never the implementation details.
+      "MediaPipe",
+      "segmentation",
+      "segmenter",
+      "tflite",
     ];
     for (const word of forbidden) {
       expect(body).not.toContain(word);
     }
+  });
+});
+
+describe("SoloRecordScreen — background effect", () => {
+  it("renders the picker with Original / Blur / Custom image chips when supported", () => {
+    render(<SoloRecordScreen />);
+    expect(screen.getByTestId("bg-mode-none")).toBeTruthy();
+    expect(screen.getByTestId("bg-mode-blur")).toBeTruthy();
+    expect(screen.getByTestId("bg-mode-image")).toBeTruthy();
+    // Section heading uses friendly language.
+    expect(document.body.textContent).toMatch(/Background/);
+  });
+
+  it("hides the picker entirely on unsupported devices (e.g. mobile)", () => {
+    bgEffectState.isSupported = false;
+    render(<SoloRecordScreen />);
+    expect(screen.queryByTestId("bg-mode-none")).toBeNull();
+    expect(screen.queryByTestId("bg-mode-blur")).toBeNull();
+  });
+
+  it("disables the Start button while the effect is preparing", () => {
+    bgEffectState.isLoading = true;
+    render(<SoloRecordScreen />);
+    const startBtn = screen.getByTestId("button-start-record") as HTMLButtonElement;
+    expect(startBtn.disabled).toBe(true);
+    expect(startBtn.textContent).toMatch(/Preparing background/i);
+  });
+
+  it("surfaces an effect failure as a toast and still allows recording with the fallback stream", async () => {
+    bgEffectState.error = "Couldn't apply background effect — using your original camera.";
+    render(<SoloRecordScreen />);
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: "destructive",
+          description: expect.stringContaining("background effect"),
+        }),
+      );
+    });
+    // Start is still enabled because the hook falls back to the raw stream.
+    const startBtn = screen.getByTestId("button-start-record") as HTMLButtonElement;
+    expect(startBtn.disabled).toBe(false);
   });
 });
 

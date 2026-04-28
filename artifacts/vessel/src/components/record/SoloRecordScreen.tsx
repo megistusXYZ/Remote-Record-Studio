@@ -14,6 +14,9 @@ import {
   ArrowRight,
   AlertTriangle,
   Info,
+  Sparkles,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
@@ -23,6 +26,8 @@ import {
   type ScreenRecordingResult,
 } from "../../hooks/use-screen-recording";
 import { useScreenShare } from "../../hooks/use-screen-share";
+import { useBackgroundEffect } from "../../hooks/use-background-effect";
+import type { BackgroundMode } from "../../lib/background-effect";
 import { useToast } from "../../hooks/use-toast";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
@@ -74,6 +79,43 @@ export function SoloRecordScreen() {
     micEnabled,
   });
 
+  // Background effect state. Mode is "none" by default (zero cost). When the
+  // user picks a custom image we keep the original File around so we can
+  // revoke its object URL on cleanup / replacement, avoiding leaks.
+  const [bgMode, setBgMode] = useState<BackgroundMode>({ kind: "none" });
+  const [customImageUrl, setCustomImageUrl] = useState<string | null>(null);
+  // We deliberately do NOT short-circuit the effect when `cameraEnabled`
+  // is false: tearing the pipeline down would stop the canvas-captured
+  // video track that the recorder is bound to, ending the video portion
+  // of any in-progress recording. Running the pipeline against a disabled
+  // camera track is cheap (the segmenter sees a black frame) and matches
+  // user expectation — toggling the camera off shows black, not "no video".
+  const {
+    outputStream: processedStream,
+    isLoading: bgLoading,
+    error: bgError,
+    isSupported: bgSupported,
+  } = useBackgroundEffect({ source: localStream, mode: bgMode });
+  // What the recorder + preview should consume.
+  const recordableStream = processedStream ?? localStream;
+
+  // Surface the background-effect failure as a toast once per occurrence —
+  // the pipeline already falls back to the raw camera, but the user should
+  // know their effect didn't apply.
+  useEffect(() => {
+    if (bgError) {
+      toast({ variant: "destructive", description: bgError });
+    }
+  }, [bgError, toast]);
+
+  // Revoke the previous custom-image object URL whenever it changes or the
+  // component unmounts.
+  useEffect(() => {
+    return () => {
+      if (customImageUrl) URL.revokeObjectURL(customImageUrl);
+    };
+  }, [customImageUrl]);
+
   const [phase, setPhase] = useState<Phase>("setup");
   const [elapsed, setElapsed] = useState(0);
   const [finalizeStep, setFinalizeStep] = useState<FinalizeStep>(null);
@@ -87,12 +129,15 @@ export function SoloRecordScreen() {
   const startedAtRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
 
-  // Bind the local camera stream into the preview <video>.
+  // Bind whichever stream the recorder will consume into the preview <video>.
+  // When background effect is active this is the canvas-composited stream;
+  // otherwise it's the raw camera. Either way the preview matches what gets
+  // recorded.
   useEffect(() => {
-    if (previewRef.current && localStream) {
-      previewRef.current.srcObject = localStream;
+    if (previewRef.current && recordableStream) {
+      previewRef.current.srcObject = recordableStream;
     }
-  }, [localStream]);
+  }, [recordableStream]);
 
   // Bind the screen stream into the screen-preview <video>.
   useEffect(() => {
@@ -158,9 +203,14 @@ export function SoloRecordScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The user can hit Start once we have a stream, no acquisition error, at
+  // least one input enabled, and any in-flight background-effect setup is
+  // done. The effect is allowed to fail silently (the hook falls back to
+  // raw camera) so we don't gate on bgError.
   const canRecord =
-    !!localStream &&
+    !!recordableStream &&
     !localStreamError &&
+    !bgLoading &&
     (micEnabled || cameraEnabled);
 
   const handleToggleScreen = useCallback(() => {
@@ -178,7 +228,7 @@ export function SoloRecordScreen() {
   }, [screenShare, toast]);
 
   const handleStart = useCallback(async () => {
-    if (!localStream) {
+    if (!recordableStream) {
       toast({
         variant: "destructive",
         description: "Camera and microphone aren't ready yet.",
@@ -198,7 +248,10 @@ export function SoloRecordScreen() {
     setElapsed(0);
     setPhase("recording");
     try {
-      await recording.start(localStream);
+      // Feed the recorder the *processed* stream when an effect is active so
+      // the recording matches the preview. When no effect is active this is
+      // just the raw camera stream (the hook is a passthrough).
+      await recording.start(recordableStream);
     } catch (err) {
       console.error("Failed to start recording", err);
       // Surface a controlled, jargon-free message — never the raw underlying
@@ -209,7 +262,7 @@ export function SoloRecordScreen() {
       );
       setPhase("error");
     }
-  }, [localStream, micEnabled, cameraEnabled, recording, toast]);
+  }, [recordableStream, micEnabled, cameraEnabled, recording, toast]);
 
   const handleStop = useCallback(async () => {
     setPhase("finalizing");
@@ -429,6 +482,29 @@ export function SoloRecordScreen() {
             localStreamError={localStreamError}
             onStart={handleStart}
             canRecord={canRecord}
+            bgMode={bgMode}
+            bgLoading={bgLoading}
+            bgSupported={bgSupported}
+            customImageUrl={customImageUrl}
+            onPickBackgroundMode={(next) => {
+              if (next.kind === "image") {
+                // Caller is responsible for providing a fresh src.
+                setBgMode(next);
+              } else {
+                setBgMode(next);
+              }
+            }}
+            onSelectCustomImage={(file) => {
+              if (customImageUrl) URL.revokeObjectURL(customImageUrl);
+              const url = URL.createObjectURL(file);
+              setCustomImageUrl(url);
+              setBgMode({ kind: "image", src: url });
+            }}
+            onClearCustomImage={() => {
+              if (customImageUrl) URL.revokeObjectURL(customImageUrl);
+              setCustomImageUrl(null);
+              setBgMode({ kind: "none" });
+            }}
           />
         )}
 
@@ -498,6 +574,13 @@ type SetupViewProps = {
   localStreamError: string | null;
   onStart: () => void;
   canRecord: boolean;
+  bgMode: BackgroundMode;
+  bgLoading: boolean;
+  bgSupported: boolean;
+  customImageUrl: string | null;
+  onPickBackgroundMode: (mode: BackgroundMode) => void;
+  onSelectCustomImage: (file: File) => void;
+  onClearCustomImage: () => void;
 };
 
 function SetupView({
@@ -519,6 +602,13 @@ function SetupView({
   localStreamError,
   onStart,
   canRecord,
+  bgMode,
+  bgLoading,
+  bgSupported,
+  customImageUrl,
+  onPickBackgroundMode,
+  onSelectCustomImage,
+  onClearCustomImage,
 }: SetupViewProps) {
   return (
     <div className="grid lg:grid-cols-[1.4fr_1fr] gap-6">
@@ -616,6 +706,18 @@ function SetupView({
           </div>
         </VesselCard>
 
+        {bgSupported && (
+          <BackgroundEffectPicker
+            mode={bgMode}
+            isLoading={bgLoading}
+            disabled={!cameraEnabled}
+            customImageUrl={customImageUrl}
+            onPick={onPickBackgroundMode}
+            onSelectCustomImage={onSelectCustomImage}
+            onClearCustomImage={onClearCustomImage}
+          />
+        )}
+
         {screenAvailable && (
           <VesselCard className="p-5 border-vessel-accent/20">
             <div className="flex items-start gap-2 text-sm text-vessel-text-secondary">
@@ -643,11 +745,199 @@ function SetupView({
           data-testid="button-start-record"
           className="w-full"
         >
-          <RecordingDot animated={false} className="mr-2" />
-          Start recording
+          {bgLoading ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <RecordingDot animated={false} className="mr-2" />
+          )}
+          {bgLoading ? "Preparing background…" : "Start recording"}
         </VesselButton>
       </div>
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Background effect picker
+// ──────────────────────────────────────────────────────────────────────────
+
+type BackgroundEffectPickerProps = {
+  mode: BackgroundMode;
+  isLoading: boolean;
+  /** True when the camera is off — the picker becomes informational only. */
+  disabled: boolean;
+  customImageUrl: string | null;
+  onPick: (mode: BackgroundMode) => void;
+  onSelectCustomImage: (file: File) => void;
+  onClearCustomImage: () => void;
+};
+
+function BackgroundEffectPicker({
+  mode,
+  isLoading,
+  disabled,
+  customImageUrl,
+  onPick,
+  onSelectCustomImage,
+  onClearCustomImage,
+}: BackgroundEffectPickerProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isNone = mode.kind === "none";
+  const isBlur = mode.kind === "blur";
+  const isImage = mode.kind === "image";
+
+  return (
+    <VesselCard className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-base font-bold text-vessel-text-primary flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-vessel-accent" />
+          Background
+        </h3>
+        {isLoading && (
+          <span className="text-xs text-vessel-text-muted flex items-center gap-1.5">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Preparing…
+          </span>
+        )}
+      </div>
+
+      {disabled && (
+        <p className="text-xs text-vessel-text-muted mb-3">
+          Turn your camera on to use a background effect.
+        </p>
+      )}
+
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Background effect">
+        <PickerChip
+          label="Original"
+          active={isNone}
+          disabled={disabled}
+          onClick={() => onPick({ kind: "none" })}
+          testId="bg-mode-none"
+        >
+          <span className="text-[10px] uppercase tracking-wider text-vessel-text-muted">
+            Off
+          </span>
+        </PickerChip>
+        <PickerChip
+          label="Blur"
+          active={isBlur}
+          disabled={disabled}
+          onClick={() => onPick({ kind: "blur" })}
+          testId="bg-mode-blur"
+        >
+          <span
+            aria-hidden
+            className="block w-8 h-8 rounded-full bg-gradient-to-br from-vessel-accent/40 to-vessel-bg-base"
+            style={{ filter: "blur(4px)" }}
+          />
+        </PickerChip>
+        <PickerChip
+          label="Custom image"
+          active={isImage}
+          disabled={disabled}
+          onClick={() => {
+            // If we already have an image, just re-activate the mode; otherwise
+            // open the file picker.
+            if (customImageUrl) {
+              onPick({ kind: "image", src: customImageUrl });
+            } else {
+              fileInputRef.current?.click();
+            }
+          }}
+          testId="bg-mode-image"
+        >
+          {customImageUrl ? (
+            <img
+              src={customImageUrl}
+              alt=""
+              className="w-8 h-8 rounded object-cover border border-vessel-border"
+            />
+          ) : (
+            <ImageIcon className="w-5 h-5 text-vessel-text-muted" />
+          )}
+        </PickerChip>
+      </div>
+
+      {customImageUrl && (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-vessel-text-muted">
+          <button
+            type="button"
+            className="underline hover:text-vessel-text-primary disabled:opacity-50"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
+            data-testid="button-bg-replace-image"
+          >
+            Replace image
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 hover:text-vessel-text-primary"
+            onClick={onClearCustomImage}
+            data-testid="button-bg-clear-image"
+          >
+            <X className="w-3 h-3" />
+            Remove
+          </button>
+        </div>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        data-testid="input-bg-image"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onSelectCustomImage(file);
+          // Reset so re-selecting the same file fires onChange again.
+          e.target.value = "";
+        }}
+      />
+    </VesselCard>
+  );
+}
+
+type PickerChipProps = {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  testId: string;
+};
+
+function PickerChip({
+  label,
+  active,
+  disabled,
+  onClick,
+  children,
+  testId,
+}: PickerChipProps) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      data-testid={testId}
+      className={[
+        "flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border transition-colors",
+        "min-h-[80px] text-xs font-medium",
+        active
+          ? "border-vessel-accent bg-vessel-accent/10 text-vessel-text-primary"
+          : "border-vessel-border bg-vessel-bg-base hover:border-vessel-accent/40 text-vessel-text-secondary",
+        disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
+      ].join(" ")}
+    >
+      <div className="flex items-center justify-center h-9">{children}</div>
+      <span>{label}</span>
+    </button>
   );
 }
 

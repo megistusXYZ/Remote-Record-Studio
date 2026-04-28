@@ -110,7 +110,18 @@ A standalone, single-person recording flow at `/record` for users who don't need
 - **System-audio guidance copy**: explicit, jargon-free wording ("Entire Screen / A Tab", "Share audio", "Chrome and Edge"). No technical terms from the forbidden vocabulary list ever reach the UI.
 - **V1 scope**: Quick Records do not write a vault row (no `createRecording` API call) — they live as personal archives + receipts only. Vault integration is intentional follow-up work once Solo Quick-Loom is validated.
 - **Mobile FAB**: the existing `MobileBottomNav` "Record" FAB still routes to `/session/new` to preserve current behavior; mobile users reach Quick Record via the dashboard card.
-- **Tests**: `SoloRecordScreen.test.tsx` covers the gating, full state-machine happy path, the publish-failure warning path, the empty-recorder error path, and pins the system-audio hint copy against forbidden vocabulary.
+- **Tests**: `SoloRecordScreen.test.tsx` covers the gating, full state-machine happy path, the publish-failure warning path, the empty-recorder error path, the background-effect picker rendering / mobile gating / loading-disabled-Start / fallback-toast paths, and pins the system-audio hint copy against forbidden vocabulary.
+
+#### Background Effects (V1)
+
+Optional camera background processing offered on the setup screen. Three modes: **Original** (passthrough, zero cost), **Blur**, and **Custom image** (user-supplied still image, cover-fit). Audio is never touched; only the video track is replaced.
+
+- **Pipeline** (`artifacts/vessel/src/lib/background-effect.ts`): a hidden `<video>` bound to the source stream is sampled per frame by the Selfie Segmenter from `@mediapipe/tasks-vision` (Apache-2.0). The category mask is upscaled (with a 2px blur for soft edges) into a person cutout via `globalCompositeOperation = "destination-in"`, then composited over a blurred copy of the video or the user's image. The output canvas's `captureStream(30)` provides the new video track; the original audio tracks are reused unchanged.
+- **React wrapper** (`artifacts/vessel/src/hooks/use-background-effect.ts`): mode `"none"` is a true passthrough (no segmenter load, output === source). Mode swaps between blur ↔ image happen in place via `handle.setMode` without rebuilding the pipeline. Source swaps (e.g. user picks a new camera) tear down and rebuild. On any pipeline failure it falls back to the source stream and surfaces a friendly message via toast.
+- **Loading & WASM/asset hosting**: the MediaPipe library and its support files load lazily on first activation from `cdn.jsdelivr.net` and `storage.googleapis.com`. First-activation latency is ~300ms-1s; subsequent activations are instant (the segmenter is module-scoped). The Start button is disabled while any pipeline build is in flight ("Preparing background…").
+- **Custom image flow**: the file is read entirely in-browser via `URL.createObjectURL`. Nothing about the image is sent to the server. The blob URL is revoked on replacement and on unmount to avoid leaks.
+- **Capability gate**: `isBackgroundEffectSupported()` requires `canvas.captureStream` and a non-coarse pointer (`(hover: none) and (pointer: coarse)` matches → false). Touch-only phones/tablets never see the picker; touch laptops do.
+- **Privacy & jargon**: every frame is processed on-device. UI vocabulary is strictly "Background", "Effect", "Blur", "Custom image", "Original" — never any forbidden vocabulary or implementation detail (no model/segmenter/MediaPipe/WASM in user copy; pinned by the test forbidden-words list).
 
 ## External Dependencies
 
