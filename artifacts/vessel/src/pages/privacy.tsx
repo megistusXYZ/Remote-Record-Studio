@@ -157,10 +157,10 @@ export default function Privacy() {
         <p>
           Questions or requests:{" "}
           <a
-            href="mailto:privacy@vessel.example"
+            href="mailto:info@megistus.xyz"
             className="text-vessel-accent hover:underline"
           >
-            privacy@vessel.example
+            info@megistus.xyz
           </a>
           , or open an issue on the GitHub repository.
         </p>
