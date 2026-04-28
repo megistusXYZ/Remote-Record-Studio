@@ -280,8 +280,11 @@ export async function startBackgroundEffect(
       const data = cat.getAsUint8Array();
       const cw = cat.width;
       const ch = cat.height;
-      // Selfie segmenter emits category 0 = background, 1 = person.
-      // Build an RGBA buffer where person => fully opaque white.
+      // Selfie segmenter emits a category mask where the FOREGROUND
+      // (person) pixels are 0 and the background is non-zero (typically
+      // 255). Build an RGBA buffer where person => fully opaque white so
+      // the destination-in compositing step below keeps the person and
+      // discards everything else.
       if (
         !maskImageData ||
         maskImageData.width !== cw ||
@@ -298,7 +301,10 @@ export async function startBackgroundEffect(
       }
       const buf = maskImageData.data;
       for (let i = 0; i < data.length; i++) {
-        buf[i * 4 + 3] = data[i] === 0 ? 0 : 255;
+        // Person == 0 in the model's category mask. Treat anything below
+        // 128 as person to be robust to the float16 threshold rounding
+        // some browsers do during the GPU → CPU readback.
+        buf[i * 4 + 3] = data[i] < 128 ? 255 : 0;
       }
       // Draw mask into a temp area, then upscale into the full mask canvas.
       // To avoid a second canvas, putImageData into top-left and stretch
