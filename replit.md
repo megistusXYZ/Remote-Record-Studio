@@ -6,7 +6,7 @@ Vessel is a studio-quality remote recording platform designed to offer a polishe
 
 **Product tagline:** "Your voice. Your studio. Your files."
 
-**License:** AGPL-3.0-or-later (root `LICENSE`). Repo includes `CONTRIBUTING.md` (DCO sign-off required), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md`, `NOTICE.md` (third-party asset attributions), and `RELEASING.md` (maintainer release process). Placeholder contact addresses (`security@vessel.example`, `conduct@vessel.example`) need to be replaced with real ones once a project domain is set up.
+**License:** AGPL-3.0-or-later (root `LICENSE`). Repo includes `CONTRIBUTING.md` (DCO sign-off required), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), `SECURITY.md`, `NOTICE.md` (third-party asset attributions), and `RELEASING.md` (maintainer release process). Public contact address: `info@megistus.xyz` (used for security reports, conduct reports, legal/terms questions, and privacy inquiries; previously per-purpose placeholders at `vessel.example`).
 
 **Release process:** Pushing a SemVer tag (`vX.Y.Z`, optionally with `-prerelease` suffix) to `main` triggers `.github/workflows/release.yml`, which verifies the tag is on `main`, runs `pnpm run build`, and publishes a GitHub Release with auto-generated notes. Notes are categorized by PR labels via `.github/release.yml` (breaking / feature / bug / performance / security / documentation; `chore`, `dependencies`, `ignore-for-release` are excluded). Tags with a hyphenated suffix are auto-marked as pre-releases. README badge row includes a "latest release" badge. See `RELEASING.md` for the full procedure.
 
