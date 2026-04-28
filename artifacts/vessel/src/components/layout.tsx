@@ -27,6 +27,13 @@ export function Layout({ children }: { children: ReactNode }) {
                 Dashboard
               </Link>
               <Link
+                href="/record"
+                className={`text-sm font-medium transition-colors ${location === '/record' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                data-testid="link-nav-record"
+              >
+                Quick Record
+              </Link>
+              <Link
                 href="/vault"
                 className={`text-sm font-medium transition-colors ${location === '/vault' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 data-testid="link-nav-vault"

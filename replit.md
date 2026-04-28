@@ -93,6 +93,25 @@ Vessel is a studio-quality remote recording platform designed to offer a polishe
 - `lib/db/src/schema/` — Database schema (identities, sessions, participants, recordings).
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (source of truth).
 
+### Quick Record (Solo)
+
+A standalone, single-person recording flow at `/record` for users who don't need a multi-person session — think "instant Loom-style clip". No invite, no scheduling, no second participant required.
+
+- **Entry points**: dedicated card on the dashboard (`LobbyScreen` default state), desktop header nav, and direct deep-link.
+- **Component**: `artifacts/vessel/src/components/record/SoloRecordScreen.tsx` (page wrapper at `artifacts/vessel/src/pages/record.tsx`, route registered in `App.tsx`).
+- **Reuses every existing recording primitive** — no studio code is touched:
+  - `useMediaDevices` + `useLocalStream` for camera/mic acquisition and device selection.
+  - `useScreenShare` for optional screen + system-audio capture.
+  - `useRecording` for the camera+mic track recorder.
+  - `useScreenRecording` for the parallel screen-clip recorder (mirrored on/off via the same effect pattern as the studio).
+  - `publishPersonalArchive` (`lib/session-archive.ts`) auto-archives on stop with a `quick-record:<recordingId>` sentinel session id and the title "Quick Record".
+  - `rememberPersonalReceipt` persists the share/receipt URLs locally.
+- **State machine**: `setup → recording → finalizing → done` (with an `error` branch). On `done` the share URL is auto-copied to the clipboard. Partial publish failures show a non-fatal warning chip but still surface the URL.
+- **System-audio guidance copy**: explicit, jargon-free wording ("Entire Screen / A Tab", "Share audio", "Chrome and Edge"). No technical terms from the forbidden vocabulary list ever reach the UI.
+- **V1 scope**: Quick Records do not write a vault row (no `createRecording` API call) — they live as personal archives + receipts only. Vault integration is intentional follow-up work once Solo Quick-Loom is validated.
+- **Mobile FAB**: the existing `MobileBottomNav` "Record" FAB still routes to `/session/new` to preserve current behavior; mobile users reach Quick Record via the dashboard card.
+- **Tests**: `SoloRecordScreen.test.tsx` covers the gating, full state-machine happy path, the publish-failure warning path, the empty-recorder error path, and pins the system-audio hint copy against forbidden vocabulary.
+
 ## External Dependencies
 
 - **Node.js**: 24

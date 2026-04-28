@@ -19,6 +19,7 @@ import RevokeTrackPage from "./pages/revoke-track";
 import Privacy from "./pages/privacy";
 import Terms from "./pages/terms";
 import HowItWorks from "./pages/how-it-works";
+import RecordPage from "./pages/record";
 import { MobileNavLayout } from "./components/MobileNavLayout";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/settings">{() => <MobileNavLayout><Settings /></MobileNavLayout>}</Route>
       <Route path="/session/new">{() => <MobileNavLayout><NewSession /></MobileNavLayout>}</Route>
       <Route path="/session/:id" component={SessionStudio} />
+      <Route path="/record">{() => <MobileNavLayout><RecordPage /></MobileNavLayout>}</Route>
       <Route path="/join/:inviteCode" component={Join} />
       <Route path="/s/:pointer" component={ShareView} />
       <Route path="/r/:pointer" component={ReceiptPage} />
