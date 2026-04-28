@@ -87,7 +87,7 @@
     "@huggingface/transformers": "^3.8.1",
     "@mediapipe/tasks-vision": "^0.10.34",
     "@noble/hashes": "^2.2.0",
-    "applesauce-core": "^5.2.0",
+    "applesauce-core": "^6.0.0",
     "applesauce-react": "^5.1.0",
     "applesauce-relay": "^5.2.0",
     "applesauce-signers": "^5.2.0",
