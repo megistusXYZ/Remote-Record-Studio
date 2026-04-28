@@ -530,7 +530,10 @@ function SetupView({
               autoPlay
               muted
               playsInline
-              className="w-full h-full object-cover"
+              // Mirror the self-view so the user sees themselves like in a
+              // mirror (matches Zoom / Loom / Riverside). The recorded file
+              // is unaffected — only the live preview is flipped via CSS.
+              className="w-full h-full object-cover -scale-x-100"
               data-testid="video-camera-preview"
             />
           ) : (
@@ -716,7 +719,9 @@ function RecordingView({
             autoPlay
             muted
             playsInline
-            className="w-full h-full object-cover"
+            // Mirror the self-view (see SetupView for rationale). The
+            // recorded file stays un-mirrored — this is preview-only CSS.
+            className="w-full h-full object-cover -scale-x-100"
             data-testid="video-camera-preview-live"
           />
         ) : (
