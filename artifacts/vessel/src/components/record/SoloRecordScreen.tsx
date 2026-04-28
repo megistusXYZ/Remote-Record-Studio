@@ -312,11 +312,11 @@ export function SoloRecordScreen() {
       const archive = await publishPersonalArchive(
         identity,
         {
-          // Solo Quick-Records aren't tied to a multi-person session, but
+          // Solo recordings aren't tied to a multi-person session, but
           // the archive schema expects a sessionId. Use a stable per-record
           // sentinel so the recipient page can still de-dupe correctly.
           sessionId: `quick-record:${r.recordingId}`,
-          sessionTitle: "Quick Record",
+          sessionTitle: "New recording",
           hostName: ownerName,
           endedAt: new Date(),
           isHost: true,
@@ -371,7 +371,7 @@ export function SoloRecordScreen() {
         rememberPersonalReceipt({
           archiveId: archive.archiveId,
           pointer: archive.pointer,
-          sessionTitle: "Quick Record",
+          sessionTitle: "New recording",
           isHost: true,
           hostName: ownerName,
           otherParticipantNames: [],
@@ -403,7 +403,7 @@ export function SoloRecordScreen() {
         // focus; the URL is still on screen for manual copy.
       }
     } catch (err) {
-      console.error("Failed to finalize Quick Record", err);
+      console.error("Failed to finalize new recording", err);
       // Use a controlled message — raw error text from upstream libraries
       // can include forbidden internal vocabulary.
       setErrorMessage(
@@ -492,7 +492,7 @@ export function SoloRecordScreen() {
       <div className="relative z-10 container max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 md:py-12">
         <div className="mb-6 sm:mb-8">
           <p className="font-mono-vessel text-[11px] uppercase tracking-[0.18em] text-vessel-accent mb-2">
-            Quick Record
+            New recording
           </p>
           <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-vessel-text-primary tracking-tight leading-[1.1]">
             Record on your own.
