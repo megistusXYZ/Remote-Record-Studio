@@ -26,6 +26,8 @@ import type { VesselIdentity } from "./identity";
  */
 
 export const STORAGE_URL_KEY = "vessel_storage_url";
+/** New plural slot — JSON-encoded ordered string[]. Primary first, then mirrors. */
+export const STORAGE_URLS_KEY = "vessel_storage_urls";
 export const DEFAULT_STORAGE_URL = "https://blossom.band";
 const LEGACY_PLACEHOLDER = "https://storage.vessel.local";
 
@@ -68,6 +70,54 @@ function scopedKey(pubkey: string): string {
   return `${STORAGE_URL_KEY}:${pubkey}`;
 }
 
+function scopedListKey(pubkey: string): string {
+  return `${STORAGE_URLS_KEY}:${pubkey}`;
+}
+
+function readList(key: string): string[] | null {
+  const raw = readRaw(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const cleaned: string[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      if (typeof item !== "string") continue;
+      const c = coerce(item);
+      // coerce only normalises and remaps the legacy placeholder — it does
+      // not enforce protocol/format. Apply isValidStorageUrl here so a stale
+      // / hand-edited list with non-https entries is silently filtered
+      // instead of being handed to upload code.
+      if (!c || !isValidStorageUrl(c)) continue;
+      if (seen.has(c)) continue;
+      seen.add(c);
+      cleaned.push(c);
+    }
+    return cleaned.length > 0 ? cleaned : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeList(key: string, urls: string[]): void {
+  if (typeof localStorage === "undefined") return;
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+  for (const u of urls) {
+    const n = normalizeStorageUrl(u);
+    if (!isValidStorageUrl(n)) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    cleaned.push(n);
+  }
+  if (cleaned.length === 0) {
+    localStorage.removeItem(key);
+    return;
+  }
+  localStorage.setItem(key, JSON.stringify(cleaned));
+}
+
 function readRaw(key: string): string | null {
   if (typeof localStorage === "undefined") return null;
   return localStorage.getItem(key);
@@ -84,29 +134,55 @@ function coerce(raw: string | null): string | null {
 }
 
 /**
- * Resolve the effective storage URL for a given identity. Lookup order:
- *   1. identity-scoped slot (`vessel_storage_url:<pubkey>`)
- *   2. legacy global slot (`vessel_storage_url`) — pre-scoping migration path
- *   3. compiled-in default
+ * Resolve the full ordered list of storage URLs for a given identity. The
+ * first entry is the **primary** — new uploads from this device target it.
+ * Later entries are mirrors which are saved/published as the user's
+ * preferred server set so the choice follows them across devices.
+ *
+ * Lookup order:
+ *   1. identity-scoped plural slot (`vessel_storage_urls:<pubkey>`)
+ *   2. identity-scoped legacy single slot (`vessel_storage_url:<pubkey>`)
+ *      — wrapped as `[that]` for migration without forced rewrites
+ *   3. global plural slot (`vessel_storage_urls`)
+ *      — mirrors the symmetric setter; without this an anonymous-write would
+ *        become an unreadable orphan
+ *   4. legacy global single slot (`vessel_storage_url`)
+ *   5. `[DEFAULT_STORAGE_URL]`
+ *
+ * Always returns a non-empty array. Duplicates are removed; order preserved.
+ */
+export function getStorageUrls(pubkey?: string): string[] {
+  if (pubkey) {
+    const scopedList = readList(scopedListKey(pubkey));
+    if (scopedList && scopedList.length > 0) return scopedList;
+    const scopedSingle = coerce(readRaw(scopedKey(pubkey)));
+    if (scopedSingle) return [scopedSingle];
+  }
+  const globalList = readList(STORAGE_URLS_KEY);
+  if (globalList && globalList.length > 0) return globalList;
+  const legacy = coerce(readRaw(STORAGE_URL_KEY));
+  if (legacy) return [legacy];
+  return [DEFAULT_STORAGE_URL];
+}
+
+/**
+ * Resolve the effective primary storage URL for a given identity. Equivalent
+ * to `getStorageUrls(pubkey)[0]`. Kept as a stable single-URL helper for the
+ * many call sites that just need "where do new uploads go?".
  *
  * Pass `undefined` for an anonymous / pre-sign-in caller — only the global
  * slot and default are consulted in that case, so two accounts on the same
  * device never bleed each other's storage choice.
  */
 export function getStorageUrl(pubkey?: string): string {
-  if (pubkey) {
-    const scoped = coerce(readRaw(scopedKey(pubkey)));
-    if (scoped) return scoped;
-  }
-  const legacy = coerce(readRaw(STORAGE_URL_KEY));
-  if (legacy) return legacy;
-  return DEFAULT_STORAGE_URL;
+  return getStorageUrls(pubkey)[0] ?? DEFAULT_STORAGE_URL;
 }
 
 /**
  * True iff there is any explicit local choice for this identity that the
  * remote-list applier must not overwrite. This includes:
- *   - the per-identity scoped key, or
+ *   - the per-identity scoped plural key, or
+ *   - the per-identity scoped legacy single key, or
  *   - the legacy global key (during migration — a user who set the global
  *     URL before scoping landed should not have it silently replaced by the
  *     remote list when they next sign in).
@@ -115,26 +191,54 @@ export function getStorageUrl(pubkey?: string): string {
  * applyRemoteStorageChoiceIfMissing.
  */
 export function hasLocalStorageChoice(pubkey: string): boolean {
+  if (readRaw(scopedListKey(pubkey)) != null) return true;
   if (readRaw(scopedKey(pubkey)) != null) return true;
+  // Global plural slot — parity with `setStorageUrls(_, undefined)`. Without
+  // this, an anonymous-write made before sign-in could be silently
+  // overwritten by `applyRemoteStorageChoiceIfMissing` on first sign-in.
+  if (readRaw(STORAGE_URLS_KEY) != null) return true;
   if (readRaw(STORAGE_URL_KEY) != null) return true;
   return false;
 }
 
-export function setStorageUrl(url: string, pubkey?: string): void {
+/**
+ * Persist the full ordered storage list. Empty / invalid entries are
+ * filtered; duplicates de-duped (first occurrence wins). Writing an empty
+ * list clears the slot — subsequent reads then resolve to the default.
+ *
+ * Also clears the legacy single-URL slot for this identity so two slots
+ * never disagree post-write — readers always see the new plural slot first
+ * anyway, but cleaning up keeps localStorage tidy and avoids confusion if
+ * someone inspects the keys directly.
+ */
+export function setStorageUrls(urls: string[], pubkey?: string): void {
   if (typeof localStorage === "undefined") return;
-  const normalized = normalizeStorageUrl(url);
   if (pubkey) {
-    localStorage.setItem(scopedKey(pubkey), normalized);
+    writeList(scopedListKey(pubkey), urls);
+    localStorage.removeItem(scopedKey(pubkey));
   } else {
-    localStorage.setItem(STORAGE_URL_KEY, normalized);
+    writeList(STORAGE_URLS_KEY, urls);
+    localStorage.removeItem(STORAGE_URL_KEY);
   }
+}
+
+/**
+ * Single-URL convenience setter — replaces the entire list with `[url]`.
+ * Kept for backward compatibility with existing single-input call sites
+ * (onboarding, sign-up). New code with multiple URLs should call
+ * `setStorageUrls` directly.
+ */
+export function setStorageUrl(url: string, pubkey?: string): void {
+  setStorageUrls([url], pubkey);
 }
 
 export function clearStorageUrl(pubkey?: string): void {
   if (typeof localStorage === "undefined") return;
   if (pubkey) {
+    localStorage.removeItem(scopedListKey(pubkey));
     localStorage.removeItem(scopedKey(pubkey));
   } else {
+    localStorage.removeItem(STORAGE_URLS_KEY);
     localStorage.removeItem(STORAGE_URL_KEY);
   }
 }
@@ -301,10 +405,10 @@ export async function fetchUserStorageServerList(
 
 /**
  * If this identity has no local storage choice on this device, best-effort
- * apply the first server URL from their published Kind 10063 list. Local
- * choices always win — never silently overwritten. Returns the URL that was
- * adopted (so callers can show a "synced from your other device" hint), or
- * `null` if nothing was applied.
+ * apply the **full ordered list** from their published Kind 10063 server
+ * list. Local choices always win — never silently overwritten. Returns the
+ * primary URL that was adopted (so callers can show a "synced from your
+ * other device" hint), or `null` if nothing was applied.
  */
 export async function applyRemoteStorageChoiceIfMissing(
   pubkey: string,
@@ -319,6 +423,6 @@ export async function applyRemoteStorageChoiceIfMissing(
   // server in Settings while the relay request was in flight; "local always
   // wins" requires we not clobber that choice.
   if (hasLocalStorageChoice(pubkey)) return null;
-  setStorageUrl(list[0], pubkey);
+  setStorageUrls(list, pubkey);
   return list[0];
 }

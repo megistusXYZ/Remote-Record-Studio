@@ -16,6 +16,7 @@ import {
   Package,
   MonitorPlay,
   Mic,
+  Braces,
 } from "lucide-react";
 import {
   downloadSelectionsAsZip,
@@ -52,6 +53,7 @@ import observationCabinSketch from "@assets/Gemini_Generated_Image_v77zp1v77zp1v
 import { VaultSidebar } from "./VaultSidebar";
 import { EmptyState } from "./EmptyState";
 import { ShareModal, type ShareModalRecording } from "./ShareModal";
+import { RecordingInspector, type InspectorSession } from "./RecordingInspector";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import {
   AlertDialog,
@@ -148,6 +150,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
     createdAt: Date;
     recordings: ShareModalRecording[];
   } | null>(null);
+  const [inspectSession, setInspectSession] = useState<InspectorSession | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedTracks, setSelectedTracks] = useState<Map<string, Set<string>>>(new Map());
@@ -701,6 +704,27 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                     >
                       <Share2 className="w-4 h-4 mr-2" /> Share
                     </VesselButton>
+                    {/* Tiny "view as data" affordance — invisible to anyone
+                        not looking for it, instantly recognised by power
+                        users. Opens a structured breakdown sheet with the
+                        raw vault record at the bottom. */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInspectSession({
+                          id: session.id,
+                          title: session.title,
+                          createdAt: session.createdAt,
+                          recordings: session.recordings,
+                        })
+                      }
+                      className="p-1.5 rounded-lg text-vessel-text-muted hover:text-vessel-text-primary hover:bg-vessel-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-vessel-accent"
+                      aria-label="View as data"
+                      title="View as data"
+                      data-testid={`button-inspect-session-${session.id}`}
+                    >
+                      <Braces className="w-4 h-4" />
+                    </button>
                   </div>
 
                   <AnimatePresence>
@@ -973,6 +997,15 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
           session={shareSession}
         />
       )}
+
+      <RecordingInspector
+        open={!!inspectSession}
+        onOpenChange={(o) => {
+          if (!o) setInspectSession(null);
+        }}
+        session={inspectSession}
+      />
+
 
       <AlertDialog
         open={!!deleteTarget}
