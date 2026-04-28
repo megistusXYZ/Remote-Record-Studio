@@ -102,8 +102,8 @@ export default function Terms() {
       <ContentSection heading="Contact">
         <p>
           Questions:{" "}
-          <a href="mailto:legal@vessel.example" className="text-vessel-accent hover:underline">
-            legal@vessel.example
+          <a href="mailto:info@megistus.xyz" className="text-vessel-accent hover:underline">
+            info@megistus.xyz
           </a>
           , or open an issue on the GitHub repository.
         </p>

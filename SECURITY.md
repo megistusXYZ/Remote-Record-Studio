@@ -8,7 +8,7 @@ as a first-class issue.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, email **`security@vessel.example`** with:
+Instead, email **`info@megistus.xyz`** with:
 
 - A clear description of the issue and its impact.
 - Steps to reproduce, or a proof-of-concept if you have one.
