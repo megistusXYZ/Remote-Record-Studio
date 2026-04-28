@@ -15,6 +15,7 @@ import {
   Music,
   Package,
   MonitorPlay,
+  Mic,
 } from "lucide-react";
 import {
   downloadSelectionsAsZip,
@@ -109,6 +110,15 @@ type VaultSession = {
   totalSize: number;
 };
 
+type VaultFilter = "all" | "studio" | "solo";
+
+// Solo recordings get a synthetic sessionId of `quick-record:<recordingId>`
+// at publish time, or `__solo_<id>` when no sessionId was supplied. Anything
+// else came from a multi-person studio session.
+function isSoloSession(id: string): boolean {
+  return id.startsWith("quick-record:") || id.startsWith("__solo_");
+}
+
 type DeleteTarget =
   | {
       kind: "session";
@@ -130,6 +140,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
   const queryClient = useQueryClient();
   const deleteMutation = useDeleteRecording();
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<VaultFilter>("all");
   const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(new Set());
   const [shareSession, setShareSession] = useState<{
     id: string;
@@ -190,6 +201,24 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
       s.title.toLowerCase().includes(search.toLowerCase()),
     );
   }, [recordings, search]);
+
+  // Split into the two natural categories so users can find a podcast-style
+  // group recording or a Loom-style solo clip without scrolling past the
+  // other type. Counts feed the segmented control labels below.
+  const studioSessions = useMemo(
+    () => filteredSessions.filter((s) => !isSoloSession(s.id)),
+    [filteredSessions],
+  );
+  const soloSessions = useMemo(
+    () => filteredSessions.filter((s) => isSoloSession(s.id)),
+    [filteredSessions],
+  );
+  const visibleSessions =
+    filter === "studio"
+      ? studioSessions
+      : filter === "solo"
+        ? soloSessions
+        : filteredSessions;
 
   const toggleExpand = (id: string) => {
     setExpandedSessionIds(prev => {
@@ -495,7 +524,63 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
               ctaTestId="button-vault-empty-cta" 
             />
           ) : (
-            filteredSessions.map(session => {
+            <>
+              {/* Segmented control: lets users narrow to either category
+                  while keeping a single "All" view for browsing. Counts are
+                  always visible so empty categories read clearly. */}
+              <div
+                role="group"
+                aria-label="Filter recordings by type"
+                className="inline-flex items-center gap-1 p-1 rounded-lg bg-vessel-bg-surface border border-vessel-border"
+                data-testid="vault-filter-tabs"
+              >
+                {([
+                  { value: "all", label: "All", count: filteredSessions.length, Icon: null },
+                  { value: "studio", label: "Studio sessions", count: studioSessions.length, Icon: Mic },
+                  { value: "solo", label: "Solo recordings", count: soloSessions.length, Icon: MonitorPlay },
+                ] as const).map((tab) => {
+                  const isActive = filter === tab.value;
+                  const Icon = tab.Icon;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => setFilter(tab.value)}
+                      data-testid={`vault-filter-${tab.value}`}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-vessel-accent/15 text-vessel-accent shadow-[0_0_0_1px_rgba(0,212,170,0.25)_inset]"
+                          : "text-vessel-text-secondary hover:text-vessel-text-primary hover:bg-vessel-bg-elevated"
+                      }`}
+                    >
+                      {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
+                      <span>{tab.label}</span>
+                      <span className={`font-mono-vessel text-[11px] ${isActive ? "text-vessel-accent" : "text-vessel-text-muted"}`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {visibleSessions.length === 0 ? (
+                <div
+                  className="rounded-xl border border-dashed border-vessel-border bg-vessel-bg-surface/40 px-6 py-10 text-center"
+                  data-testid="vault-filter-empty"
+                >
+                  <p className="text-vessel-text-primary font-medium">
+                    No {filter === "studio" ? "studio sessions" : "solo recordings"} yet
+                  </p>
+                  <p className="text-vessel-text-muted text-sm mt-1">
+                    {filter === "studio"
+                      ? "Multi-person recordings will appear here once you host or join one."
+                      : "On-your-own recordings will appear here once you make one."}
+                  </p>
+                </div>
+              ) : null}
+
+              {visibleSessions.map(session => {
               const isExpanded = expandedSessionIds.has(session.id);
               const uniqueParticipants = Array.from(
                 new Set(session.recordings.map((r) => r.participantName)),
@@ -525,9 +610,24 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                 <div key={session.id} className="p-6 rounded-xl bg-vessel-bg-surface border border-vessel-border hover:border-vessel-border-strong transition-colors" data-testid={`card-session-${session.id}`}>
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.4)]" />
                         <h2 className="font-display text-lg font-bold text-vessel-text-primary truncate">{session.title}</h2>
+                        {isSoloSession(session.id) ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono-vessel text-vessel-text-secondary bg-vessel-bg-base border border-vessel-border"
+                            data-testid={`badge-session-type-${session.id}`}
+                          >
+                            <MonitorPlay className="w-3 h-3" /> Solo
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono-vessel text-vessel-text-secondary bg-vessel-bg-base border border-vessel-border"
+                            data-testid={`badge-session-type-${session.id}`}
+                          >
+                            <Mic className="w-3 h-3" /> Studio
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-vessel-text-muted font-mono-vessel mt-1">
                         {format(session.createdAt, 'MMM d, yyyy')} &middot; {formatDuration(session.maxDuration)}
@@ -859,7 +959,8 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                   </AnimatePresence>
                 </div>
               );
-            })
+            })}
+            </>
           )}
         </div>
       </main>
