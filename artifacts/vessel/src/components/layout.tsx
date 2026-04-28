@@ -31,7 +31,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 className={`text-sm font-medium transition-colors ${location === '/record' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 data-testid="link-nav-record"
               >
-                Quick Record
+                New recording
               </Link>
               <Link
                 href="/vault"

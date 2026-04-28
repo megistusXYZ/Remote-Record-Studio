@@ -216,7 +216,7 @@ export function LobbyScreen({
                     className="w-full sm:w-auto shrink-0"
                     data-testid="button-quick-record"
                   >
-                    Quick Record &rarr;
+                    New recording &rarr;
                   </VesselButton>
                 </div>
               </VesselCard>
