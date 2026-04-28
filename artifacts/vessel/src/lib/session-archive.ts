@@ -2,6 +2,7 @@ import type { Event } from "nostr-tools/pure";
 import { generateSecretKey, getPublicKey, finalizeEvent } from "nostr-tools/pure";
 import type { VesselIdentity } from "./identity";
 import { getRelayPool } from "./relay-pool";
+import { getPublishRelays } from "./relay-config";
 import {
   encryptManifestContent,
   encodeShareKey,
@@ -112,21 +113,18 @@ const PUBLISH_TIMEOUT_MS = 8000;
 const PUBLISH_MAX_ATTEMPTS = 3;
 const PUBLISH_RETRY_DELAY_MS = 800;
 
-function getConfiguredRelays(): string[] {
+function getConfiguredRelays(identity?: VesselIdentity | null): string[] {
+  // Deployment-level override always wins. Set by ops, not the user.
   const raw = (import.meta.env.VITE_NOSTR_RELAYS as string | undefined) || "";
-  const list = raw
+  const envList = raw
     .split(",")
     .map((s) => s.trim())
     .filter((s) => s.startsWith("ws://") || s.startsWith("wss://"));
-  // Sensible defaults so the modal still functions if the env var is missing.
-  if (list.length === 0) {
-    return [
-      "wss://relay.damus.io",
-      "wss://nos.lol",
-      "wss://relay.nostr.band",
-    ];
-  }
-  return list;
+  if (envList.length > 0) return envList;
+  // Otherwise: the participant's own configured publish endpoints. When no
+  // identity is supplied (e.g. anonymous publish), this falls back to the
+  // global slot or the built-in defaults — see relay-config.getPublishRelays.
+  return getPublishRelays(identity?._pubkey);
 }
 
 /** Build a kind-1063 file-metadata event for a single track. The public tags
@@ -335,7 +333,7 @@ export async function publishSessionArchive(
     createdAt,
   });
 
-  const relays = getConfiguredRelays();
+  const relays = getConfiguredRelays(identity);
   const pool = getRelayPool();
 
   // Publish manifest + tracks in parallel, each with bounded retries. We
@@ -493,7 +491,6 @@ export async function publishPersonalArchive(
   input: PersonalArchiveInput,
   track: TrackDescriptor,
 ): Promise<PersonalArchiveResult> {
-  void identity;
   if (!track) {
     throw new Error("A recorded track is required to publish a personal archive");
   }
@@ -522,7 +519,7 @@ export async function publishPersonalArchive(
     createdAt,
   });
 
-  const relays = getConfiguredRelays();
+  const relays = getConfiguredRelays(identity);
   const pool = getRelayPool();
 
   const allEvents = [manifestEvent, trackEvent];

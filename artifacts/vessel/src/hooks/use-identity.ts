@@ -12,6 +12,7 @@ import {
   type VesselIdentity,
 } from "../lib/identity";
 import { applyRemoteStorageChoiceIfMissing } from "../lib/storage-config";
+import { applyRemoteRelayChoiceIfMissing } from "../lib/relay-config";
 
 export {
   startNostrConnectInvite,
@@ -46,9 +47,24 @@ export function useIdentity() {
     const pk = identity._pubkey;
     if (remoteStorageAppliedRef.current.has(pk)) return;
     remoteStorageAppliedRef.current.add(pk);
-    void applyRemoteStorageChoiceIfMissing(pk).catch(() => {
-      // Best-effort only; never block the UI on relay availability.
-    });
+    // Order matters: apply the published endpoint list FIRST, so that the
+    // subsequent storage-list fetch can use the user's preferred endpoints
+    // as its bootstrap (its default is `getPublishRelays(pubkey)`). If we
+    // ran these in parallel, a user whose storage list lives only on their
+    // custom endpoints would lose cross-device sync because the storage
+    // fetch would race ahead using the built-in defaults.
+    void (async () => {
+      try {
+        await applyRemoteRelayChoiceIfMissing(pk);
+      } catch {
+        // Best-effort only; never block the UI on network availability.
+      }
+      try {
+        await applyRemoteStorageChoiceIfMissing(pk);
+      } catch {
+        // Best-effort only.
+      }
+    })();
   }, [identity]);
 
   const createNewIdentity = useCallback(

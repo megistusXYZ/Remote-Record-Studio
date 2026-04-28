@@ -30,6 +30,7 @@ import {
 import { AvatarMark } from "../AvatarMark";
 import { BackupKeyModal } from "./BackupKeyModal";
 import { StorageServerList } from "./StorageServerList";
+import { EndpointList } from "./EndpointList";
 import { MoqClient } from "../../lib/moq";
 import { notifyRelayUrlChanged } from "../../hooks/use-live-transport";
 import observationCabinSketch from "@assets/Gemini_Generated_Image_v77zp1v77zp1v77z_1777173537021.png";
@@ -521,6 +522,12 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                       </button>
                     </div>
                   </div>
+
+                  <EndpointList
+                    pubkey={pubkey}
+                    identity={identity}
+                    onToast={(msg) => toast(msg)}
+                  />
 
                   {isLocalSigner ? (
                     <div className="space-y-1.5">
