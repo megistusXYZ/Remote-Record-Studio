@@ -133,18 +133,35 @@ export function SoloRecordScreen() {
   // When background effect is active this is the canvas-composited stream;
   // otherwise it's the raw camera. Either way the preview matches what gets
   // recorded.
+  //
+  // We depend on `cameraEnabled` and `phase` in addition to the stream so that
+  // when the user toggles the camera off and back on (or transitions between
+  // setup/recording views), the freshly-mounted <video> element gets its
+  // srcObject re-attached. Without this, the element would mount empty and
+  // stay black even though the underlying track is live again.
   useEffect(() => {
-    if (previewRef.current && recordableStream) {
-      previewRef.current.srcObject = recordableStream;
+    const el = previewRef.current;
+    if (el && recordableStream && el.srcObject !== recordableStream) {
+      el.srcObject = recordableStream;
+      // Some browsers pause autoplay when the element re-mounts mid-playback;
+      // nudge it back to playing. play() may return undefined in test/jsdom
+      // environments, so guard before calling .catch.
+      const p = el.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
     }
-  }, [recordableStream]);
+  }, [recordableStream, cameraEnabled, phase]);
 
-  // Bind the screen stream into the screen-preview <video>.
+  // Bind the screen stream into the screen-preview <video>. Same remount
+  // robustness as the main preview above — toggling screen sharing or
+  // switching phases re-mounts the element and we must reattach.
   useEffect(() => {
-    if (screenPreviewRef.current) {
-      screenPreviewRef.current.srcObject = screenShare.stream;
+    const el = screenPreviewRef.current;
+    if (el && screenShare.stream && el.srcObject !== screenShare.stream) {
+      el.srcObject = screenShare.stream;
+      const p = el.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
     }
-  }, [screenShare.stream]);
+  }, [screenShare.stream, screenShare.isSharing, phase]);
 
   // Mirror the screen-share lifecycle into the screen recorder. Same pattern
   // as the studio: starting a share kicks off an independent chunked
