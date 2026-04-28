@@ -14,7 +14,6 @@ import {
   ArrowRight,
   AlertTriangle,
   Info,
-  Sparkles,
   Image as ImageIcon,
   X,
 } from "lucide-react";
@@ -807,8 +806,7 @@ function BackgroundEffectPicker({
   return (
     <VesselCard className="p-5">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-base font-bold text-vessel-text-primary flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-vessel-accent" />
+        <h3 className="font-display text-base font-bold text-vessel-text-primary">
           Background
         </h3>
         {isLoading && (
