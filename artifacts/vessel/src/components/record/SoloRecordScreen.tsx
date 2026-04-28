@@ -14,6 +14,7 @@ import {
   ArrowRight,
   AlertTriangle,
   Info,
+  ChevronDown,
   Image as ImageIcon,
   X,
 } from "lucide-react";
@@ -735,22 +736,38 @@ function SetupView({
         )}
 
         {screenAvailable && (
-          <VesselCard className="p-5 border-vessel-accent/20">
-            <div className="flex items-start gap-2 text-sm text-vessel-text-secondary">
-              <Info className="w-4 h-4 text-vessel-accent shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-vessel-text-primary mb-1">
-                  Want to capture audio playing from your computer?
+          <VesselCard className="p-0 border-vessel-accent/20 overflow-hidden">
+            <details className="group">
+              <summary
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none text-sm text-vessel-text-primary hover:bg-vessel-bg-elevated/40 transition-colors [&::-webkit-details-marker]:hidden"
+                data-testid="audio-tip-summary"
+              >
+                <Info className="w-4 h-4 text-vessel-accent shrink-0" />
+                <span className="flex-1 font-medium">
+                  How to capture computer audio
+                </span>
+                <ChevronDown className="w-4 h-4 text-vessel-text-muted shrink-0 transition-transform duration-200 group-open:rotate-180" />
+              </summary>
+              <div className="px-4 pb-4 pt-1 pl-11 text-sm text-vessel-text-secondary leading-relaxed border-t border-vessel-border/40">
+                <p className="mt-3">
+                  When the picker opens, choose{" "}
+                  <strong className="text-vessel-text-primary">
+                    Entire Screen
+                  </strong>{" "}
+                  or{" "}
+                  <strong className="text-vessel-text-primary">A Tab</strong>{" "}
+                  and tick{" "}
+                  <strong className="text-vessel-text-primary">
+                    Share audio
+                  </strong>
+                  . Window-only sharing won't include the sound.
                 </p>
-                <p className="leading-relaxed">
-                  When the picker opens, choose <strong>Entire Screen</strong>{" "}
-                  or <strong>A Tab</strong> and tick <strong>Share audio</strong>.
-                  Window-only sharing won't include the sound. This works in
-                  Chrome and Edge — Safari and Firefox can't capture computer
-                  audio yet.
+                <p className="mt-2 text-xs text-vessel-text-muted">
+                  Works in Chrome and Edge. Safari and Firefox can't capture
+                  computer audio yet.
                 </p>
               </div>
-            </div>
+            </details>
           </VesselCard>
         )}
 
