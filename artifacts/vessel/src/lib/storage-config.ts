@@ -1,5 +1,6 @@
 import type { Event } from "nostr-tools/pure";
 import { getRelayPool } from "./relay-pool";
+import { getPublishRelays } from "./relay-config";
 import type { VesselIdentity } from "./identity";
 
 /**
@@ -30,12 +31,6 @@ export const STORAGE_URL_KEY = "vessel_storage_url";
 export const STORAGE_URLS_KEY = "vessel_storage_urls";
 export const DEFAULT_STORAGE_URL = "https://blossom.band";
 const LEGACY_PLACEHOLDER = "https://storage.vessel.local";
-
-const DEFAULT_PUBLISH_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://relay.nostr.band",
-  "wss://nos.lol",
-];
 
 const KIND_USER_SERVER_LIST = 10063;
 const REMOTE_FETCH_TIMEOUT_MS = 4000;
@@ -314,7 +309,7 @@ function combineSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
 export async function publishStorageServerList(
   identity: VesselIdentity,
   urls: string[],
-  relays: string[] = DEFAULT_PUBLISH_RELAYS,
+  relays: string[] = getPublishRelays(identity._pubkey),
 ): Promise<{ event: Event; published: boolean }> {
   const tags = urls
     .map((u) => normalizeStorageUrl(u))
@@ -348,7 +343,7 @@ export async function publishStorageServerList(
  */
 export async function fetchUserStorageServerList(
   pubkey: string,
-  relays: string[] = DEFAULT_PUBLISH_RELAYS,
+  relays: string[] = getPublishRelays(pubkey),
 ): Promise<string[]> {
   if (!pubkey) return [];
   return new Promise<string[]>((resolve) => {

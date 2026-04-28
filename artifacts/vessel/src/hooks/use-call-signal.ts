@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Event as NostrEvent } from "nostr-tools";
 import { getRelayPool } from "../lib/relay-pool";
+import { DEFAULT_PUBLISH_RELAYS, getPublishRelays } from "../lib/relay-config";
 import type { VesselIdentity } from "../lib/identity";
 
 /**
@@ -79,11 +80,10 @@ const MAX_TRANSCRIPT_HISTORY = 1000;
 // Public free relays. The signaling channel is best-effort: as long as ONE
 // relay is reachable everyone sees each other. Falls back gracefully if all
 // are down — the studio still works, just without the live roster.
-export const DEFAULT_SIGNAL_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.nostr.band",
-];
+//
+// Re-exported from relay-config so we share a single source of truth with the
+// other publish call sites (storage list, archive, endpoint list metadata).
+export const DEFAULT_SIGNAL_RELAYS = DEFAULT_PUBLISH_RELAYS;
 
 // ─── Public types ──────────────────────────────────────────────────────────
 
@@ -318,6 +318,34 @@ export function useCallSignal({
     hostPubkeyRef.current = hostPubkey;
   }, [hostPubkey]);
 
+  // The user's chosen network endpoints, UNIONed with the defaults AND
+  // whatever the caller explicitly passed. We always keep the defaults in
+  // the union — even when the caller overrides `relays` — so the
+  // signaling channel still has the lingua franca that other clients in
+  // the room agree on. The user's preferred endpoints are then merged in
+  // so a user who runs their own server sees their room's signaling flow
+  // through it too. Order: defaults first (broadest reach), then caller
+  // override, then user prefs; dedupe preserves first occurrence.
+  const effectiveRelays = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const u of [
+      ...DEFAULT_PUBLISH_RELAYS,
+      ...relays,
+      ...getPublishRelays(myPubkey),
+    ]) {
+      if (seen.has(u)) continue;
+      seen.add(u);
+      out.push(u);
+    }
+    return out;
+    // We intentionally re-resolve on every identity change, not on every
+    // localStorage tick — the user editing their list mid-call doesn't need
+    // to tear down the live subscription. New endpoints take effect on the
+    // next mount of the studio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myPubkey, relays]);
+
   // ── State ──
   const [peers, setPeers] = useState<Map<string, Peer>>(new Map());
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -389,13 +417,13 @@ export function useCallSignal({
         // subscription path.
         if (signed?.id) rememberSeen(signed.id);
         const pool = getRelayPool();
-        await pool.publish(relays, signed);
+        await pool.publish(effectiveRelays, signed);
       } catch (err) {
         // Best-effort; chat / heartbeats should never break the studio.
         console.warn("[call-signal] publish failed:", err);
       }
     },
-    [identity, relays, rememberSeen],
+    [identity, effectiveRelays, rememberSeen],
   );
 
   // ── Inbound event router ──
@@ -700,7 +728,7 @@ export function useCallSignal({
     }
     const pool = getRelayPool();
     let cancelled = false;
-    const obs = pool.subscription(relays, [
+    const obs = pool.subscription(effectiveRelays, [
       {
         kinds: ALL_KINDS,
         "#d": [sessionId],
