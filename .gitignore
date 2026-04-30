@@ -48,11 +48,6 @@ Thumbs.db
 .cache/
 .local/
 
-# Internal Replit dev artifacts — kept local only, never published.
-# `attached_assets/` was a dumping ground for screenshots, draft prompts and
-# unused image generations during development. The 6 illustrations actually
-# rendered by the UI now live in artifacts/vessel/src/assets/illustrations/.
-# `replit.md` is the AI agent's project memory — useful to keep on disk so
-# tooling can read it across sessions, but not appropriate for the public repo.
+# Local-only dev artifacts.
 /attached_assets/
 /replit.md
