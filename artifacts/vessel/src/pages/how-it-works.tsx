@@ -24,8 +24,10 @@ import { SketchLine } from "../components/icons/SketchLine";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
 import { VesselBadge } from "../components/vessel-ui/VesselBadge";
-import seascapeSketch from "@/assets/illustrations/seascape.png";
-import shipSketch from "@/assets/illustrations/ship.png";
+import seascapeAvif from "@/assets/illustrations/seascape.avif";
+import seascapeWebp from "@/assets/illustrations/seascape.webp";
+import shipAvif from "@/assets/illustrations/ship.avif";
+import shipWebp from "@/assets/illustrations/ship.webp";
 
 const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 24 },
@@ -248,7 +250,7 @@ export default function HowItWorks() {
         <div
           className="absolute inset-x-0 top-0 h-[110%] pointer-events-none bg-no-repeat bg-contain opacity-[0.06]"
           style={{
-            backgroundImage: `url(${seascapeSketch})`,
+            backgroundImage: `image-set(url('${seascapeAvif}') type('image/avif'), url('${seascapeWebp}') type('image/webp'))`,
             backgroundPosition: "center top",
             filter: "invert(1) grayscale(1)",
             maskImage:
@@ -509,7 +511,7 @@ export default function HowItWorks() {
             <div
               className="absolute inset-0 bg-no-repeat bg-cover bg-center opacity-[0.18]"
               style={{
-                backgroundImage: `url(${shipSketch})`,
+                backgroundImage: `image-set(url('${shipAvif}') type('image/avif'), url('${shipWebp}') type('image/webp'))`,
                 filter: "invert(1) grayscale(1)",
                 maskImage:
                   "radial-gradient(ellipse at center, black 40%, transparent 80%)",
