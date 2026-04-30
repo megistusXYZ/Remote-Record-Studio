@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ParticipantCard } from "./ParticipantCard";
 import { InviteModal } from "./InviteModal";
-import wheelhouseSketch from "@assets/Gemini_Generated_Image_zx4hpzx4hpzx4hpz_1777173879947.png";
+import wheelhouseSketch from "@/assets/illustrations/wheelhouse.png";
 
 export type LobbyScreenProps = {
   state: "default" | "waitingRoom";

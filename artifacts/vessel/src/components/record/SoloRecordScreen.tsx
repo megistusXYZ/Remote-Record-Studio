@@ -37,7 +37,7 @@ import { publishPersonalArchive } from "../../lib/session-archive";
 import { rememberPersonalReceipt } from "../../lib/personal-receipts";
 // Same hand-drawn captain's-bridge sketch the lobby/home page uses as its
 // backdrop — keeps the visual family consistent across the signed-in pages.
-import wheelhouseSketch from "@assets/Gemini_Generated_Image_zx4hpzx4hpzx4hpz_1777173879947.png";
+import wheelhouseSketch from "@/assets/illustrations/wheelhouse.png";
 
 type Phase = "setup" | "recording" | "finalizing" | "done" | "error";
 

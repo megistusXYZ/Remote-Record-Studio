@@ -24,8 +24,8 @@ import { SketchLine } from "../components/icons/SketchLine";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
 import { VesselBadge } from "../components/vessel-ui/VesselBadge";
-import seascapeSketch from "@assets/Gemini_Generated_Image_b0di8ib0di8ib0di_1777089861634.png";
-import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
+import seascapeSketch from "@/assets/illustrations/seascape.png";
+import shipSketch from "@/assets/illustrations/ship.png";
 
 const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 24 },

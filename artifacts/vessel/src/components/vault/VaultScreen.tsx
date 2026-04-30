@@ -49,7 +49,7 @@ import {
   resolveAvatarColor,
   useStoredAvatarColor,
 } from "../../hooks/use-avatar-color";
-import observationCabinSketch from "@assets/Gemini_Generated_Image_v77zp1v77zp1v77z_1777173537021.png";
+import observationCabinSketch from "@/assets/illustrations/observation-cabin.png";
 import { VaultSidebar } from "./VaultSidebar";
 import { EmptyState } from "./EmptyState";
 import { ShareModal, type ShareModalRecording } from "./ShareModal";
