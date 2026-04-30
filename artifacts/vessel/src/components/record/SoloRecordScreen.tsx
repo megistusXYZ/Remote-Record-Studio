@@ -37,7 +37,8 @@ import { publishPersonalArchive } from "../../lib/session-archive";
 import { rememberPersonalReceipt } from "../../lib/personal-receipts";
 // Same hand-drawn captain's-bridge sketch the lobby/home page uses as its
 // backdrop — keeps the visual family consistent across the signed-in pages.
-import wheelhouseSketch from "@/assets/illustrations/wheelhouse.png";
+import wheelhouseAvif from "@/assets/illustrations/wheelhouse.avif";
+import wheelhouseWebp from "@/assets/illustrations/wheelhouse.webp";
 
 type Phase = "setup" | "recording" | "finalizing" | "done" | "error";
 
@@ -479,7 +480,7 @@ export function SoloRecordScreen() {
         <div
           className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
-            backgroundImage: `url(${wheelhouseSketch})`,
+            backgroundImage: `image-set(url('${wheelhouseAvif}') type('image/avif'), url('${wheelhouseWebp}') type('image/webp'))`,
             filter: "invert(1) grayscale(1)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",

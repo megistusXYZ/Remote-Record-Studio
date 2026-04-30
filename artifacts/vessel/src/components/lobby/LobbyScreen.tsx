@@ -37,7 +37,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ParticipantCard } from "./ParticipantCard";
 import { InviteModal } from "./InviteModal";
-import wheelhouseSketch from "@/assets/illustrations/wheelhouse.png";
+import wheelhouseAvif from "@/assets/illustrations/wheelhouse.avif";
+import wheelhouseWebp from "@/assets/illustrations/wheelhouse.webp";
 
 export type LobbyScreenProps = {
   state: "default" | "waitingRoom";
@@ -142,7 +143,7 @@ export function LobbyScreen({
         <div
           className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
-            backgroundImage: `url(${wheelhouseSketch})`,
+            backgroundImage: `image-set(url('${wheelhouseAvif}') type('image/avif'), url('${wheelhouseWebp}') type('image/webp'))`,
             filter: "invert(1) grayscale(1)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",

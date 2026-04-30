@@ -18,10 +18,14 @@ import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { AimIcon } from "../components/icons/AimIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
-import shipSketch from "@/assets/illustrations/ship.png";
-import podcastSketch from "@/assets/illustrations/podcast.png";
-import pirateCrewSketch from "@/assets/illustrations/pirate-crew.png";
-import seascapeSketch from "@/assets/illustrations/seascape.png";
+import shipAvif from "@/assets/illustrations/ship.avif";
+import shipWebp from "@/assets/illustrations/ship.webp";
+import podcastAvif from "@/assets/illustrations/podcast.avif";
+import podcastWebp from "@/assets/illustrations/podcast.webp";
+import pirateCrewAvif from "@/assets/illustrations/pirate-crew.avif";
+import pirateCrewWebp from "@/assets/illustrations/pirate-crew.webp";
+import seascapeAvif from "@/assets/illustrations/seascape.avif";
+import seascapeWebp from "@/assets/illustrations/seascape.webp";
 
 /** Provider-comparison data driving the "How Vessel stacks up." section.
  *  Single source of truth for both the mobile stacked-card layout and
@@ -286,7 +290,7 @@ export default function LandingPage() {
         <div
           className="absolute inset-x-0 top-0 h-[55%] pointer-events-none bg-no-repeat bg-contain opacity-[0.06]"
           style={{
-            backgroundImage: `url(${podcastSketch})`,
+            backgroundImage: `image-set(url('${podcastAvif}') type('image/avif'), url('${podcastWebp}') type('image/webp'))`,
             backgroundPosition: "center top",
             filter: "invert(1) grayscale(1)",
             maskImage: "radial-gradient(ellipse at 50% 35%, black 30%, transparent 75%)",
@@ -537,7 +541,7 @@ export default function LandingPage() {
         <div
           className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.07]"
           style={{
-            backgroundImage: `url(${seascapeSketch})`,
+            backgroundImage: `image-set(url('${seascapeAvif}') type('image/avif'), url('${seascapeWebp}') type('image/webp'))`,
             filter: "invert(1) grayscale(1)",
             maskImage: "radial-gradient(ellipse at center, black 45%, transparent 80%)",
             WebkitMaskImage: "radial-gradient(ellipse at center, black 45%, transparent 80%)",
@@ -707,7 +711,7 @@ export default function LandingPage() {
         <div
           className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.07]"
           style={{
-            backgroundImage: `url(${shipSketch})`,
+            backgroundImage: `image-set(url('${shipAvif}') type('image/avif'), url('${shipWebp}') type('image/webp'))`,
             filter: "invert(1) grayscale(1)",
             maskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",
             WebkitMaskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)",

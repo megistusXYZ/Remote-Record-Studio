@@ -158,12 +158,11 @@ export default defineConfig({
         // Don't cache anything bigger than 4MB so we never blow up the SW cache
         // with recorded media blobs (those are stored separately in the app).
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-        // Exclude oversized hero / background art from precache — they load on
-        // demand over the network and would otherwise exceed the cache limit.
-        // Match the hashed filenames Vite emits (e.g. assets/ship-BrxH2_Ho.png).
-        globIgnores: [
-          "**/{seascape,ship,podcast,pirate-crew,wheelhouse,observation-cabin}-*.png",
+        // Includes the AVIF + WebP background illustrations so they're
+        // precached on first install and paint instantly on every later visit
+        // (including offline / PWA cold starts).
+        globPatterns: [
+          "**/*.{js,css,html,svg,png,ico,woff2,webp,avif}",
         ],
         navigateFallback: `${basePath}index.html`,
         navigateFallbackDenylist: [/^\/api\//],

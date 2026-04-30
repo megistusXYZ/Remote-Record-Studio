@@ -33,7 +33,8 @@ import { StorageServerList } from "./StorageServerList";
 import { EndpointList } from "./EndpointList";
 import { MoqClient } from "../../lib/moq";
 import { notifyRelayUrlChanged } from "../../hooks/use-live-transport";
-import observationCabinSketch from "@/assets/illustrations/observation-cabin.png";
+import observationCabinAvif from "@/assets/illustrations/observation-cabin.avif";
+import observationCabinWebp from "@/assets/illustrations/observation-cabin.webp";
 import { VaultSidebar } from "./VaultSidebar";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
@@ -198,7 +199,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
         <div
           className="pointer-events-none fixed inset-0 z-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
-            backgroundImage: `url(${observationCabinSketch})`,
+            backgroundImage: `image-set(url('${observationCabinAvif}') type('image/avif'), url('${observationCabinWebp}') type('image/webp'))`,
             filter: "invert(1) grayscale(1)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",
