@@ -161,7 +161,10 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
         // Exclude oversized hero / background art from precache — they load on
         // demand over the network and would otherwise exceed the cache limit.
-        globIgnores: ["**/Gemini_Generated_Image_*"],
+        // Match the hashed filenames Vite emits (e.g. assets/ship-BrxH2_Ho.png).
+        globIgnores: [
+          "**/{seascape,ship,podcast,pirate-crew,wheelhouse,observation-cabin}-*.png",
+        ],
         navigateFallback: `${basePath}index.html`,
         navigateFallbackDenylist: [/^\/api\//],
       },
@@ -187,7 +190,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
     dedupe: ["react", "react-dom"],
   },

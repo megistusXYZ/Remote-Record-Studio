@@ -18,10 +18,10 @@ import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { AimIcon } from "../components/icons/AimIcon";
 import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
-import shipSketch from "@assets/Gemini_Generated_Image_b432cvb432cvb432_1777081786194.png";
-import podcastSketch from "@assets/Gemini_Generated_Image_ptr74qptr74qptr7_1777075390674.png";
-import pirateCrewSketch from "@assets/Gemini_Generated_Image_sctiuasctiuascti_1777089542804.png";
-import seascapeSketch from "@assets/Gemini_Generated_Image_b0di8ib0di8ib0di_1777089861634.png";
+import shipSketch from "@/assets/illustrations/ship.png";
+import podcastSketch from "@/assets/illustrations/podcast.png";
+import pirateCrewSketch from "@/assets/illustrations/pirate-crew.png";
+import seascapeSketch from "@/assets/illustrations/seascape.png";
 
 /** Provider-comparison data driving the "How Vessel stacks up." section.
  *  Single source of truth for both the mobile stacked-card layout and
