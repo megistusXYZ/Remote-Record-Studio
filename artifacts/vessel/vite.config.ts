@@ -192,6 +192,13 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname),
+  // ES-module worker output. Required for vite-plugin-pwa: Workbox's
+  // registration helper (workbox-window) uses dynamic imports, which Vite's
+  // default IIFE worker format cannot represent. Also matches our captions
+  // worker, which is already instantiated with `{ type: "module" }`.
+  worker: {
+    format: "es",
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
