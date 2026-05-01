@@ -158,6 +158,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/RoomFullError"
 
+  /sessions/{sessionId}/leave:
+    post:
+      operationId: leaveSession
+      tags: [sessions]
+      summary: Mark a participant as having left the session
+      description: |
+        Records a clean exit by stamping `leftAt` on the participant row so
+        the canonical roster updates immediately for everyone polling the
+        session. Must be signed by the leaving participant's pubkey
+        (NIP-98 Authorization header). The host of a session leaving does
+        not end the session — that requires PATCH /sessions/{sessionId}
+        with status=ended.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaveSessionBody"
+      responses:
+        "200":
+          description: Participant marked as left
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Session or participant not found
+
   /recordings:
     get:
       operationId: listRecordings
@@ -417,6 +451,18 @@ components:
         - guestName
         - guestPubkey
 
+    LeaveSessionBody:
+      type: object
+      description: |
+        Body for POST /sessions/{sessionId}/leave. The pubkey must match the
+        signing pubkey of the NIP-98 Authorization header so participants
+        can only mark themselves as left.
+      properties:
+        pubkey:
+          type: string
+      required:
+        - pubkey
+
     Participant:
       type: object
       properties:
@@ -432,6 +478,14 @@ components:
         joinedAt:
           type: string
           format: date-time
+        leftAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Timestamp of clean exit via POST /sessions/{sessionId}/leave.
+            Null while the participant is in the room. Consumers building
+            the live roster should filter rows where this is non-null.
       required:
         - id
         - pubkey

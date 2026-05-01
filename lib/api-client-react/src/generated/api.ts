@@ -23,6 +23,7 @@ import type {
   GetVaultSummaryParams,
   HealthStatus,
   JoinSessionBody,
+  LeaveSessionBody,
   ListRecordingsParams,
   ListSessionsParams,
   RecentActivity,
@@ -641,6 +642,100 @@ export const useJoinSession = <
   TContext
 > => {
   return useMutation(getJoinSessionMutationOptions(options));
+};
+
+/**
+ * Records a clean exit by stamping `leftAt` on the participant row so
+the canonical roster updates immediately for everyone polling the
+session. Must be signed by the leaving participant's pubkey
+(NIP-98 Authorization header). The host of a session leaving does
+not end the session — that requires PATCH /sessions/{sessionId}
+with status=ended.
+
+ * @summary Mark a participant as having left the session
+ */
+export const getLeaveSessionUrl = (sessionId: string) => {
+  return `/api/sessions/${sessionId}/leave`;
+};
+
+export const leaveSession = async (
+  sessionId: string,
+  leaveSessionBody: LeaveSessionBody,
+  options?: RequestInit,
+): Promise<Session> => {
+  return customFetch<Session>(getLeaveSessionUrl(sessionId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(leaveSessionBody),
+  });
+};
+
+export const getLeaveSessionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof leaveSession>>,
+    TError,
+    { sessionId: string; data: BodyType<LeaveSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof leaveSession>>,
+  TError,
+  { sessionId: string; data: BodyType<LeaveSessionBody> },
+  TContext
+> => {
+  const mutationKey = ["leaveSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof leaveSession>>,
+    { sessionId: string; data: BodyType<LeaveSessionBody> }
+  > = (props) => {
+    const { sessionId, data } = props ?? {};
+
+    return leaveSession(sessionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LeaveSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof leaveSession>>
+>;
+export type LeaveSessionMutationBody = BodyType<LeaveSessionBody>;
+export type LeaveSessionMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark a participant as having left the session
+ */
+export const useLeaveSession = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof leaveSession>>,
+    TError,
+    { sessionId: string; data: BodyType<LeaveSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof leaveSession>>,
+  TError,
+  { sessionId: string; data: BodyType<LeaveSessionBody> },
+  TContext
+> => {
+  return useMutation(getLeaveSessionMutationOptions(options));
 };
 
 /**

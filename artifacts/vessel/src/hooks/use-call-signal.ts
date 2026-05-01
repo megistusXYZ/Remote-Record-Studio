@@ -57,14 +57,33 @@ const ALL_KINDS = [
 ];
 
 // ─── Timing ────────────────────────────────────────────────────────────────
-const HEARTBEAT_MS = 5_000;
+/** Steady-state heartbeat cadence once a peer has been in the room for
+ *  more than {@link HEARTBEAT_BURST_DURATION_MS}. Tighter than the old
+ *  5s so a peer that crashes or drops shows up as stale within a few
+ *  seconds rather than half a minute. */
+const HEARTBEAT_MS = 3_000;
+/** Faster heartbeat used during the first {@link HEARTBEAT_BURST_DURATION_MS}
+ *  after we join. The first ten seconds is when everyone's roster is
+ *  most volatile — people are joining, A/V is initialising, and a missed
+ *  heartbeat is the difference between "they're here!" and "are they
+ *  here?". Beating every second early eliminates that uncertainty
+ *  without burning bandwidth for the rest of the session. */
+const HEARTBEAT_BURST_MS = 1_000;
+/** Total wall-clock window of the burst-rate heartbeat phase. */
+const HEARTBEAT_BURST_DURATION_MS = 10_000;
 /** A peer that hasn't heartbeated within this window is flagged "stale" in
- *  the roster — UI fades them and shows a "Reconnecting…" tag. */
-const STALE_TTL_MS = 15_000;
-/** A peer past this window is dropped from the roster (presumed gone). */
-const DROP_TTL_MS = 45_000;
-/** How often we re-evaluate stale peers on the wall clock. */
-const PRUNE_TICK_MS = 2_000;
+ *  the roster — UI fades them and shows a "Reconnecting…" tag. Set to
+ *  2× the steady-state heartbeat so a single missed beat doesn't trip
+ *  the stale state, but two in a row do. */
+const STALE_TTL_MS = 6_000;
+/** A peer past this window is dropped from the roster (presumed gone).
+ *  Set to 6× the steady-state heartbeat so a brief network blip
+ *  (3-5 missed beats) doesn't evict a still-present participant. */
+const DROP_TTL_MS = 18_000;
+/** How often we re-evaluate stale peers on the wall clock. Aligned with
+ *  the steady-state heartbeat so the pruner ticks at most one cycle
+ *  behind the latest beat. */
+const PRUNE_TICK_MS = 1_000;
 const RECENT_EVENT_RING_SIZE = 200;
 /** Hard caps so a misbehaving relay can't eat unbounded memory. */
 const MAX_CHAT_HISTORY = 100;
@@ -180,6 +199,13 @@ export type UseCallSignalArgs = {
    *  silently dropped. Without this, any participant could spoof a host
    *  "ask to mute" prompt by publishing their own event. */
   hostPubkey?: string | null;
+  /** Fires the moment we receive a clean leave signal from a peer (KIND_LEAVE).
+   *  The studio uses this to surface a one-off "Alex left" toast — much
+   *  more noticeable than a row silently disappearing from the sidebar.
+   *  The callback receives the leaver's pubkey and the display name we
+   *  last saw on their presence beats; if we never saw any, displayName
+   *  falls back to a short pubkey preview. */
+  onPeerLeave?: (info: { pubkey: string; displayName: string }) => void;
 };
 
 export type UseCallSignalResult = {
@@ -311,12 +337,22 @@ export function useCallSignal({
   enabled = true,
   relays = DEFAULT_SIGNAL_RELAYS,
   hostPubkey = null,
+  onPeerLeave,
 }: UseCallSignalArgs): UseCallSignalResult {
   const myPubkey = identity?._pubkey ?? "";
   const hostPubkeyRef = useRef<string | null>(hostPubkey);
   useEffect(() => {
     hostPubkeyRef.current = hostPubkey;
   }, [hostPubkey]);
+
+  // Latch the leave callback into a ref so handleIncoming (which is itself
+  // memoized on a long dependency list) doesn't need to be re-created
+  // every time the parent component swaps the callback identity. This is
+  // the same pattern we use for hostPubkey above.
+  const onPeerLeaveRef = useRef<typeof onPeerLeave>(onPeerLeave);
+  useEffect(() => {
+    onPeerLeaveRef.current = onPeerLeave;
+  }, [onPeerLeave]);
 
   // The user's chosen network endpoints, UNIONed with the defaults AND
   // whatever the caller explicitly passed. We always keep the defaults in
@@ -674,6 +710,15 @@ export function useCallSignal({
           // present for the staleness window. Authenticity is the
           // signature itself: relays only deliver events whose signature
           // matches the claimed pubkey, so we can trust ev.pubkey.
+          //
+          // Capture the display name BEFORE the row is removed so the
+          // toast can say "Alex left" rather than a pubkey preview.
+          // Fall back to a short pubkey string when we never received
+          // a presence beat from this peer (e.g. they fired LEAVE on
+          // page-close before their first heartbeat landed for us).
+          const departing = peersRef.current.get(ev.pubkey);
+          const fallbackName = `${ev.pubkey.slice(0, 8)}…`;
+          const displayName = departing?.displayName?.trim() || fallbackName;
           setPeers((prev) => {
             if (!prev.has(ev.pubkey)) return prev;
             const next = new Map(prev);
@@ -681,6 +726,16 @@ export function useCallSignal({
             peersRef.current = next;
             return next;
           });
+          // Fire the leave callback AFTER the state mutation is queued
+          // so consumers that read `peers` inside the callback see the
+          // post-leave roster on their next render. Wrapped in a
+          // try/catch because a misbehaving consumer must not break
+          // the signaling pipeline.
+          try {
+            onPeerLeaveRef.current?.({ pubkey: ev.pubkey, displayName });
+          } catch (err) {
+            console.warn("[call-signal] onPeerLeave threw:", err);
+          }
           break;
         }
         default:
@@ -764,6 +819,15 @@ export function useCallSignal({
   }, [enabled, sessionId, identity, relays, handleIncoming]);
 
   // ── Heartbeat loop ──
+  // Two-tier cadence: the first {@link HEARTBEAT_BURST_DURATION_MS} after
+  // we join, we beat at {@link HEARTBEAT_BURST_MS} (1s) so everyone else's
+  // roster locks onto us within a single second of the first arrival,
+  // and so a peer who fails to come up at all is detectable in seconds
+  // rather than tens of seconds. After the burst, we fall back to the
+  // steady-state {@link HEARTBEAT_MS} (3s) for the rest of the session.
+  // Two `setInterval`s keep the implementation trivially correct: a
+  // single dynamic interval would have to be torn down and recreated at
+  // the cutover, racing the next-due beat.
   useEffect(() => {
     if (!enabled || !sessionId || !identity) return;
     let cancelled = false;
@@ -783,16 +847,28 @@ export function useCallSignal({
     };
     // Immediate beat so we appear in everyone else's roster ASAP.
     sendHeartbeat();
-    const id = window.setInterval(sendHeartbeat, HEARTBEAT_MS);
+    // Burst-rate interval, active for the first ten seconds.
+    const burstId = window.setInterval(sendHeartbeat, HEARTBEAT_BURST_MS);
+    // Cut over to steady-state once the burst window elapses.
+    let steadyId: number | null = null;
+    const cutoverId = window.setTimeout(() => {
+      window.clearInterval(burstId);
+      // Fire one beat at the cutover boundary so we don't drift up to
+      // HEARTBEAT_MS without a beat between burst-end and steady-start.
+      sendHeartbeat();
+      steadyId = window.setInterval(sendHeartbeat, HEARTBEAT_MS);
+    }, HEARTBEAT_BURST_DURATION_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.clearInterval(burstId);
+      window.clearTimeout(cutoverId);
+      if (steadyId !== null) window.clearInterval(steadyId);
     };
   }, [enabled, sessionId, identity, publishSigned]);
 
   // ── Immediate presence republish on local A/V state changes ──
   // Without this, a peer toggling their mic, camera or screen-share has
-  // to wait up to HEARTBEAT_MS (5s) for the next regular heartbeat before
+  // to wait up to HEARTBEAT_MS for the next regular heartbeat before
   // anyone else sees the change. That makes mute/unmute and camera
   // on/off feel broken from the listeners' perspective.
   //

@@ -46,6 +46,12 @@ export const ListSessionsResponseItem = zod.object({
       displayName: zod.string(),
       role: zod.enum(["host", "guest"]),
       joinedAt: zod.coerce.date(),
+      leftAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp of clean exit via POST \/sessions\/{sessionId}\/leave.\nNull while the participant is in the room. Consumers building\nthe live roster should filter rows where this is non-null.\n",
+        ),
     }),
   ),
   createdAt: zod.coerce.date(),
@@ -104,6 +110,12 @@ export const GetSessionResponse = zod.object({
       displayName: zod.string(),
       role: zod.enum(["host", "guest"]),
       joinedAt: zod.coerce.date(),
+      leftAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp of clean exit via POST \/sessions\/{sessionId}\/leave.\nNull while the participant is in the room. Consumers building\nthe live roster should filter rows where this is non-null.\n",
+        ),
     }),
   ),
   createdAt: zod.coerce.date(),
@@ -157,6 +169,12 @@ export const UpdateSessionResponse = zod.object({
       displayName: zod.string(),
       role: zod.enum(["host", "guest"]),
       joinedAt: zod.coerce.date(),
+      leftAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp of clean exit via POST \/sessions\/{sessionId}\/leave.\nNull while the participant is in the room. Consumers building\nthe live roster should filter rows where this is non-null.\n",
+        ),
     }),
   ),
   createdAt: zod.coerce.date(),
@@ -207,6 +225,71 @@ export const JoinSessionResponse = zod.object({
       displayName: zod.string(),
       role: zod.enum(["host", "guest"]),
       joinedAt: zod.coerce.date(),
+      leftAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp of clean exit via POST \/sessions\/{sessionId}\/leave.\nNull while the participant is in the room. Consumers building\nthe live roster should filter rows where this is non-null.\n",
+        ),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+  startedAt: zod.coerce.date().nullish(),
+  endedAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * Records a clean exit by stamping `leftAt` on the participant row so
+the canonical roster updates immediately for everyone polling the
+session. Must be signed by the leaving participant's pubkey
+(NIP-98 Authorization header). The host of a session leaving does
+not end the session — that requires PATCH /sessions/{sessionId}
+with status=ended.
+
+ * @summary Mark a participant as having left the session
+ */
+export const LeaveSessionParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+export const LeaveSessionBody = zod
+  .object({
+    pubkey: zod.string(),
+  })
+  .describe(
+    "Body for POST \/sessions\/{sessionId}\/leave. The pubkey must match the\nsigning pubkey of the NIP-98 Authorization header so participants\ncan only mark themselves as left.\n",
+  );
+
+export const leaveSessionResponseMaxParticipantsMax = 25;
+
+export const LeaveSessionResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  hostPubkey: zod.string(),
+  hostName: zod.string(),
+  status: zod.enum(["waiting", "live", "ended"]),
+  inviteCode: zod.string(),
+  participantCount: zod.number(),
+  maxParticipants: zod
+    .number()
+    .min(1)
+    .max(leaveSessionResponseMaxParticipantsMax)
+    .describe(
+      "Maximum number of participants allowed in the room (counts host + guests).",
+    ),
+  participants: zod.array(
+    zod.object({
+      id: zod.string(),
+      pubkey: zod.string(),
+      displayName: zod.string(),
+      role: zod.enum(["host", "guest"]),
+      joinedAt: zod.coerce.date(),
+      leftAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Timestamp of clean exit via POST \/sessions\/{sessionId}\/leave.\nNull while the participant is in the room. Consumers building\nthe live roster should filter rows where this is non-null.\n",
+        ),
     }),
   ),
   createdAt: zod.coerce.date(),
@@ -402,6 +485,12 @@ export const GetRecentActivityResponse = zod.object({
           displayName: zod.string(),
           role: zod.enum(["host", "guest"]),
           joinedAt: zod.coerce.date(),
+          leftAt: zod.coerce
+            .date()
+            .nullish()
+            .describe(
+              "Timestamp of clean exit via POST \/sessions\/{sessionId}\/leave.\nNull while the participant is in the room. Consumers building\nthe live roster should filter rows where this is non-null.\n",
+            ),
         }),
       ),
       createdAt: zod.coerce.date(),
