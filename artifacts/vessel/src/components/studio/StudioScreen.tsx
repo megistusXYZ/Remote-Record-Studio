@@ -10,6 +10,7 @@ import { useCallSignal, type ConnectionQuality } from "../../hooks/use-call-sign
 import { useScreenShare } from "../../hooks/use-screen-share";
 import { useCaptions } from "../../hooks/use-captions";
 import { getConnectionQualityLabel } from "../../lib/moq";
+import { isMoqAvailable } from "../../lib/transport-select";
 import { buildInviteUrl } from "../../lib/session";
 import { InviteModal } from "../lobby/InviteModal";
 import { RecordingDot } from "../vessel-ui/RecordingDot";
@@ -218,13 +219,77 @@ export function StudioScreen({
     }
   }, [screenShare.isSharing, screenShareStartedAtMs]);
 
+  // Local browser's MoQ capability bit. Probed once at mount and shared
+  // between the call signal (which broadcasts it on every presence beat
+  // so peers can decide whether the room needs the WebRTC fallback) and
+  // the live transport itself (which uses it when picking which
+  // transport to drive).
+  const [selfSupportsMoq] = useState<boolean>(() => isMoqAvailable());
+
+  // Mirror of `liveTransport.quality`, kept as state so the call-signal
+  // hook can be declared BEFORE the live transport without forming a
+  // render-time circular dependency. The transport publishes new quality
+  // values via an effect below; the call-signal beats them out on the
+  // next render. One extra render per quality change is fine — quality
+  // updates are throttled at the source.
+  const [signalQuality, setSignalQuality] = useState<ConnectionQuality>("unknown");
+
+  const hostPubkey = useMemo(
+    () => session.participants.find((p) => p.role === "host")?.pubkey ?? null,
+    [session.participants],
+  );
+
+  const callSignal = useCallSignal({
+    sessionId: session.id,
+    identity,
+    myDisplayName: displayName || "You",
+    myMicEnabled: micEnabled,
+    myCameraEnabled: cameraEnabled,
+    myScreenSharing: screenShare.isSharing,
+    myScreenSharingStartedAtMs: screenShareStartedAtMs,
+    myQuality: signalQuality,
+    myLiveSupportsMoq: selfSupportsMoq,
+    enabled: session.status !== "ended",
+    hostPubkey,
+    // Surface a one-off toast the moment a peer cleanly leaves the room.
+    // Much more attention-grabbing than a row silently disappearing from
+    // the side panel — it tells the host "they meant to go, the call
+    // didn't drop". The display name comes from the most recent presence
+    // beat we saw from this peer (the hook captures it before deleting
+    // the row), so the toast reads naturally even when the leaver had
+    // already disconnected from our live transport.
+    onPeerLeave: ({ displayName: leaverName }) => {
+      toast({
+        description: `${leaverName} left the session.`,
+      });
+    },
+  });
+
   const liveTransport = useLiveTransport({
     sessionId: session.id,
     selfPubkey: currentPubkey,
     localStream,
     screenStream: screenShare.stream,
     enabled: session.status === "live" || session.status === "waiting",
+    // Roster + signalling come from the call-signal hook above; both
+    // feed the dual-transport selector. When the room contains a peer
+    // who can't speak the higher-capacity path, the hook transparently
+    // falls back to the cross-browser WebRTC mesh.
+    peers: callSignal.peers,
+    signaling: callSignal.webRtcSignaling,
+    selfSupportsMoq,
   });
+
+  // Forward live-transport quality back into the call-signal beat. The
+  // state setter dedupes — React skips the re-render when the value is
+  // unchanged — so the hot path is cheap.
+  useEffect(() => {
+    const q = liveTransport.quality;
+    setSignalQuality(
+      q === "good" || q === "fair" || q === "poor" ? q : "unknown",
+    );
+  }, [liveTransport.quality]);
+
   useEffect(() => {
     if (session.status === "ended" && screenShare.isSharing) {
       screenShare.stop();
@@ -249,39 +314,6 @@ export function StudioScreen({
     })();
   };
   const connQuality = liveTransport.quality;
-
-  const signalQuality: ConnectionQuality =
-    connQuality === "good" || connQuality === "fair" || connQuality === "poor"
-      ? connQuality
-      : "unknown";
-  const hostPubkey = useMemo(
-    () => session.participants.find((p) => p.role === "host")?.pubkey ?? null,
-    [session.participants],
-  );
-  const callSignal = useCallSignal({
-    sessionId: session.id,
-    identity,
-    myDisplayName: displayName || "You",
-    myMicEnabled: micEnabled,
-    myCameraEnabled: cameraEnabled,
-    myScreenSharing: screenShare.isSharing,
-    myScreenSharingStartedAtMs: screenShareStartedAtMs,
-    myQuality: signalQuality,
-    enabled: session.status !== "ended",
-    hostPubkey,
-    // Surface a one-off toast the moment a peer cleanly leaves the room.
-    // Much more attention-grabbing than a row silently disappearing from
-    // the side panel — it tells the host "they meant to go, the call
-    // didn't drop". The display name comes from the most recent presence
-    // beat we saw from this peer (the hook captures it before deleting
-    // the row), so the toast reads naturally even when the leaver had
-    // already disconnected from our live transport.
-    onPeerLeave: ({ displayName: leaverName }) => {
-      toast({
-        description: `${leaverName} left the session.`,
-      });
-    },
-  });
 
   // The other participant currently broadcasting a screen-share, if any.
   // Used both to disable our share button (so two people don't fight for

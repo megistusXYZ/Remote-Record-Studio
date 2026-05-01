@@ -3,6 +3,7 @@ import type { Event as NostrEvent } from "nostr-tools";
 import { getRelayPool } from "../lib/relay-pool";
 import { DEFAULT_PUBLISH_RELAYS, getPublishRelays } from "../lib/relay-config";
 import type { VesselIdentity } from "../lib/identity";
+import type { WebRtcSignaling, WebRtcSignalPayload } from "../lib/webrtc-mesh";
 
 /**
  * Ephemeral in-call signaling channel.
@@ -45,6 +46,18 @@ export const KIND_LEAVE = 27006;
  *  fragment to a single speaker; we never trust a peer's claim to be
  *  speaking on someone else's behalf. */
 export const KIND_TRANSCRIPT = 27007;
+/** Direct peer-to-peer signalling for the WebRTC mesh fallback transport.
+ *  Each event carries one offer / answer / ICE candidate addressed to a
+ *  specific recipient via a `["p", recipientPubkey]` tag. The relay-pool's
+ *  signature check is the authentication boundary: receivers trust
+ *  `ev.pubkey` as the sender. Recipients filter on the `p` tag and ignore
+ *  anything not addressed to them, so a single relay subscription can
+ *  multiplex everyone's signalling without leaking to bystanders.
+ *
+ *  The wire content is `JSON.stringify(WebRtcSignalPayload)` — see
+ *  `lib/webrtc-mesh.ts` for the payload shape. No user-visible UI strings
+ *  derive from this kind. */
+export const KIND_WEBRTC_SIGNAL = 27008;
 
 const ALL_KINDS = [
   KIND_PRESENCE,
@@ -54,6 +67,7 @@ const ALL_KINDS = [
   KIND_LOWER_HAND_REQUEST,
   KIND_LEAVE,
   KIND_TRANSCRIPT,
+  KIND_WEBRTC_SIGNAL,
 ];
 
 // ─── Timing ────────────────────────────────────────────────────────────────
@@ -132,6 +146,16 @@ export type Peer = {
    *  arbitrated by oldest-wins. Null when not sharing. */
   screenSharingStartedAtMs: number | null;
   quality: ConnectionQuality;
+  /** True iff this peer's browser can speak the higher-capacity MoQ
+   *  transport. Surfaced via the `liveSupports.moq` field on their
+   *  presence beats. Drives mixed-room transport selection: when ANY
+   *  peer in the room (including the local user) reports `false`,
+   *  every peer falls back to the WebRTC mesh so the non-Chromium
+   *  participant can see and hear everyone. Defaults to `true` for
+   *  pre-existing peers who haven't published the field yet — they're
+   *  almost certainly on Chromium since that's the only browser that
+   *  could speak MoQ at all. */
+  supportsMoq: boolean;
   /** Wall-clock ms of the most recent heartbeat we've received. */
   lastSeenMs: number;
   /** True once we haven't heard from this peer in {@link STALE_TTL_MS}. The
@@ -189,6 +213,13 @@ export type UseCallSignalArgs = {
    *  the value doesn't drift across renders. */
   myScreenSharingStartedAtMs?: number | null;
   myQuality: ConnectionQuality;
+  /** Whether the local browser can speak the higher-capacity MoQ
+   *  transport. Published on every presence beat as `liveSupports.moq`
+   *  so other peers can decide whether the room needs to fall back to
+   *  the cross-browser WebRTC mesh. Defaults to `true` for backward
+   *  compatibility — Chromium-only callers that don't pass the flag
+   *  keep their existing behaviour. */
+  myLiveSupportsMoq?: boolean;
   /** Disable the channel entirely (e.g. while the session is still loading
    *  or after it has ended). When false the hook is a no-op. */
   enabled?: boolean;
@@ -266,6 +297,13 @@ export type UseCallSignalResult = {
   /** True once we've successfully published our first heartbeat AND received
    *  a relay's EOSE — i.e. the channel is "live". */
   isConnected: boolean;
+  /** Direct peer-to-peer signalling adapter used by the WebRTC mesh
+   *  fallback transport. Implements the `WebRtcSignaling` interface from
+   *  `lib/webrtc-mesh.ts`. The returned object identity is stable across
+   *  renders so it can be passed straight into `useLiveTransport` and
+   *  fed to a long-lived `WebRtcMesh` instance without churning
+   *  subscriptions. */
+  webRtcSignaling: WebRtcSignaling;
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -334,6 +372,7 @@ export function useCallSignal({
   myScreenSharing = false,
   myScreenSharingStartedAtMs = null,
   myQuality,
+  myLiveSupportsMoq = true,
   enabled = true,
   relays = DEFAULT_SIGNAL_RELAYS,
   hostPubkey = null,
@@ -410,8 +449,18 @@ export function useCallSignal({
   const myScreenStartedAtRef = useRef<number | null>(myScreenSharingStartedAtMs);
   const myQualityRef = useRef<ConnectionQuality>(myQuality);
   const myNameRef = useRef(myDisplayName);
+  /** Local browser's MoQ capability bit, mirrored into every presence
+   *  beat so other peers can decide whether the room needs the WebRTC
+   *  fallback. */
+  const myLiveSupportsMoqRef = useRef<boolean>(myLiveSupportsMoq);
   const seenIdsRef = useRef<string[]>([]);
   const seenSetRef = useRef<Set<string>>(new Set());
+  /** Subscribers to inbound WebRTC signalling (KIND_WEBRTC_SIGNAL) addressed
+   *  to us. Stored in a ref so the stable `webRtcSignaling` object can
+   *  dispatch without depending on React state. */
+  const webRtcSignalHandlersRef = useRef<
+    Set<(from: string, payload: WebRtcSignalPayload) => void>
+  >(new Set());
 
   useEffect(() => {
     myMicRef.current = myMicEnabled;
@@ -431,6 +480,9 @@ export function useCallSignal({
   useEffect(() => {
     myNameRef.current = myDisplayName;
   }, [myDisplayName]);
+  useEffect(() => {
+    myLiveSupportsMoqRef.current = myLiveSupportsMoq;
+  }, [myLiveSupportsMoq]);
 
   const rememberSeen = useCallback((id: string): boolean => {
     if (seenSetRef.current.has(id)) return false;
@@ -481,6 +533,7 @@ export function useCallSignal({
             screenSharing?: boolean;
             screenSharingStartedAtMs?: number;
             quality?: ConnectionQuality;
+            liveSupports?: { moq?: boolean };
           }>(ev.content);
           if (!c) return;
           setPeers((prev) => {
@@ -553,6 +606,16 @@ export function useCallSignal({
                 c.quality === "good" || c.quality === "fair" || c.quality === "poor"
                   ? c.quality
                   : existing?.quality ?? "unknown",
+              // Default to TRUE when the field is absent: pre-fallback
+              // peers (and any future client that forgets to publish it)
+              // are presumed Chromium-capable, since that was the only
+              // browser the studio ever supported. Anyone newer who
+              // can't speak MoQ explicitly publishes `false` and trips
+              // the room-needs-WebRTC computation downstream.
+              supportsMoq:
+                typeof c.liveSupports?.moq === "boolean"
+                  ? c.liveSupports.moq
+                  : existing?.supportsMoq ?? true,
               lastSeenMs: Date.now(),
               stale: false,
             };
@@ -660,6 +723,39 @@ export function useCallSignal({
               quality: myQualityRef.current,
             });
             void publishSigned(tmpl);
+          }
+          break;
+        }
+        case KIND_WEBRTC_SIGNAL: {
+          // Direct peer-to-peer signalling addressed to one recipient via
+          // a `["p", recipient]` tag. We trust ev.pubkey as the sender —
+          // the relay pool's signature check guarantees it. Anything not
+          // addressed to us is silently ignored so a single subscription
+          // can multiplex everyone's signalling without leaking.
+          const target = getTagValue(ev, "p");
+          if (!target || target !== myPubkey) return;
+          let payload: WebRtcSignalPayload | null = null;
+          try {
+            const parsed = JSON.parse(ev.content);
+            if (
+              parsed &&
+              typeof parsed === "object" &&
+              (parsed.type === "offer" ||
+                parsed.type === "answer" ||
+                parsed.type === "ice")
+            ) {
+              payload = parsed as WebRtcSignalPayload;
+            }
+          } catch {
+            // ignore malformed payloads — best-effort transport
+          }
+          if (!payload) return;
+          for (const handler of webRtcSignalHandlersRef.current) {
+            try {
+              handler(ev.pubkey, payload);
+            } catch (err) {
+              console.warn("[call-signal] webrtc signal handler threw", err);
+            }
           }
           break;
         }
@@ -842,6 +938,7 @@ export function useCallSignal({
         screenSharing: myScreenRef.current,
         screenSharingStartedAtMs: myScreenStartedAtRef.current,
         quality: myQualityRef.current,
+        liveSupports: { moq: myLiveSupportsMoqRef.current },
       });
       void publishSigned(tmpl);
     };
@@ -1125,6 +1222,7 @@ export function useCallSignal({
         screenSharing: myScreenRef.current,
         screenSharingStartedAtMs: myScreenStartedAtRef.current,
         quality: myQualityRef.current,
+        liveSupports: { moq: myLiveSupportsMoqRef.current },
       });
       void publishSigned(tmpl);
     }
@@ -1180,6 +1278,50 @@ export function useCallSignal({
     );
   }, [peers]);
 
+  // ── WebRTC mesh signalling adapter (stable identity across renders) ──
+  //
+  // The send + on functions close over `publishSigned` and the handlers
+  // ref respectively. We capture `publishSigned` via a ref so the
+  // returned object's identity stays the same even as `publishSigned`'s
+  // memoized identity churns on relay/identity changes — that lets the
+  // consumer hand this object straight to a long-lived `WebRtcMesh`
+  // instance without re-subscribing every render.
+  const publishSignedRef = useRef(publishSigned);
+  useEffect(() => {
+    publishSignedRef.current = publishSigned;
+  }, [publishSigned]);
+  const sessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+  const enabledRef = useRef(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+  const webRtcSignaling = useMemo<WebRtcSignaling>(
+    () => ({
+      send: async (targetPubkey, payload) => {
+        if (!enabledRef.current) return;
+        if (!sessionIdRef.current) return;
+        if (!targetPubkey) return;
+        const tmpl = buildEventTemplate(
+          KIND_WEBRTC_SIGNAL,
+          sessionIdRef.current,
+          payload as unknown as Record<string, unknown>,
+          [["p", targetPubkey]],
+        );
+        await publishSignedRef.current(tmpl);
+      },
+      on: (handler) => {
+        webRtcSignalHandlersRef.current.add(handler);
+        return () => {
+          webRtcSignalHandlersRef.current.delete(handler);
+        };
+      },
+    }),
+    [],
+  );
+
   return {
     peers: peersList,
     handRaised,
@@ -1201,5 +1343,6 @@ export function useCallSignal({
     incomingMuteRequest,
     acknowledgeMuteRequest,
     isConnected,
+    webRtcSignaling,
   };
 }
