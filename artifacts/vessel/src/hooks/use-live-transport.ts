@@ -1,20 +1,30 @@
 /**
- * useLiveTransport — orchestrates the real live-preview pipeline:
+ * useLiveTransport — orchestrates the studio's real-time A/V plane.
  *
- *   1. Open a WebTransport-backed MoqClient against the configured relay.
- *   2. Encode the local stream (video + audio) and publish into the
- *      session's per-pubkey namespace.
- *   3. Watch incoming tracks from the relay, decode them, group by
- *      participant pubkey, and expose the resulting MediaStreams to the
- *      caller as `remoteStreams`.
- *   4. Surface real connection-quality measurements driven by control-plane
- *      RTT (NOT navigator.connection.effectiveType).
+ * Two underlying transports, picked dynamically per-room:
  *
- * No UI strings live in this file. The studio chrome reads the results and
- * uses the same "live preview" / "Connection quality" copy it always has.
+ *   - "moq":    WebTransport + WebCodecs publish/subscribe pipeline. Used
+ *               whenever every peer in the room can speak it (which is
+ *               whenever everyone is on a Chromium-family browser today).
+ *   - "webrtc": Peer-to-peer WebRTC mesh, used the moment any peer in
+ *               the room can't speak MoQ. Slightly more bandwidth on the
+ *               Chromium peers in exchange for the cross-browser peer
+ *               seeing and hearing everyone.
+ *
+ * Both feed the same per-pubkey aggregation: each remote participant
+ * gets a `cameraStream` + an optional `screenStream`, exposed to the
+ * caller via the same `remoteStreams` / `remoteScreenStreams` maps.
+ * Switching modes is handled transparently — when the roster shifts
+ * (someone on Safari joins or leaves) the previous transport tears
+ * down, the new one stands up, and the caller's UI continues to read
+ * the same shape.
+ *
+ * No UI strings live in this file. The studio chrome reads `mode` only
+ * for an optional dev-only indicator and never names the transport in
+ * user-visible copy.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MoqClient,
   isLivePreviewSupported,
@@ -22,6 +32,12 @@ import {
   type IncomingTrack,
 } from "../lib/moq";
 import { decodeTrack, publishStream, type DecodedTrack, type PublisherHandle } from "../lib/codec";
+import {
+  selectTransport,
+  isWebRtcAvailable,
+  type TransportMode,
+} from "../lib/transport-select";
+import { WebRtcMesh, type WebRtcSignaling } from "../lib/webrtc-mesh";
 
 const DEFAULT_RELAY_URL =
   (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) ||
@@ -63,9 +79,20 @@ export function notifyRelayUrlChanged(): void {
   window.dispatchEvent(new Event(RELAY_CHANGED_EVENT));
 }
 
+/** Subset of the `Peer` shape from `useCallSignal` that this hook needs.
+ *  Kept narrow so the hook can be tested without dragging in the whole
+ *  signalling API. */
+export type LivePeer = {
+  pubkey: string;
+  /** False ⇒ this peer can't speak the MoQ transport, so the room must
+   *  fall back to the cross-browser WebRTC mesh. */
+  supportsMoq: boolean;
+};
+
 export type UseLiveTransportArgs = {
   sessionId: string;
-  /** The local participant's pubkey, used to build their publish namespace. */
+  /** The local participant's pubkey, used to build their publish namespace
+   *  (MoQ mode) and to determine polite/impolite role (WebRTC mode). */
   selfPubkey: string | null | undefined;
   /** Local A/V stream to publish. May be null while devices are warming up. */
   localStream: MediaStream | null;
@@ -75,12 +102,29 @@ export type UseLiveTransportArgs = {
   screenStream?: MediaStream | null;
   /** Pause the transport entirely (e.g. session not yet live). */
   enabled?: boolean;
+  /** Live peer roster (everyone except the local user). When any peer
+   *  reports `supportsMoq: false`, the room falls back to WebRTC. */
+  peers?: LivePeer[];
+  /** Direct peer-to-peer signalling adapter. Required for the WebRTC
+   *  fallback to function — when null and we'd otherwise pick "webrtc",
+   *  the hook reports `mode: "none"` and surfaces an error. */
+  signaling?: WebRtcSignaling | null;
+  /** Override the local browser's MoQ capability bit. Mostly here so the
+   *  caller can mirror the same value into its presence beats and the
+   *  transport selection without two separate probes. */
+  selfSupportsMoq?: boolean;
 };
 
 export type UseLiveTransportResult = {
-  /** True iff the browser supports WebTransport + WebCodecs. */
+  /** True iff at least ONE transport is available (MoQ OR WebRTC). False
+   *  only on genuinely ancient browsers that have neither WebTransport
+   *  nor WebRTC. */
   isSupported: boolean;
-  /** True iff the transport is currently connected to the relay. */
+  /** Which transport the hook is currently driving. Exposed so a dev-only
+   *  studio chip can render an A/B indicator; user-visible copy never
+   *  references this. */
+  mode: TransportMode;
+  /** True iff the current transport is connected. */
   isConnected: boolean;
   /** Real RTT-derived link quality, or "unknown" before the first probe. */
   quality: ConnectionQuality;
@@ -102,6 +146,7 @@ export type UseLiveTransportResult = {
   remoteScreenReady: Set<string>;
 };
 
+/** Per-pubkey aggregation. Both transports funnel into this shape. */
 type RemoteParticipant = {
   pubkey: string;
   cameraVideoTrack: DecodedTrack | null;
@@ -117,6 +162,19 @@ type RemoteParticipant = {
   hasScreen: boolean;
 };
 
+function newEmptyParticipant(pubkey: string): RemoteParticipant {
+  return {
+    pubkey,
+    cameraVideoTrack: null,
+    cameraAudioTrack: null,
+    cameraStream: new MediaStream(),
+    screenVideoTrack: null,
+    screenAudioTrack: null,
+    screenStream: new MediaStream(),
+    hasScreen: false,
+  };
+}
+
 function namespaceFor(sessionId: string, pubkey: string): string {
   return `vessel/${sessionId}/${pubkey}`;
 }
@@ -127,14 +185,58 @@ function parseNamespace(ns: string): { sessionId: string; pubkey: string } | nul
   return { sessionId: parts[1], pubkey: parts[2] };
 }
 
+/** Wrap a raw MediaStreamTrack as a DecodedTrack so the WebRTC ingestion
+ *  path can share storage with the MoQ ingestion path. The `stop()` call
+ *  is a thin pass-through; for raw tracks there's no decoder to tear
+ *  down. */
+function wrapPlainTrack(track: MediaStreamTrack): DecodedTrack {
+  return {
+    track,
+    kind: track.kind === "audio" ? "audio" : "video",
+    stop: () => {
+      try {
+        track.stop();
+      } catch {
+        // ignore — already stopped
+      }
+    },
+  };
+}
+
 export function useLiveTransport({
   sessionId,
   selfPubkey,
   localStream,
   screenStream = null,
   enabled = true,
+  peers,
+  signaling = null,
+  selfSupportsMoq,
 }: UseLiveTransportArgs): UseLiveTransportResult {
-  const [isSupported] = useState(() => isLivePreviewSupported());
+  // Capability probes. Stable across the hook's lifetime (browser support
+  // doesn't change between renders), so a one-shot lazy initialiser is fine.
+  const [moqCapable] = useState<boolean>(() =>
+    selfSupportsMoq ?? isLivePreviewSupported(),
+  );
+  const [webRtcCapable] = useState<boolean>(() => isWebRtcAvailable());
+
+  // Recompute mixed-room flag from the roster on every render. Cheap —
+  // the roster is small and this is just a one-pass scan.
+  const roomNeedsWebRtc = useMemo(
+    () => (peers ?? []).some((p) => !p.supportsMoq),
+    [peers],
+  );
+  const mode: TransportMode = useMemo(
+    () =>
+      selectTransport({
+        moqAvailable: moqCapable,
+        webRtcAvailable: webRtcCapable,
+        roomNeedsWebRtc,
+      }),
+    [moqCapable, webRtcCapable, roomNeedsWebRtc],
+  );
+  const isSupported = mode !== "none";
+
   const [isConnected, setIsConnected] = useState(false);
   const [quality, setQuality] = useState<ConnectionQuality>("unknown");
   const [rttMs, setRttMs] = useState<number | null>(null);
@@ -153,6 +255,7 @@ export function useLiveTransport({
   const clientRef = useRef<MoqClient | null>(null);
   const publisherRef = useRef<PublisherHandle | null>(null);
   const screenPublisherRef = useRef<PublisherHandle | null>(null);
+  const meshRef = useRef<WebRtcMesh | null>(null);
   const remotesRef = useRef<Map<string, RemoteParticipant>>(new Map());
 
   const refreshStreamMaps = () => {
@@ -166,6 +269,7 @@ export function useLiveTransport({
     setRemoteScreenStreams(new Map(screenEntries));
   };
 
+  /** MoQ ingestion path — incoming `DecodedTrack` from the codec layer. */
   const upsertRemoteTrack = (
     pubkey: string,
     decoded: DecodedTrack,
@@ -173,16 +277,7 @@ export function useLiveTransport({
   ) => {
     let entry = remotesRef.current.get(pubkey);
     if (!entry) {
-      entry = {
-        pubkey,
-        cameraVideoTrack: null,
-        cameraAudioTrack: null,
-        cameraStream: new MediaStream(),
-        screenVideoTrack: null,
-        screenAudioTrack: null,
-        screenStream: new MediaStream(),
-        hasScreen: false,
-      };
+      entry = newEmptyParticipant(pubkey);
       remotesRef.current.set(pubkey, entry);
     }
     const isScreen = source === "screen";
@@ -214,6 +309,112 @@ export function useLiveTransport({
     }
     targetStream.addTrack(decoded.track);
     if (isScreen) entry.hasScreen = true;
+    refreshStreamMaps();
+  };
+
+  /** WebRTC ingestion path — incoming raw `MediaStreamTrack` plus the
+   *  publisher-asserted source label ("camera" / "screen"). */
+  const attachRtcTrack = (
+    pubkey: string,
+    source: "camera" | "screen",
+    track: MediaStreamTrack,
+  ) => {
+    let entry = remotesRef.current.get(pubkey);
+    if (!entry) {
+      entry = newEmptyParticipant(pubkey);
+      remotesRef.current.set(pubkey, entry);
+    }
+    const isScreen = source === "screen";
+    const targetStream = isScreen ? entry.screenStream : entry.cameraStream;
+    if (track.kind === "video") {
+      const existing = isScreen ? entry.screenVideoTrack : entry.cameraVideoTrack;
+      if (existing) {
+        existing.stop();
+        try {
+          targetStream.removeTrack(existing.track);
+        } catch {
+          // ignore
+        }
+      }
+      const wrapped = wrapPlainTrack(track);
+      if (isScreen) entry.screenVideoTrack = wrapped;
+      else entry.cameraVideoTrack = wrapped;
+      // Mark the tile as ready when the track first carries media. Some
+      // remotes start muted (camera off) — we wait for `unmute` so the
+      // "Connecting…" state doesn't flip to "live" prematurely. Tracks
+      // that arrive already unmuted (typical) are marked ready
+      // immediately so the tile doesn't sit stuck.
+      const markReady = () => markRemoteReady(pubkey, source);
+      if (track.muted) {
+        track.addEventListener("unmute", markReady, { once: true });
+      } else {
+        markReady();
+      }
+    } else {
+      const existing = isScreen ? entry.screenAudioTrack : entry.cameraAudioTrack;
+      if (existing) {
+        existing.stop();
+        try {
+          targetStream.removeTrack(existing.track);
+        } catch {
+          // ignore
+        }
+      }
+      const wrapped = wrapPlainTrack(track);
+      if (isScreen) entry.screenAudioTrack = wrapped;
+      else entry.cameraAudioTrack = wrapped;
+    }
+    targetStream.addTrack(track);
+    if (isScreen) entry.hasScreen = true;
+    refreshStreamMaps();
+  };
+
+  /** WebRTC track-removed: drop the matching wrapper if its trackId
+   *  still matches what we last ingested. Out-of-order events (a swap
+   *  followed by a removed-old-track event) become no-ops. */
+  const detachRtcTrack = (
+    pubkey: string,
+    source: "camera" | "screen",
+    kind: "video" | "audio",
+    trackId: string,
+  ) => {
+    const entry = remotesRef.current.get(pubkey);
+    if (!entry) return;
+    const isScreen = source === "screen";
+    const targetStream = isScreen ? entry.screenStream : entry.cameraStream;
+    let removed: DecodedTrack | null = null;
+    if (kind === "video") {
+      const existing = isScreen ? entry.screenVideoTrack : entry.cameraVideoTrack;
+      if (existing && existing.track.id === trackId) {
+        removed = existing;
+        if (isScreen) entry.screenVideoTrack = null;
+        else entry.cameraVideoTrack = null;
+      }
+    } else {
+      const existing = isScreen ? entry.screenAudioTrack : entry.cameraAudioTrack;
+      if (existing && existing.track.id === trackId) {
+        removed = existing;
+        if (isScreen) entry.screenAudioTrack = null;
+        else entry.cameraAudioTrack = null;
+      }
+    }
+    if (!removed) return;
+    try {
+      targetStream.removeTrack(removed.track);
+    } catch {
+      // ignore
+    }
+    removed.stop();
+    if (isScreen && !entry.screenVideoTrack && !entry.screenAudioTrack) {
+      entry.hasScreen = false;
+      // Drop the screen-ready flag too so a fresh share can re-arm it.
+      setRemoteScreenReady((prev) => {
+        if (!prev.has(pubkey)) return prev;
+        const next = new Set(prev);
+        next.delete(pubkey);
+        return next;
+      });
+    }
     refreshStreamMaps();
   };
 
@@ -249,11 +450,12 @@ export function useLiveTransport({
     setRemoteScreenReady(new Set());
   };
 
-  // Connection lifecycle. Restarts if the session id, self pubkey, or
-  // configured relay URL changes (relay URL is reactive via storage events
-  // and the same-tab `vessel:relay-url-changed` event).
+  // ── MoQ connection lifecycle ───────────────────────────────────────────
+  // Restarts if the session id, self pubkey, or configured relay URL
+  // changes. Tears down cleanly when the mode flips away from "moq" (e.g.
+  // a Safari peer joins and the room falls back to the WebRTC mesh).
   useEffect(() => {
-    if (!enabled || !isSupported || !sessionId || !selfPubkey) return;
+    if (!enabled || mode !== "moq" || !sessionId || !selfPubkey) return;
 
     if (!relayUrl || !relayUrl.startsWith("https://")) {
       setError("Live preview server needs an https:// URL.");
@@ -328,12 +530,13 @@ export function useLiveTransport({
       setQuality("unknown");
       setRttMs(null);
     };
-  }, [enabled, isSupported, sessionId, selfPubkey, relayUrl]);
+  }, [enabled, mode, sessionId, selfPubkey, relayUrl]);
 
-  // Publish lifecycle (camera + mic). Restarts encoders whenever the local
-  // stream identity changes (device switch). Tears down on transport loss.
+  // ── MoQ camera publish lifecycle ───────────────────────────────────────
+  // Restarts encoders whenever the local stream identity changes (device
+  // switch). Tears down on transport loss.
   useEffect(() => {
-    if (!isConnected || !localStream || !selfPubkey) return;
+    if (mode !== "moq" || !isConnected || !localStream || !selfPubkey) return;
     const client = clientRef.current;
     if (!client) return;
 
@@ -367,15 +570,15 @@ export function useLiveTransport({
       publisherRef.current = null;
       void p?.stop().catch(() => {});
     };
-  }, [isConnected, localStream, selfPubkey, sessionId]);
+  }, [mode, isConnected, localStream, selfPubkey, sessionId]);
 
-  // Independent screen-share publish lifecycle. Spins up a second publisher
-  // tagged source="screen" against the same per-pubkey namespace whenever a
-  // screen stream is provided. Tears down cleanly when the stream goes
-  // away (user pressed Stop, OS dialog closed, session ended). Failures
-  // here NEVER affect the camera publisher above.
+  // ── MoQ screen publish lifecycle ───────────────────────────────────────
+  // Independent screen-share publisher tagged source="screen" against the
+  // same per-pubkey namespace whenever a screen stream is provided. Tears
+  // down cleanly when the stream goes away. Failures here NEVER affect
+  // the camera publisher above.
   useEffect(() => {
-    if (!isConnected || !screenStream || !selfPubkey) return;
+    if (mode !== "moq" || !isConnected || !screenStream || !selfPubkey) return;
     const client = clientRef.current;
     if (!client) return;
 
@@ -409,10 +612,92 @@ export function useLiveTransport({
       screenPublisherRef.current = null;
       void p?.stop().catch(() => {});
     };
-  }, [isConnected, screenStream, selfPubkey, sessionId]);
+  }, [mode, isConnected, screenStream, selfPubkey, sessionId]);
+
+  // ── WebRTC mesh lifecycle ──────────────────────────────────────────────
+  // Stand up a `WebRtcMesh` while `mode === "webrtc"`. Roster + local
+  // stream changes are pushed via dedicated effects below so the mesh
+  // itself isn't recreated on every roster blip.
+  const peerPubkeys = useMemo(() => {
+    const list = (peers ?? []).map((p) => p.pubkey).filter(Boolean);
+    list.sort();
+    return list;
+  }, [peers]);
+  const peerPubkeysKey = peerPubkeys.join(","); // stable string for deps
+
+  useEffect(() => {
+    if (!enabled || mode !== "webrtc" || !sessionId || !selfPubkey) return;
+    if (!signaling) {
+      setError("Live video isn't available in this browser.");
+      return;
+    }
+    setError(null);
+
+    // `cancelled` guards the inbound event callback from racing the
+    // teardown path: mesh.close() may not synchronously stop in-flight
+    // listener invocations (e.g. an ICE-state callback already on the
+    // microtask queue), and an `attachRtcTrack` after `clearAllRemotes`
+    // would resurrect a stream the rest of the hook has just dropped.
+    let cancelled = false;
+    const mesh = new WebRtcMesh({ selfPubkey, signaling });
+    meshRef.current = mesh;
+
+    const off = mesh.on((ev) => {
+      if (cancelled) return;
+      if (ev.type === "connected") {
+        setIsConnected(true);
+        setError(null);
+      } else if (ev.type === "disconnected") {
+        setIsConnected(false);
+        if (ev.error) setError(ev.error);
+      } else if (ev.type === "quality") {
+        setQuality(ev.quality);
+        setRttMs(ev.rttMs);
+      } else if (ev.type === "track-added") {
+        attachRtcTrack(ev.pubkey, ev.source, ev.track);
+      } else if (ev.type === "track-removed") {
+        detachRtcTrack(ev.pubkey, ev.source, ev.kind, ev.trackId);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      off();
+      try {
+        mesh.close();
+      } catch {
+        // ignore
+      }
+      meshRef.current = null;
+      clearAllRemotes();
+      setIsConnected(false);
+      setQuality("unknown");
+      setRttMs(null);
+    };
+  }, [enabled, mode, sessionId, selfPubkey, signaling]);
+
+  // Push roster updates into the live mesh (no recreate).
+  useEffect(() => {
+    if (mode !== "webrtc") return;
+    meshRef.current?.setPeers(peerPubkeys);
+    // peerPubkeysKey participates in the deps so we re-run when the
+    // sorted list of pubkeys changes content, not just identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, peerPubkeysKey]);
+
+  // Push local stream changes into the live mesh.
+  useEffect(() => {
+    if (mode !== "webrtc") return;
+    meshRef.current?.setLocalCameraStream(localStream);
+  }, [mode, localStream]);
+  useEffect(() => {
+    if (mode !== "webrtc") return;
+    meshRef.current?.setLocalScreenStream(screenStream);
+  }, [mode, screenStream]);
 
   return {
     isSupported,
+    mode,
     isConnected,
     quality,
     rttMs,
