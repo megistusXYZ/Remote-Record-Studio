@@ -31,6 +31,11 @@ export interface Participant {
   displayName: string;
   role: ParticipantRole;
   joinedAt: string;
+  /** Timestamp of clean exit via POST /sessions/{sessionId}/leave.
+Null while the participant is in the room. Consumers building
+the live roster should filter rows where this is non-null.
+ */
+  leftAt?: string | null;
 }
 
 export interface Session {
@@ -114,6 +119,16 @@ export interface RoomFullError {
 export interface JoinSessionBody {
   guestName: string;
   guestPubkey: string;
+}
+
+/**
+ * Body for POST /sessions/{sessionId}/leave. The pubkey must match the
+signing pubkey of the NIP-98 Authorization header so participants
+can only mark themselves as left.
+
+ */
+export interface LeaveSessionBody {
+  pubkey: string;
 }
 
 export type RecordingStatus =

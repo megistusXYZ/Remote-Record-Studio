@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { AlertTriangle, X, MonitorPlay } from "lucide-react";
+import { AlertTriangle, X, MonitorPlay, Copy, Check } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
@@ -269,6 +269,18 @@ export function StudioScreen({
     myQuality: signalQuality,
     enabled: session.status !== "ended",
     hostPubkey,
+    // Surface a one-off toast the moment a peer cleanly leaves the room.
+    // Much more attention-grabbing than a row silently disappearing from
+    // the side panel — it tells the host "they meant to go, the call
+    // didn't drop". The display name comes from the most recent presence
+    // beat we saw from this peer (the hook captures it before deleting
+    // the row), so the toast reads naturally even when the leaver had
+    // already disconnected from our live transport.
+    onPeerLeave: ({ displayName: leaverName }) => {
+      toast({
+        description: `${leaverName} left the session.`,
+      });
+    },
   });
 
   // The other participant currently broadcasting a screen-share, if any.
@@ -484,16 +496,49 @@ export function StudioScreen({
     return m;
   }, [callSignal.peers]);
 
-  const rosterParticipants = useMemo<RosterParticipant[]>(
-    () =>
-      session.participants.map((p) => ({
-        pubkey: p.pubkey,
-        displayName: p.displayName,
-        role: p.role,
-        isSelf: p.pubkey === currentPubkey,
-      })),
-    [session.participants, currentPubkey],
-  );
+  // Augment the canonical DB roster with any peer we currently see on
+  // the signaling channel that hasn't been written to the session row
+  // yet. Two windows cause this:
+  //
+  //   1. A guest just joined: the relay heartbeat reaches us in <1s
+  //      thanks to the burst-rate cadence, but the polling refetch of
+  //      GET /sessions/:id can take up to its 8s interval to land.
+  //
+  //   2. A guest is in the room but the server-side participants row
+  //      was lost (e.g. a transient DB error). Presence keeps them
+  //      visible to everyone else even when the canonical roster
+  //      forgot about them.
+  //
+  // Either way, the roster panel showing them as "Joining…" beats a
+  // ghost feeling of "I can hear them, why aren't they in the list?".
+  // Their role defaults to "guest" because hosts are always present in
+  // the DB row (the session is created with the host already in it),
+  // so a host appearing here would be a server bug worth surfacing as
+  // a non-host row anyway. Display name is whatever they're heartbeating;
+  // a fallback of a short pubkey preview keeps the row labelled even
+  // before the first beat carries a name.
+  const augmentedParticipants = useMemo<RosterParticipant[]>(() => {
+    const known = new Set(session.participants.map((p) => p.pubkey));
+    const dbRows: RosterParticipant[] = session.participants.map((p) => ({
+      pubkey: p.pubkey,
+      displayName: p.displayName,
+      role: p.role,
+      isSelf: p.pubkey === currentPubkey,
+    }));
+    const presenceOnly: RosterParticipant[] = [];
+    for (const peer of callSignal.peers) {
+      if (known.has(peer.pubkey)) continue;
+      presenceOnly.push({
+        pubkey: peer.pubkey,
+        displayName: peer.displayName?.trim() || `${peer.pubkey.slice(0, 8)}…`,
+        role: "guest",
+        isSelf: peer.pubkey === currentPubkey,
+      });
+    }
+    return [...dbRows, ...presenceOnly];
+  }, [session.participants, callSignal.peers, currentPubkey]);
+
+  const rosterParticipants = augmentedParticipants;
 
   // Peers with their hand currently up, sorted oldest-first by raise
   // timestamp so the floating notification names whoever's been waiting
@@ -1353,6 +1398,39 @@ export function StudioScreen({
               );
             }
 
+            // "First one here" empty-room overlay. Triggers when both:
+            //   - the canonical roster has exactly one entry (us), AND
+            //   - no other peer is currently heartbeating presence.
+            //
+            // The second clause matters because the augmented roster
+            // already accounts for presence-only peers in the side panel —
+            // here we want the overlay to disappear the instant any
+            // remote peer lights up the relay, before they've even
+            // managed to write their participant row to the DB. The
+            // overlay shows the local tile prominently with a copyable
+            // invite link below, so the host can grab it from the
+            // session itself rather than digging into a separate menu.
+            const noRemotePresence = callSignal.peers.length === 0;
+            const aloneInRoom =
+              session.participants.length === 1 &&
+              session.participants[0]?.pubkey === currentPubkey &&
+              noRemotePresence;
+            if (aloneInRoom) {
+              const selfTile = participantTiles[0];
+              const selfParticipant = session.participants[0];
+              return (
+                <FirstOneHereOverlay
+                  inviteCode={session.inviteCode}
+                  selfStream={selfTile?.cameraStream ?? null}
+                  selfMicEnabled={selfTile?.micEnabled ?? micEnabled}
+                  selfCameraEnabled={selfTile?.cameraEnabled ?? cameraEnabled}
+                  selfParticipant={selfParticipant}
+                  myMicLevel={myMicLevel}
+                  captionsActive={captionsEnabled}
+                />
+              );
+            }
+
             return (
               <VideoGrid participantCount={session.participants.length}>
                 {participantTiles.map((t) => {
@@ -1616,5 +1694,139 @@ export function StudioScreen({
         />
       </div>
     </TooltipProvider>
+  );
+}
+
+/**
+ * FirstOneHereOverlay — replaces the empty grid the host sees when they
+ * are alone in the room before any guest has arrived.
+ *
+ * Riverside-style empty rooms feel cold: a lone tile floating in a sea
+ * of black with no obvious next step. This overlay keeps the local
+ * preview prominent (the host can still check their own framing) and
+ * pairs it with a copyable invite link so the natural next action —
+ * "share the link" — is one click away. As soon as any peer lights up
+ * the relay or the DB roster grows past one, the overlay vanishes and
+ * the standard `VideoGrid` takes over.
+ */
+function FirstOneHereOverlay({
+  inviteCode,
+  selfStream,
+  selfMicEnabled,
+  selfCameraEnabled,
+  selfParticipant,
+  myMicLevel,
+  captionsActive,
+}: {
+  inviteCode: string;
+  selfStream: MediaStream | null;
+  selfMicEnabled: boolean;
+  selfCameraEnabled: boolean;
+  selfParticipant: StudioScreenProps["session"]["participants"][number] | undefined;
+  myMicLevel: number;
+  captionsActive: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const inviteUrl = useMemo(() => buildInviteUrl(inviteCode), [inviteCode]);
+
+  // Reset the "Copied" affordance after a short beat so a host who
+  // re-shares the link a minute later still gets the visual confirmation.
+  useEffect(() => {
+    if (!copied) return;
+    const id = window.setTimeout(() => setCopied(false), 1800);
+    return () => window.clearTimeout(id);
+  }, [copied]);
+
+  const handleCopy = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(inviteUrl);
+      } else {
+        // Fallback for browsers without the async clipboard API
+        // (rare in the modern set we support, but cheap insurance).
+        const ta = document.createElement("textarea");
+        ta.value = inviteUrl;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "absolute";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+    } catch {
+      // Silent failure — the visible URL is still readable so the user
+      // can copy it manually. We deliberately don't toast here because
+      // the dominant copy is the input itself, not the button.
+    }
+  };
+
+  const fallbackParticipant = {
+    id: selfParticipant?.id ?? "self",
+    displayName: selfParticipant?.displayName ?? "You",
+    pubkey: selfParticipant?.pubkey ?? "",
+    role: (selfParticipant?.role ?? "host") as "host" | "guest",
+  };
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center p-6"
+      data-testid="overlay-first-one-here"
+    >
+      <div className="w-full max-w-2xl flex flex-col items-center gap-6">
+        <div className="w-full aspect-video max-h-[55vh] rounded-2xl overflow-hidden">
+          <VideoTile
+            participant={fallbackParticipant}
+            stream={selfStream ?? undefined}
+            isLocal={true}
+            micEnabled={selfMicEnabled}
+            cameraEnabled={selfCameraEnabled}
+            captionsActive={captionsActive}
+            audioLevel={selfMicEnabled ? myMicLevel : 0}
+          />
+        </div>
+
+        <div className="text-center">
+          <h2 className="text-xl sm:text-2xl font-medium text-vessel-text-primary">
+            You're the first one here.
+          </h2>
+          <p className="mt-1.5 text-sm text-vessel-text-secondary">
+            Share this link to bring everyone else in.
+          </p>
+        </div>
+
+        <div className="w-full max-w-md flex items-stretch gap-2">
+          <input
+            type="text"
+            readOnly
+            value={inviteUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-vessel-bg-base border border-vessel-border text-sm font-mono-vessel text-vessel-text-primary focus:outline-none focus:ring-2 focus:ring-vessel-accent/40"
+            data-testid="input-empty-room-invite-url"
+            aria-label="Invite link"
+          />
+          <button
+            type="button"
+            onClick={handleCopy}
+            className={cn(
+              "px-3 py-2 rounded-lg border text-sm font-medium inline-flex items-center gap-1.5 transition-colors shrink-0",
+              copied
+                ? "bg-vessel-accent/15 border-vessel-accent/40 text-vessel-accent"
+                : "bg-vessel-bg-base border-vessel-border text-vessel-text-primary hover:border-vessel-accent/40",
+            )}
+            data-testid="button-empty-room-copy-invite"
+            aria-label={copied ? "Invite link copied" : "Copy invite link"}
+          >
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+
+        <div className="text-xs text-vessel-text-muted font-mono-vessel">
+          Waiting for others to join…
+        </div>
+      </div>
+    </div>
   );
 }

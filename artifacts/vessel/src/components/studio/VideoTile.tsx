@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MicOff, Captions } from "lucide-react";
 import { AudioMeter } from "../vessel-ui/AudioMeter";
 import { AvatarMark } from "../AvatarMark";
@@ -24,6 +24,19 @@ export type VideoTileProps = {
   captionsActive?: boolean;
 };
 
+// Phased copy for the connecting overlay. The thresholds (in ms) match
+// the heartbeat tiers in use-call-signal: a healthy peer should arrive
+// well within the first window, a slow peer within the second, and only
+// a peer that is genuinely failing to deliver A/V should land in the
+// third. The third copy intentionally tells the viewer that THE OTHER
+// SIDE'S LIVE FEED isn't reaching them — and reassures them that the
+// recording is unaffected, since the per-participant local recording is
+// independent of the live preview path.
+const PHASE_2_AT_MS = 3000;
+const PHASE_3_AT_MS = 8000;
+
+type ConnectingPhase = "joining" | "connecting" | "stalled";
+
 export function VideoTile({
   participant,
   stream,
@@ -36,11 +49,46 @@ export function VideoTile({
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Track how long this tile has been stuck in the "connecting" state so
+  // we can progressively soften the copy from a cheerful "Joining…" to
+  // an honest "their feed isn't reaching you". The clock resets every
+  // time `isConnecting` flips back to true — so a tile that briefly
+  // recovers and then loses the stream again starts the phase ladder
+  // from the top, not from where it left off.
+  const [phase, setPhase] = useState<ConnectingPhase>("joining");
+  useEffect(() => {
+    if (!isConnecting) {
+      setPhase("joining");
+      return;
+    }
+    setPhase("joining");
+    const t2 = window.setTimeout(() => setPhase("connecting"), PHASE_2_AT_MS);
+    const t3 = window.setTimeout(() => setPhase("stalled"), PHASE_3_AT_MS);
+    return () => {
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, [isConnecting]);
+
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  const connectingHeadline =
+    phase === "joining"
+      ? "Joining…"
+      : phase === "connecting"
+        ? "Connecting…"
+        : "Their live video isn't reaching you";
+
+  // Only the stalled phase warrants the explanatory subline. Showing it
+  // earlier would alarm viewers during the normal first few seconds of
+  // a join, which sets the wrong tone for what is usually a healthy
+  // hand-off.
+  const connectingSubline =
+    phase === "stalled" ? "Their recording is unaffected." : null;
 
   return (
     <div
@@ -54,7 +102,11 @@ export function VideoTile({
       )}
     >
       {isConnecting ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-vessel-bg-surface overflow-hidden">
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center bg-vessel-bg-surface overflow-hidden px-6 text-center"
+          data-testid={`tile-connecting-${participant.id}`}
+          data-phase={phase}
+        >
           <div
             className="absolute inset-0 w-[200%] animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent"
             style={{ transform: "skewX(-20deg)" }}
@@ -64,9 +116,21 @@ export function VideoTile({
               100% { transform: translateX(100%) skewX(-20deg); }
             }
           `}</style>
-          <span className="font-mono-vessel text-sm text-vessel-text-secondary z-10">
-            Connecting...
+          <span
+            className={cn(
+              "font-mono-vessel text-sm z-10 transition-colors duration-300",
+              phase === "stalled"
+                ? "text-vessel-text-primary"
+                : "text-vessel-text-secondary",
+            )}
+          >
+            {connectingHeadline}
           </span>
+          {connectingSubline && (
+            <span className="mt-1 text-[11px] sm:text-xs text-vessel-text-secondary z-10 max-w-[28ch]">
+              {connectingSubline}
+            </span>
+          )}
         </div>
       ) : (
         <>

@@ -75,6 +75,36 @@ export async function cancelSession(sessionId: string): Promise<void> {
   );
 }
 
+/**
+ * Mark the calling participant as having cleanly left the session. The
+ * server stamps `leftAt` on their participant row so other participants'
+ * polled session responses drop them from the live roster within one
+ * polling cycle (~8s) — much faster than waiting for the in-room
+ * heartbeat DROP TTL to expire.
+ *
+ * `keepalive: true` lets the request finish even if the page is in the
+ * middle of unloading or navigating away, so this is safe to call from
+ * the Leave button right before navigation.
+ *
+ * Best-effort: callers should fire-and-forget. The relay LEAVE event +
+ * heartbeat DROP TTL still cover the case where this request fails or
+ * never reaches the server.
+ */
+export async function leaveSession(
+  sessionId: string,
+  pubkey: string,
+): Promise<void> {
+  await customFetch<unknown>(
+    `${API_BASE}/sessions/${encodeURIComponent(sessionId)}/leave`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pubkey }),
+      keepalive: true,
+    },
+  );
+}
+
 export function extractInviteCodeFromInput(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "";

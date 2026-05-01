@@ -10,7 +10,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "../components/layout";
 import { LobbyScreen } from "../components/lobby/LobbyScreen";
 import { StudioScreen } from "../components/studio/StudioScreen";
-import { cancelSession } from "../lib/session";
+import { cancelSession, leaveSession } from "../lib/session";
+import { readCachedRoster, writeCachedRoster } from "../lib/roster-cache";
 
 export default function SessionStudio() {
   const params = useParams();
@@ -31,10 +32,36 @@ export default function SessionStudio() {
       query: {
         enabled: !!sessionId && !!pubkey,
         queryKey: getGetSessionQueryKey(sessionId || ""),
-        refetchInterval: (query) => query.state.data?.status === "waiting" ? 3000 : false,
+        // Poll every 8 seconds while the session is waiting OR live so a
+        // joiner who joined after we mounted shows up promptly, and a
+        // joiner who left cleanly disappears within ~8s. Stop polling
+        // once the session has ended — there's nothing left to discover
+        // and we don't want to keep hitting the API from the post-session
+        // screens.
+        refetchInterval: (query) =>
+          query.state.data?.status === "ended" ? false : 8000,
+        // Seed from the local roster cache so a refresh shows the last
+        // known room composition immediately instead of an empty
+        // skeleton, even before the first network roundtrip resolves.
+        // The cache is per-sessionId and the response signature matches
+        // exactly what the API returns, so this is safe.
+        initialData: () => (sessionId ? readCachedRoster(sessionId) : undefined),
+        // Treat the cached snapshot as immediately stale so React Query
+        // still kicks off a network fetch on mount; we just skip the
+        // empty loading state.
+        initialDataUpdatedAt: 0,
       },
     }
   );
+
+  // Persist every successful response to the local roster cache. This is
+  // what makes the next reload paint instantly with the same room you
+  // just left — no spinner, no flash of empty roster.
+  useEffect(() => {
+    if (session && sessionId) {
+      writeCachedRoster(sessionId, session);
+    }
+  }, [session, sessionId]);
 
   const updateSessionMutation = useUpdateSession();
 
@@ -107,8 +134,26 @@ export default function SessionStudio() {
   };
 
   const handleLeave = async () => {
+    // Fire the signed leave request so the participant disappears from
+    // every other client's roster within one poll cycle (~8s) — much
+    // faster than waiting for the heartbeat-based DROP TTL. We deliberately
+    // don't block navigation on this; the user clicked Leave and they
+    // want out of the room. `keepalive: true` lets the request finish
+    // even if React unmounts the component immediately afterward.
+    if (sessionId && pubkey) {
+      void leaveSession(sessionId, pubkey).catch(() => {
+        // Best-effort. Other participants will still notice us gone via
+        // the relay LEAVE event and the heartbeat DROP TTL.
+      });
+    }
     setLocation("/home");
   };
+
+  // Roster surfaces should only show people who are CURRENTLY in the room.
+  // Participants who cleanly left (POST /sessions/:id/leave) keep their row
+  // for recording-attribution purposes, but they shouldn't appear in the
+  // lobby list or studio sidebar — that's what `leftAt` filters out here.
+  const liveParticipants = session.participants.filter((p) => p.leftAt == null);
 
   if (session.status === "waiting") {
     return (
@@ -121,7 +166,7 @@ export default function SessionStudio() {
             inviteCode: session.inviteCode,
             hostPubkey: session.hostPubkey,
             hostName: session.hostName,
-            participants: session.participants.map((p) => ({
+            participants: liveParticipants.map((p) => ({
               id: p.id,
               displayName: p.displayName,
               pubkey: p.pubkey,
@@ -145,7 +190,7 @@ export default function SessionStudio() {
         inviteCode: session.inviteCode,
         hostPubkey: session.hostPubkey,
         hostName: session.hostName,
-        participants: session.participants.map((p) => ({
+        participants: liveParticipants.map((p) => ({
           id: p.id,
           displayName: p.displayName,
           pubkey: p.pubkey,
