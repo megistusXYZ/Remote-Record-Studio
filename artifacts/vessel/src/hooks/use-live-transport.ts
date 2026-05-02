@@ -188,12 +188,22 @@ function parseNamespace(ns: string): { sessionId: string; pubkey: string } | nul
 /** Wrap a raw MediaStreamTrack as a DecodedTrack so the WebRTC ingestion
  *  path can share storage with the MoQ ingestion path. The `stop()` call
  *  is a thin pass-through; for raw tracks there's no decoder to tear
- *  down. */
-function wrapPlainTrack(track: MediaStreamTrack): DecodedTrack {
+ *  down. The optional `extraCleanup` runs before `track.stop()` so any
+ *  per-track resources (e.g. a first-frame probe element) tear down
+ *  alongside the track itself. */
+function wrapPlainTrack(
+  track: MediaStreamTrack,
+  extraCleanup?: () => void,
+): DecodedTrack {
   return {
     track,
     kind: track.kind === "audio" ? "audio" : "video",
     stop: () => {
+      try {
+        extraCleanup?.();
+      } catch {
+        // ignore — best-effort cleanup
+      }
       try {
         track.stop();
       } catch {
@@ -201,6 +211,121 @@ function wrapPlainTrack(track: MediaStreamTrack): DecodedTrack {
       }
     },
   };
+}
+
+type WithRequestVideoFrameCallback = HTMLVideoElement & {
+  requestVideoFrameCallback?: (cb: () => void) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+};
+
+/**
+ * Detect the first actually-decoded frame for an inbound video track.
+ *
+ * The naive `track.muted` + `unmute` gate fires when the underlying
+ * pipeline reports the track is producing samples — typically a frame
+ * or two BEFORE the first decoded frame is presentable. The result is
+ * a perceptible black flash on the remote tile when WebRTC video
+ * first arrives. Mirroring the MoQ path's `onFirstFrame` discipline,
+ * we attach the track to a detached `<video>` element and ask the
+ * browser to tell us when it has actually painted a frame:
+ *
+ *   - `requestVideoFrameCallback` (Chromium / Firefox / Safari 15.4+)
+ *     is the most accurate signal; it fires exactly once per painted
+ *     frame so the very first invocation IS the first frame.
+ *   - Browsers without it fall back to the `playing` event, which is
+ *     still strictly later than `unmute` and avoids the worst flash.
+ *   - A 5-second hard timeout guarantees the tile never sits stuck on
+ *     "Connecting…" if neither signal fires (e.g. a permanently
+ *     muted/black track).
+ *
+ * Returns a cleanup function that callers MUST invoke when the track
+ * is replaced or detached, otherwise the probe element leaks.
+ */
+function probeFirstVideoFrame(
+  track: MediaStreamTrack,
+  onReady: () => void,
+): () => void {
+  if (typeof document === "undefined") {
+    // SSR / non-DOM context — fall back to the synchronous mark so the
+    // tile doesn't wedge. Should never run in practice (the studio is
+    // CSR-only) but keeps the helper environment-safe.
+    onReady();
+    return () => {};
+  }
+  const video = document.createElement("video") as WithRequestVideoFrameCallback;
+  video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  // Off-document is enough — we never insert it into the DOM. The
+  // browser still decodes into it because srcObject + play() is what
+  // drives the pipeline, not document attachment.
+  try {
+    video.srcObject = new MediaStream([track]);
+  } catch {
+    // Some test environments don't support MediaStream construction.
+    // Treat as immediate ready so the tile isn't stuck.
+    onReady();
+    return () => {};
+  }
+  // `done` is set whenever the probe is finished — either because a
+  // first frame fired (in `fire()`) OR because an external caller
+  // tore the probe down (in `cleanup()`). Setting it in BOTH paths
+  // prevents an in-flight requestVideoFrameCallback from invoking
+  // `onReady()` AFTER the track has been detached/replaced (which
+  // would otherwise re-add a stale pubkey to `remoteReady`).
+  let done = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let rvfcHandle: number | null = null;
+  const cleanup = () => {
+    done = true;
+    if (timer != null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (rvfcHandle != null && typeof video.cancelVideoFrameCallback === "function") {
+      try {
+        video.cancelVideoFrameCallback(rvfcHandle);
+      } catch {
+        // ignore
+      }
+      rvfcHandle = null;
+    }
+    try {
+      video.srcObject = null;
+    } catch {
+      // ignore
+    }
+    try {
+      video.remove();
+    } catch {
+      // ignore — element was never inserted
+    }
+  };
+  const fire = () => {
+    if (done) return;
+    cleanup();
+    try {
+      onReady();
+    } catch (err) {
+      console.warn("first-frame ready callback threw", err);
+    }
+  };
+  if (typeof video.requestVideoFrameCallback === "function") {
+    rvfcHandle = video.requestVideoFrameCallback(() => fire());
+  } else {
+    video.addEventListener("playing", fire, { once: true });
+  }
+  // Last-ditch timeout so a permanently-black track doesn't leave the
+  // tile in "Connecting…" forever. 5s comfortably outlasts every
+  // browser's first-decoded-frame latency on a working track.
+  timer = setTimeout(fire, 5000);
+  // Kick the decode pipeline. Some browsers won't decode without
+  // play(); muted autoplay is universally allowed so this is safe.
+  void video.play().catch(() => {
+    // play() can reject on some test envs (jsdom) or if the element
+    // was removed mid-call. The event/timeout paths still resolve.
+  });
+  return cleanup;
 }
 
 export function useLiveTransport({
@@ -336,20 +461,17 @@ export function useLiveTransport({
           // ignore
         }
       }
-      const wrapped = wrapPlainTrack(track);
+      // Mark the tile as ready only when the browser has actually
+      // painted the first frame, NOT when the track reports it's
+      // unmuted (the unmute event consistently fires a frame or two
+      // before the first decoded frame, producing a brief black flash
+      // on the tile). The probe element is torn down by the wrapper's
+      // stop() — see wrapPlainTrack.
+      const markReady = () => markRemoteReady(pubkey, source);
+      const cancelProbe = probeFirstVideoFrame(track, markReady);
+      const wrapped = wrapPlainTrack(track, cancelProbe);
       if (isScreen) entry.screenVideoTrack = wrapped;
       else entry.cameraVideoTrack = wrapped;
-      // Mark the tile as ready when the track first carries media. Some
-      // remotes start muted (camera off) — we wait for `unmute` so the
-      // "Connecting…" state doesn't flip to "live" prematurely. Tracks
-      // that arrive already unmuted (typical) are marked ready
-      // immediately so the tile doesn't sit stuck.
-      const markReady = () => markRemoteReady(pubkey, source);
-      if (track.muted) {
-        track.addEventListener("unmute", markReady, { once: true });
-      } else {
-        markReady();
-      }
     } else {
       const existing = isScreen ? entry.screenAudioTrack : entry.cameraAudioTrack;
       if (existing) {
@@ -409,6 +531,20 @@ export function useLiveTransport({
       entry.hasScreen = false;
       // Drop the screen-ready flag too so a fresh share can re-arm it.
       setRemoteScreenReady((prev) => {
+        if (!prev.has(pubkey)) return prev;
+        const next = new Set(prev);
+        next.delete(pubkey);
+        return next;
+      });
+    }
+    // Camera ready means "the camera video track has produced its
+    // first decoded frame". When that video track is detached, the
+    // flag is no longer meaningful — clear it so a fresh camera
+    // republish (e.g. user toggles their camera off and back on)
+    // re-arms the first-frame probe instead of remaining stuck on a
+    // stale "live" state pointing at a detached track.
+    if (!isScreen && kind === "video") {
+      setRemoteReady((prev) => {
         if (!prev.has(pubkey)) return prev;
         const next = new Set(prev);
         next.delete(pubkey);
