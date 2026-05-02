@@ -1361,7 +1361,11 @@ export function StudioScreen({
             its own backdrop. */}
         <main
           className={cn(
-            "flex-1 overflow-hidden relative pb-20 transition-[padding-right] duration-200 ease-out",
+            // Bottom padding clears the fixed ControlBar (h-20) PLUS the
+            // iOS home-indicator safe-area inset (the bar itself absorbs
+            // the inset via env(safe-area-inset-bottom), so the grid
+            // needs to clear the same amount of extra height).
+            "flex-1 overflow-hidden relative pb-[calc(5rem+env(safe-area-inset-bottom))] transition-[padding-right] duration-200 ease-out",
             showRoster && "lg:pr-[360px]",
           )}
         >

@@ -402,7 +402,13 @@ function PresenterBubble({
           : undefined
       }
       className={cn(
-        "absolute z-30 w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-vessel-accent/70 shadow-2xl bg-vessel-bg-surface cursor-grab active:cursor-grabbing select-none focus:outline-none focus:ring-2 focus:ring-vessel-accent",
+        // touch-none is critical here: the global `touch-action:
+        // manipulation` we apply to all `[role="button"]` elements
+        // would otherwise let the browser claim panning for itself
+        // and fight the custom PointerEvents drag below, producing
+        // a jerky/sticky bubble on mobile. A more-specific class
+        // wins per the cascade.
+        "touch-none absolute z-30 w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-vessel-accent/70 shadow-2xl bg-vessel-bg-surface cursor-grab active:cursor-grabbing select-none focus:outline-none focus:ring-2 focus:ring-vessel-accent",
         cornerClasses,
       )}
       aria-label={`${presenter.displayName} camera (drag to reposition, arrow keys to snap to a corner, Enter to hide)`}

@@ -116,7 +116,18 @@ export function ControlBar({
 
   return (
     <TooltipProvider>
-      <div className="fixed bottom-0 left-0 right-0 h-20 bg-vessel-bg-base/80 backdrop-blur-xl border-t border-vessel-border flex items-center justify-between px-4 sm:px-6 z-30">
+      <div
+        // overflow-x-auto is the safety net for sub-390px viewports
+        // (iPhone SE 1st gen and a handful of small Androids): the
+        // three flex-1 groups can collectively demand more than the
+        // viewport width once every optional control (hand,
+        // captions, screen-share substitute) is on screen. Rather
+        // than clip the Leave button or fight intrinsic sizes, we
+        // let the bar scroll horizontally as a graceful fallback.
+        // [&::-webkit-scrollbar]:hidden hides the scroll-track so
+        // the mobile bar still looks like a cohesive control strip.
+        className="fixed bottom-0 left-0 right-0 min-h-20 bg-vessel-bg-base/80 backdrop-blur-xl border-t border-vessel-border flex items-center justify-between px-3 sm:px-6 pb-[env(safe-area-inset-bottom)] z-30 overflow-x-auto sm:overflow-x-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {/* Left Group */}
         <div className="flex-1 flex items-center justify-start">
           <Popover>
@@ -145,21 +156,23 @@ export function ControlBar({
           </Popover>
         </div>
 
-        {/* Center Group */}
-        <div className="flex-1 flex items-center gap-3 justify-center">
+        {/* Center Group — gap tightens on mobile so the row of primary
+            controls (mic / record / camera / hand / captions) fits a
+            375px-wide phone without overflowing the side groups. */}
+        <div className="flex-1 flex items-center gap-2 sm:gap-3 justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 data-testid="button-toggle-mic"
                 onClick={onToggleMic}
                 className={cn(
-                  "w-14 h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                  "w-12 h-12 sm:w-14 sm:h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
                   micEnabled
                     ? "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary"
                     : "bg-vessel-red/20 border-vessel-red/40 text-vessel-red"
                 )}
               >
-                {micEnabled ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
+                {micEnabled ? <Mic className="w-5 h-5 sm:w-6 sm:h-6" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6" />}
               </button>
             </TooltipTrigger>
             <TooltipContent>{micEnabled ? "Mute microphone" : "Unmute microphone"}</TooltipContent>
@@ -217,13 +230,13 @@ export function ControlBar({
                 data-testid="button-toggle-camera"
                 onClick={onToggleCamera}
                 className={cn(
-                  "w-14 h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                  "w-12 h-12 sm:w-14 sm:h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
                   cameraEnabled
                     ? "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary"
                     : "bg-vessel-red/20 border-vessel-red/40 text-vessel-red"
                 )}
               >
-                {cameraEnabled ? <VideoIcon className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                {cameraEnabled ? <VideoIcon className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
               </button>
             </TooltipTrigger>
             <TooltipContent>{cameraEnabled ? "Turn off camera" : "Turn on camera"}</TooltipContent>
@@ -241,13 +254,13 @@ export function ControlBar({
                   aria-pressed={handRaised}
                   aria-label={handRaised ? "Lower hand" : "Raise hand"}
                   className={cn(
-                    "w-14 h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    "w-12 h-12 sm:w-14 sm:h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
                     handRaised
                       ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
                       : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
                   )}
                 >
-                  <Hand className="w-6 h-6" />
+                  <Hand className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>{handRaised ? "Lower hand (H)" : "Raise hand (H)"}</TooltipContent>
@@ -269,16 +282,16 @@ export function ControlBar({
                   aria-pressed={captionsActive}
                   aria-label={captionsActive ? "Turn off live captions" : "Turn on live captions"}
                   className={cn(
-                    "relative w-14 h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
+                    "relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
                     captionsActive
                       ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
                       : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
                   )}
                 >
                   {captionsActive ? (
-                    <Captions className="w-6 h-6" />
+                    <Captions className="w-5 h-5 sm:w-6 sm:h-6" />
                   ) : (
-                    <CaptionsOff className="w-6 h-6" />
+                    <CaptionsOff className="w-5 h-5 sm:w-6 sm:h-6" />
                   )}
                   {captionsActive && captionsLoading && (
                     <span

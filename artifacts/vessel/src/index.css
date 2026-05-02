@@ -123,6 +123,11 @@
   html {
     background-color: var(--vessel-bg-base);
     color-scheme: dark;
+    /* Stop iOS Safari from auto-resizing fonts when the device
+       rotates landscape — we already pick deliberate type sizes per
+       breakpoint and the auto-resize fights with them. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
@@ -130,9 +135,35 @@
     color: var(--vessel-text-primary);
     font-family: var(--vessel-font-body);
     -webkit-font-smoothing: antialiased;
+    /* Critical for the studio: a stray downswipe during a recording
+       session must NOT trigger the browser's pull-to-refresh — that
+       would reload the page and discard everything the user just
+       captured. `overscroll-behavior-y: contain` is the conservative
+       choice over `none`: it stops the chain to the browser chrome
+       (which is what triggers pull-to-refresh) but leaves every
+       inner scroll container's native momentum and elastic bounce
+       fully intact, so chat/Vault/Settings scroll exactly as before
+       on iOS. Applies app-wide; no flow in Vessel relies on
+       pull-to-refresh. */
+    overscroll-behavior-y: contain;
     @apply selection:bg-primary/30 selection:text-primary transition-colors duration-400 ease-out;
   }
-  
+
+  /* Kill the gray flash iOS Safari paints over every tappable
+     element on touch — the app already provides its own hover/active
+     feedback, so the default highlight just looks webby. */
+  a, button, [role="button"], input, label, select, textarea, summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Belt-and-suspenders against the legacy 300ms tap-delay that some
+     mobile browsers still apply while waiting for a possible
+     double-tap-zoom. The viewport meta already opts us out of zoom
+     gestures on most browsers; this covers the holdouts. */
+  button, [role="button"], a, label, summary {
+    touch-action: manipulation;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif tracking-tight;
   }
