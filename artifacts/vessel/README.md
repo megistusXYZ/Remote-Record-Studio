@@ -1,206 +1,55 @@
-# Vessel
+# Vessel web client
 
-Studio-quality remote recording. No subscriptions. No cloud lock-in.
+The browser app: landing page, studio, vault and sharing. React 19, Vite,
+TypeScript, Tailwind v4.
 
-Vessel records every guest in their browser at full local quality, then hands
-the master files back to *you* — not to a SaaS vault you have to keep paying
-for. Bring your own server, or use the public defaults to get started in under
-a minute.
-
----
+Run it from the repository root with `pnpm dev` (see
+[docs/LOCAL-DEVELOPMENT.md](../../docs/LOCAL-DEVELOPMENT.md)); deploy it with
+the compose stack (see [OPERATIONS.md](../../OPERATIONS.md)).
 
 ## How it works
 
-1. **Create a studio.** Pick a display name. Vessel generates a private studio
-   key on your device — no email, no password, no account to remember.
-2. **Invite your guests.** Share a single link. Anyone who opens it joins your
-   studio in their browser; nothing to install.
-3. **Hit record.** Each participant's microphone and camera are captured
-   locally at studio quality, so a slow internet connection never lowers the
-   final fidelity.
-4. **End the session.** All tracks finalize and land in your Vault — separated
-   per speaker, ready to drop straight into your editor.
-5. **Share or hand off.** One click gets you a clean link for an editor, plus
-   per-track download links for collaborators who only need their own audio.
-
-That's the whole product. No subscription tiers, no "you've used your free
-hour" pop-ups, no recordings held hostage behind a paywall. Your files belong
-to you.
-
----
-
-## Quick start
-
-```bash
-# from the monorepo root
-pnpm install
-pnpm --filter @workspace/vessel run dev
-```
-
-Open the URL printed in the console. The dev server runs at the port supplied
-via the `PORT` environment variable (assigned by the workspace runtime), and
-mounts under the artifact's `BASE_PATH`.
-
-To configure infrastructure for self-hosting, copy `.env.example` to
-`.env.local` and edit:
-
-```bash
-cp .env.example .env.local
-```
-
----
-
-## For developers
-
-> The rest of this README is technical detail for people building or
-> self-hosting Vessel. Skip it if you just want to record a podcast.
-
-### Architecture
-
-Vessel is a client-heavy SPA built with React 18, Vite, TypeScript, Tailwind v4
-and shadcn/ui. There is no proprietary backend — Vessel speaks open protocols
-and points at infrastructure you can swap out at any time.
-
-| Concern | Protocol | Default endpoint |
+| Concern | How | Configured by |
 |---|---|---|
-| Live in-studio transport | Media-over-QUIC (MoQ) over WebTransport | `https://relay.quic.video` |
-| Finalized file storage | Blossom (HTTP blob server) | `https://blossom.primal.net` |
-| Share manifests + identity | Nostr relays (NIP-94 / parameterized replaceable events kind 1063, 30563) | `wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.nostr.band` |
-| Local cache (per-participant raw chunks) | IndexedDB via `idb` |  — |
+| Recording | Each participant records on their own device: a 48 kHz WAV master plus a camera file, written to IndexedDB as it is made, so a reload or crash loses nothing | — |
+| Live preview | Peer-to-peer WebRTC between participants, with short-lived TURN credentials from the API when a network blocks direct connections | `TURN_*` on the API |
+| In-call messages | Presence, chat and connection setup, encrypted under a per-session key and passed through sync servers | `VESSEL_RELAYS` / `VITE_NOSTR_RELAYS` |
+| Storage | Finished files are encrypted on the device, each with its own key, then uploaded to a storage server the studio chooses | `VESSEL_STORAGE_SERVER` / `VITE_BLOSSOM_SERVER` |
+| Sharing | Share links carry the key in the URL fragment, which never reaches a server | — |
+| Delivery to the host | Each guest's share link is sealed to the host's key and recorded by the API | — |
+| Export and transcript | An editor-ready bundle (tracks aligned, Reaper project, markers) and a speaker-labelled transcript made on the host's machine with Whisper, served by the site | — |
 
-Each of these is configured via a `VITE_*` environment variable
-(`.env.example`).
+Deployment settings reach the browser at runtime through `/config.js`,
+written by the web container from its environment; the `VITE_*` variables in
+[`.env.example`](./.env.example) are the build-time equivalents.
 
-### Cross-origin isolation headers
-
-To unlock `SharedArrayBuffer` (used by some downstream codec workers) and
-guarantee predictable WebCodecs / WebTransport behaviour, the Vite dev and
-preview servers send:
-
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: credentialless   # dev — preserves third-party iframe embedding
-Cross-Origin-Embedder-Policy: require-corp     # production preview — strict cross-origin isolation
-```
-
-> **Important — production static hosting:** Vite-set headers only apply
-> when Vite is the runtime (dev / `vite preview`). When Vessel is published
-> through the Replit artifact's `serve = "static"` mode, headers must be
-> configured at the **static host / CDN layer**. SharedArrayBuffer-dependent
-> features will not be available in production until that's done. WebCodecs
-> and WebTransport themselves do **not** require cross-origin isolation, so
-> the core recording flow works without these headers — they only matter for
-> threaded codec workers that need `SharedArrayBuffer`.
->
-> If you self-host behind nginx / Caddy / Cloudflare, add:
->
-> ```
-> Cross-Origin-Opener-Policy: same-origin
-> Cross-Origin-Embedder-Policy: require-corp
-> ```
->
-> on every HTML response, and audit any third-party assets you load to make
-> sure they send `Cross-Origin-Resource-Policy: cross-origin` or `same-site`.
-
-### PWA / offline shell
-
-The app ships a service worker via `vite-plugin-pwa` (`registerType:
-"autoUpdate"`). Built assets are precached for an offline app shell;
-recording media blobs are *not* cached by the service worker (they live in
-IndexedDB and the configured storage server).
-
-### Build
+## Scripts
 
 ```bash
-pnpm --filter @workspace/vessel run build
-# emits to artifacts/vessel/dist/public
+pnpm --filter @workspace/vessel run dev        # dev server (needs PORT and BASE_PATH; pnpm dev sets them)
+pnpm --filter @workspace/vessel run build      # production build into dist/public
+pnpm --filter @workspace/vessel run test       # vitest
+pnpm --filter @workspace/vessel run typecheck
 ```
 
-The production target is configured in `.replit-artifact/artifact.toml` as
-`serve = "static"`, so any static host works.
+`dev` and `build` first copy the background-blur runtime and fetch the speech
+model into `public/` (both git-ignored); set `VESSEL_SKIP_MODEL=1` to skip the
+model download.
 
----
+## Headers
 
-## Self-hosting
+The dev and preview servers send the same security headers as the
+production Caddy configuration (`deploy/Caddyfile`): cross-origin isolation
+(`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy:
+credentialless`), `Referrer-Policy: no-referrer`, a Permissions-Policy, and a
+Content-Security-Policy that ships in report-only mode until
+`VESSEL_CSP_ENFORCE=true`.
 
-Vessel is designed to run end-to-end on infrastructure you control. None of
-the following are required, but each step pulls one more dependency away from
-public infrastructure.
+## Copy rules
 
-### Your own MoQ relay (low-latency live transport)
-
-The MoQ working group provides a reference relay you can deploy yourself.
-Easiest path is Fly.io:
-
-```bash
-git clone https://github.com/kixelated/moq-rs
-cd moq-rs
-fly launch                  # accept defaults
-fly deploy
-```
-
-Then point `VITE_MOQ_RELAY_URL` at your Fly app:
-
-```
-VITE_MOQ_RELAY_URL=https://your-app-name.fly.dev
-```
-
-See [github.com/kixelated/moq-rs](https://github.com/kixelated/moq-rs) for the
-full deployment guide and other hosting options (Docker, bare-metal).
-
-### Your own storage server (finalized recordings)
-
-Vessel uploads finalized tracks to a Blossom server — a tiny HTTP blob store
-that uses content-addressed (SHA-256) URLs.
-
-```bash
-git clone https://github.com/hzrd149/blossom-server
-cd blossom-server
-docker compose up -d
-```
-
-Then:
-
-```
-VITE_BLOSSOM_SERVER=https://blobs.your-domain.example
-```
-
-Reference implementation and protocol spec:
-[github.com/hzrd149/blossom](https://github.com/hzrd149/blossom).
-
-### Your own Nostr relays (share metadata + identity)
-
-Share manifests are published as Nostr events (kind 1063 per-track, kind 30563
-session manifest). You can publish them to any combination of public relays,
-or run your own (`strfry`, `nostr-rs-relay`, etc.).
-
-Browse the live relay directory at
-[nostr.watch](https://nostr.watch/relays/find), pick the relays you want, and
-list them comma-separated:
-
-```
-VITE_NOSTR_RELAYS=wss://relay.your-domain.example,wss://relay.damus.io
-```
-
-### Putting it all together
-
-Once you've configured all three, your `.env.local` looks like:
-
-```
-VITE_MOQ_RELAY_URL=https://moq.your-domain.example
-VITE_BLOSSOM_SERVER=https://blobs.your-domain.example
-VITE_NOSTR_RELAYS=wss://relay.your-domain.example
-VITE_APP_NAME=Vessel
-VITE_APP_TAGLINE=Your voice. Your studio. Your files.
-```
-
-Run `pnpm --filter @workspace/vessel run build`, deploy the contents of
-`artifacts/vessel/dist/public/` behind your own static host with
-cross-origin-isolation headers configured, and you have a fully self-hosted
-studio platform.
-
----
+User-facing text never names the underlying protocols. `src/copy-guard.test.ts`
+fails the build if it does; the glossary lives in the test.
 
 ## License
 
-See repository root for license information.
+AGPL-3.0, see the repository root.

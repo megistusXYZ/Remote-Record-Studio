@@ -132,6 +132,60 @@ jobs:
       - name: Build the API server
         run: pnpm --filter @workspace/api-server run build
 
+  hygiene:
+    name: Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Forbidden files, secrets, personal paths and internal labels in
+      # tracked files. See CONTRIBUTING.md, "What goes in the public repo".
+      - name: Check tracked files
+        run: pnpm --filter @workspace/scripts run hygiene
+
+      # The same text rules for the pull request title, description and
+      # every commit message on the branch.
+      - name: Check pull request text and commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: pnpm --filter @workspace/scripts run public-text
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan history with gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   audit:
     name: Dependency audit (pnpm)
     runs-on: ubuntu-latest

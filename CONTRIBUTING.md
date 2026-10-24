@@ -65,6 +65,35 @@ Before opening a PR, please check:
 - [ ] If the change affects users, you've updated `README.md` or relevant
       docs
 - [ ] Screenshots or a short clip for any UI change
+- [ ] `pnpm --filter @workspace/scripts run hygiene` passes
+
+## What goes in the public repo
+
+This repository, its commit messages and its pull requests are public and
+permanent. Keep them to code, user-facing documentation and the reasoning a
+reviewer needs.
+
+- **No internal working material.** Planning notes, AI prompts, screenshots,
+  market or business thinking, and private task or ticket labels stay out of
+  files, commits and PR descriptions. Local-only notes belong in the
+  git-ignored `attached_assets/` folder.
+- **No vulnerability details in public.** Fix security problems through the
+  private process in [`SECURITY.md`](./SECURITY.md). Commit messages and PR
+  descriptions describe the change in neutral terms ("Bind signed requests to
+  their payload"), not the attack.
+- **No secrets or personal data.** No keys, tokens, `.env` files, private
+  keys or paths from your own machine. Use `.env.example` files with
+  placeholder values.
+- **Docs describe what the code does today.** Plans belong in issues.
+
+CI enforces the mechanical part: the Hygiene job rejects forbidden files,
+secrets, personal paths and internal labels in files, commit messages and the
+PR text, and gitleaks scans the history for credentials. Run the file check
+locally with:
+
+```bash
+pnpm --filter @workspace/scripts run hygiene
+```
 
 ## Cutting a release
 

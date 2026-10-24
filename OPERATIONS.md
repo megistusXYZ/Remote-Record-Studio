@@ -89,7 +89,7 @@ leak; otherwise once a year is plenty.
 
 Every safety feature added in the pre-launch hardening pass is gated by
 an environment variable so an operator can disable it instantly without
-a redeploy. Set the variable, restart the API server workflow, done.
+a redeploy. Set the variable in `deploy/.env`, run `up -d api`, done.
 
 | Subsystem                      | Env var                                          | Default | Disable command                                |
 | ------------------------------ | ------------------------------------------------ | ------- | ---------------------------------------------- |

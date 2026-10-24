@@ -20,7 +20,6 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.base.json tsconfig.json ./
 COPY artifacts/api-server/package.json artifacts/api-server/
 COPY artifacts/vessel/package.json artifacts/vessel/
-COPY artifacts/mockup-sandbox/package.json artifacts/mockup-sandbox/
 COPY lib/db/package.json lib/db/
 COPY lib/api-spec/package.json lib/api-spec/
 COPY lib/api-zod/package.json lib/api-zod/

@@ -2,7 +2,7 @@
 # Local development helper.
 #
 # Loads ./.env (git-ignored; copy it from .env.example) into the environment,
-# then runs one workspace task with the port it needs. Replit injects these
+# then runs one workspace task with the port it needs. Deployments inject these
 # variables itself, so this script is only used for local development.
 #
 #   sh scripts/dev.sh api       build + start the API server     (pnpm dev:api)
