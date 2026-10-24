@@ -32,6 +32,15 @@ if (!rawBasePath) {
 // "/foo/" all become "/foo/").
 const basePath = rawBasePath.endsWith("/") ? rawBasePath : `${rawBasePath}/`;
 
+// Local development: forward `/api/*` from the Vite dev server to the API
+// server so the web client's same-origin fetches work without a path router
+// in front (Replit provides one; `pnpm dev` on a laptop does not). The Host
+// header is deliberately left untouched (no `changeOrigin`): NIP-98 request
+// signing binds each call to the URL the browser targeted, and the API
+// rebuilds that URL from the Host header it receives. Unset on Replit and in
+// production builds, where this is a no-op.
+const apiProxyTarget = process.env["VESSEL_API_PROXY_TARGET"];
+
 // Headers required for advanced web platform features (WebCodecs, WebTransport,
 // SharedArrayBuffer). `credentialless` is used in dev so the Replit preview
 // iframe can still embed third-party resources without CORP headers — switch to
@@ -213,6 +222,9 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    ...(apiProxyTarget
+      ? { proxy: { "/api": { target: apiProxyTarget } } }
+      : {}),
   },
   preview: {
     port,

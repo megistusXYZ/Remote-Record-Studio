@@ -51,3 +51,9 @@ Thumbs.db
 # Local-only dev artifacts.
 /attached_assets/
 /replit.md
+
+# Local environment files (server-side config lives in /.env, browser-side in artifacts/vessel/.env.local)
+.env
+.env.local
+.env.*.local
+!.env.example
