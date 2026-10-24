@@ -176,7 +176,7 @@ describe("Host aggregation 2-participant smoke", () => {
     const accepted = ["pkAda", "pkGrace", "pkOscar"];
     const resolved = new Map<string, unknown>([["pkAda", {}]]);
     const resolveErrors = new Map<string, unknown>([
-      ["pkGrace", "Pointer URL is malformed."],
+      ["pkGrace", "This link looks broken."],
     ]);
 
     expect(

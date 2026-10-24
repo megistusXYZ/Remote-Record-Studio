@@ -12,7 +12,7 @@ import {
  * Join orchestrator for `/join/:inviteCode`.
  *
  * Flow:
- *   1. Resolve the invite — show "Studio not found" if it doesn't.
+ *   1. Resolve the invite — show "Session not found" if it doesn't.
  *   2. Greenroom: pick devices, run mic check, see preflight, set name.
  *   3. Consent: read the contract, accept (calls joinSession) or decline.
  *   4. On success → /session/:id. On 409 (room full) → friendly blocked view
@@ -66,7 +66,7 @@ export default function Join() {
         </div>
         <div className="relative z-10 flex flex-col items-center gap-4">
           <div className="h-10 w-10 border-2 border-vessel-accent border-t-transparent rounded-full animate-spin" />
-          <p className="text-vessel-text-secondary text-sm animate-pulse">Finding studio…</p>
+          <p className="text-vessel-text-secondary text-sm animate-pulse">Finding session…</p>
         </div>
       </div>
     );
@@ -79,10 +79,10 @@ export default function Join() {
           <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-vessel-accent/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2" />
         </div>
         <div className="relative z-10 max-w-md text-center">
-          <h2 className="font-display text-2xl font-bold mb-4">Studio not found</h2>
+          <h2 className="font-display text-2xl font-bold mb-4">Session not found</h2>
           <p className="text-vessel-text-secondary mb-8">
-            This invite link doesn't work anymore. The host may have ended the session
-            or cancelled the invite.
+            This invite link doesn't work any more. The host may have ended the session
+            or made a new link.
           </p>
           <button
             type="button"
@@ -156,7 +156,8 @@ export default function Join() {
 function parseJoinError(err: unknown):
   | { kind: "room_full"; info: RoomFullInfo }
   | { kind: "generic"; message: string } {
-  const fallback = "We couldn't join the studio. The invite might be expired.";
+  const fallback =
+    "We couldn't join this session. Try the link again, or ask the host for a new one.";
   if (!err || typeof err !== "object") {
     return { kind: "generic", message: fallback };
   }
@@ -188,8 +189,10 @@ function parseJoinError(err: unknown):
       };
     }
   }
-  return {
-    kind: "generic",
-    message: anyErr.message?.trim() ? anyErr.message : fallback,
-  };
+  // Never surface raw transport/auth error text (e.g. "HTTP 401 … auth event
+  // signature is invalid") to the guest. Log it and show the friendly line.
+  if (anyErr.message?.trim()) {
+    console.warn("[join] join request failed:", anyErr.message, err);
+  }
+  return { kind: "generic", message: fallback };
 }

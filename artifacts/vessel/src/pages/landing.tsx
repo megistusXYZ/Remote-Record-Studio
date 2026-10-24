@@ -42,8 +42,8 @@ type ComparisonRow = {
 const COMPARISON_ROWS: ComparisonRow[] = [
   {
     label: "Local recording quality",
-    vessel: { value: "Lossless", icon: null },
-    riverside: { value: "Lossless", icon: null },
+    vessel: { value: "Full quality", icon: null },
+    riverside: { value: "Full quality", icon: null },
     zoom: { value: "Compressed", icon: null },
   },
   {
@@ -281,7 +281,7 @@ export default function LandingPage() {
           data-testid="nav-cta-signin"
         >
           <AimIcon className="w-4 h-4" />
-          <span>Return to your studio</span>
+          <span>Sign in</span>
         </button>
       </header>
 
@@ -330,7 +330,7 @@ export default function LandingPage() {
           
           <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             <VesselButton size="lg" onClick={navigateToStart} data-testid="hero-cta-start">
-              Create Your Free Studio &rarr;
+              Create your studio
             </VesselButton>
             <VesselButton variant="ghost" size="lg" onClick={scrollToHowItWorks} data-testid="hero-cta-how">
               See How It Works
@@ -351,7 +351,7 @@ export default function LandingPage() {
               className="text-vessel-accent hover:underline focus:outline-none font-medium"
               data-testid="hero-cta-signin"
             >
-              Return to it
+              Sign in with your recovery key
             </button>
           </motion.p>
         </motion.div>
@@ -506,7 +506,7 @@ export default function LandingPage() {
             <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeInUp}>
               <VesselCard variant="interactive" className="p-8 h-full">
                 <SupportPersonIcon className="w-12 h-12 text-vessel-accent mb-6" />
-                <h3 className="font-display font-bold text-xl mb-3">Lossless Local Recording</h3>
+                <h3 className="font-display font-bold text-xl mb-3">Full-quality local recording</h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
                   Every participant records directly on their device at full quality — not a compressed video call screengrab.
                 </p>
@@ -726,18 +726,18 @@ export default function LandingPage() {
           <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">Your studio is waiting.</h2>
           <p className="text-xl text-vessel-text-secondary mb-10">Start recording in under a minute.</p>
           <VesselButton size="lg" onClick={navigateToStart} className="mb-6 w-full sm:w-auto" data-testid="footer-cta-start">
-            Create Your Free Studio &rarr;
+            Create your studio
           </VesselButton>
           <p className="text-xs text-vessel-text-muted font-medium">No credit card. No subscription. Free forever.</p>
           <p className="text-sm text-vessel-text-muted mt-8">
-            Coming back to your studio?{" "}
+            Have a studio?{" "}
             <button
               type="button"
               onClick={openBackupSignIn}
               className="text-vessel-accent hover:underline focus:outline-none font-medium"
               data-testid="footer-cta-signin"
             >
-              Step back in
+              Sign in
             </button>
           </p>
         </motion.div>
@@ -786,7 +786,7 @@ export default function LandingPage() {
         
         <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-vessel-border/30 text-center">
           <p className="text-xs text-vessel-text-muted/60">
-            Built on open protocols. Your content. Your vessel.
+            Open source. Open formats. Your recordings, delivered to you.
           </p>
         </div>
       </footer>

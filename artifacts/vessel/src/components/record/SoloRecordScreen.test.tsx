@@ -357,7 +357,7 @@ describe("SoloRecordScreen — state machine", () => {
     await waitFor(() =>
       expect(screen.getByTestId("button-record-another")).toBeTruthy(),
     );
-    expect(document.body.textContent).toMatch(/No sharing servers accepted/i);
+    expect(document.body.textContent).toMatch(/link couldn't be published/i);
     // No receipt was written because nothing was actually published.
     expect(rememberPersonalReceiptMock).not.toHaveBeenCalled();
   });

@@ -171,7 +171,7 @@ async function publishWithRetry(
       responses = (await Promise.race([
         pool.publish(remaining, event),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Publish timeout")), PUBLISH_TIMEOUT_MS),
+          setTimeout(() => reject(new Error("Publishing took too long. Try again.")), PUBLISH_TIMEOUT_MS),
         ),
       ])) as Array<{ ok: boolean; message?: string; from: string }>;
     } catch (err: any) {
@@ -226,7 +226,7 @@ export async function revokeShareLink(archiveId: string): Promise<ShareRevokeRes
   if (getPublicKey(ephemeralSecret) !== material.ephemeralPubkey) {
     throw new ShareRevokeError(
       "no_material",
-      "Stored takedown credentials look corrupted.",
+      "This device's record of the link is damaged, so it can't be taken down from here.",
     );
   }
 
@@ -252,7 +252,7 @@ export async function revokeShareLink(archiveId: string): Promise<ShareRevokeRes
   if (successCount === 0) {
     throw new ShareRevokeError(
       "publish_failed",
-      "We couldn't tell any sharing servers to take this link down. Try again in a moment.",
+      "We couldn't take this link down right now. Try again in a moment.",
     );
   }
 

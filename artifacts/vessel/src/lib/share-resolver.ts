@@ -195,7 +195,7 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
     const code = err instanceof ShareDecryptError ? err.code : "bad_format";
     throw new ShareResolveError(
       code === "missing_key" ? "missing_key" : "bad_format",
-      "This link's reading code looks malformed.",
+      "This link looks malformed.",
     );
   }
 
@@ -282,7 +282,7 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
         reject(
           new ShareResolveError(
             "not_found",
-            "We couldn't find this archive on the network.",
+            "We couldn't find this share yet.",
           ),
         ),
       );
@@ -335,9 +335,10 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
           }
         },
         error: (err: any) =>
-          settle(() =>
-            reject(new ShareResolveError("network", err?.message || "Couldn't reach the network.")),
-          ),
+          settle(() => {
+            console.warn("[share-resolver] subscription error", err);
+            reject(new ShareResolveError("network", "Couldn't reach the network."));
+          }),
         complete: () => decide(),
       });
     timer = setTimeout(() => decide(), FETCH_TIMEOUT_MS);
@@ -351,7 +352,7 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
     if (err instanceof ShareDecryptError) {
       throw new ShareResolveError(err.code, err.message);
     }
-    throw new ShareResolveError("bad_format", "This archive looks corrupted.");
+    throw new ShareResolveError("bad_format", "This share looks corrupted.");
   }
 
   // 5. Parse + validate the decrypted JSON.
@@ -359,10 +360,10 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
   try {
     body = JSON.parse(plaintext);
   } catch {
-    throw new ShareResolveError("bad_format", "This archive looks corrupted.");
+    throw new ShareResolveError("bad_format", "This share looks corrupted.");
   }
   if (!body || typeof body !== "object" || !Array.isArray(body.tracks)) {
-    throw new ShareResolveError("bad_format", "This archive looks corrupted.");
+    throw new ShareResolveError("bad_format", "This share looks corrupted.");
   }
 
   let tracks = (body.tracks as unknown[]).map(parseManifestTrack);
@@ -395,7 +396,7 @@ export { decodeShareKey };
  */
 export async function sha256HexOfBlob(blob: Blob): Promise<string> {
   if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("Web Crypto is not available in this environment");
+    throw new Error("This browser can't verify downloads.");
   }
   const buf = await blob.arrayBuffer();
   const digest = await crypto.subtle.digest("SHA-256", buf);

@@ -267,7 +267,7 @@ async function publishWithRetry(
       responses = (await Promise.race([
         pool.publish(remaining, event),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Publish timeout")), PUBLISH_TIMEOUT_MS),
+          setTimeout(() => reject(new Error("Publishing took too long. Try again.")), PUBLISH_TIMEOUT_MS),
         ),
       ])) as Array<{ ok: boolean; message?: string; from: string }>;
     } catch (err: any) {
@@ -492,7 +492,7 @@ export async function publishPersonalArchive(
   track: TrackDescriptor,
 ): Promise<PersonalArchiveResult> {
   if (!track) {
-    throw new Error("A recorded track is required to publish a personal archive");
+    throw new Error("There is no recorded track to publish yet.");
   }
 
   const createdAt = Math.floor(Date.now() / 1000);

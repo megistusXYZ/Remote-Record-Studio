@@ -387,9 +387,9 @@ export function SoloRecordScreen() {
         shareUrl: archive.shareUrl,
         receiptUrl: archive.receiptUrl,
         publishWarning: noneAccepted
-          ? "No sharing servers accepted the link. Your file is saved on this device — try recording again to retry the upload."
+          ? "The link couldn't be published. Your file is saved on this device; try recording again to retry the upload."
           : partial
-            ? "Some sharing servers didn't respond, but your link is live."
+            ? "Your link is live, though publishing didn't finish everywhere."
             : null,
       });
       setPhase("done");
@@ -457,9 +457,9 @@ export function SoloRecordScreen() {
     if (phase !== "recording") return null;
     if (incrementalSync.total === 0) return "Backing up to your storage…";
     if (incrementalSync.failed > 0) {
-      return `Backed up ${incrementalSync.saved} of ${incrementalSync.total} chunks (${incrementalSync.failed} retrying).`;
+      return `Saved ${incrementalSync.saved} of ${incrementalSync.total} parts (${incrementalSync.failed} retrying).`;
     }
-    return `Backed up ${incrementalSync.saved} of ${incrementalSync.total} chunks.`;
+    return `Saved ${incrementalSync.saved} of ${incrementalSync.total} parts.`;
   }, [phase, incrementalSync]);
 
   if (!isLoaded) return null;

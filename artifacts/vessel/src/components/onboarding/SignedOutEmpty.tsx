@@ -14,11 +14,11 @@ type SignedOutEmptyProps = {
 const COPY: Record<SignedOutEmptyProps["context"], { headline: string; body: string }> = {
   home: {
     headline: "You're not signed in.",
-    body: "Create a fresh studio to start recording, or sign in on this device with the backup key from your other studio.",
+    body: "Create a fresh studio to start recording, or sign in on this device with your recovery key.",
   },
   vault: {
     headline: "Your vault lives in your studio.",
-    body: "Sign in with the backup key from your studio to see the recordings tied to it. New here? You can create a studio in a few seconds.",
+    body: "Sign in with your recovery key to see the recordings tied to your studio. New here? You can create a studio in a few seconds.",
   },
 };
 
@@ -78,7 +78,7 @@ export function SignedOutEmpty({ context }: SignedOutEmptyProps) {
             data-testid="signed-out-cta-backup"
             className="whitespace-nowrap sm:min-w-[180px]"
           >
-            Use backup key
+            Sign in with your recovery key
           </VesselButton>
         </div>
 

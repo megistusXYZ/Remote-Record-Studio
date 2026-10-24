@@ -57,7 +57,7 @@ export default function RevokeTrackPage() {
   }, [archiveId]);
 
   const isHost = receipt?.isHost ?? false;
-  const sessionTitle = receipt?.sessionTitle || "this archive";
+  const sessionTitle = receipt?.sessionTitle || "this recording";
   const hostName = receipt?.hostName || "the host";
 
   const handleConfirm = async () => {
@@ -128,16 +128,16 @@ export default function RevokeTrackPage() {
                     <span className="text-vessel-text-primary font-medium">{hostName}</span>
                     's access to your track from{" "}
                     <span className="text-vessel-text-primary font-medium">{sessionTitle}</span>.
-                    Their multi-track archive will no longer be able to download your audio. Your
-                    own copy is not affected.
+                    Their multi-track download will no longer include your track. Your own copy
+                    is not affected.
                   </>
                 )}
               </p>
 
               <div className="p-4 rounded-lg bg-vessel-bg-surface border border-vessel-border mb-6">
                 <p className="text-xs text-vessel-text-secondary leading-relaxed">
-                  This action is signed by a key only your browser holds. Once it goes out, sharing
-                  servers are told to drop the link.
+                  Once you confirm, the link stops working everywhere. Your own copy is not
+                  affected.
                   {isHost
                     ? " You can publish a new share link later if you change your mind."
                     : " The host can ask you to record again, but they can't restore this access."}
@@ -170,7 +170,7 @@ export default function RevokeTrackPage() {
           {phase.kind === "revoking" && (
             <div className="flex flex-col items-center text-center py-12" data-testid="revoke-loading">
               <Loader2 className="w-7 h-7 text-vessel-accent animate-spin mb-3" />
-              <p className="text-sm text-vessel-text-secondary">Telling sharing servers to take it down…</p>
+              <p className="text-sm text-vessel-text-secondary">Taking it down…</p>
             </div>
           )}
 
@@ -185,14 +185,12 @@ export default function RevokeTrackPage() {
               <p className="text-sm text-vessel-text-secondary leading-relaxed mb-6">
                 {phase.result.publish.successCount === phase.result.publish.totalCount ? (
                   <>
-                    Every sharing server we publish to confirmed the takedown. Anyone opening this
-                    link from now on will see a "taken down" page.
+                    Done. Anyone opening this link from now on will see that it was taken down.
                   </>
                 ) : (
                   <>
-                    {phase.result.publish.successCount} of {phase.result.publish.totalCount}{" "}
-                    sharing servers confirmed the takedown. The rest may catch up shortly. Vessel
-                    will treat this link as revoked regardless.
+                    Taken down. Some servers may take a moment to catch up; Vessel treats the link
+                    as revoked now.
                   </>
                 )}
               </p>

@@ -197,7 +197,7 @@ export default function ReceiptPage() {
           >
             <div className="mb-8" data-testid="receipt-header">
               <p className="text-xs font-mono-vessel text-vessel-accent uppercase tracking-wider mb-2">
-                {isHost ? "Your archive" : "Your personal track"}
+                Your receipt
               </p>
               <h1
                 className="font-display text-3xl font-bold tracking-tight mb-3"
@@ -276,9 +276,9 @@ export default function ReceiptPage() {
                 <li className="flex items-start gap-3">
                   <Server className="w-4 h-4 text-vessel-text-muted mt-0.5 shrink-0" />
                   <span>
-                    {isHost ? "Your" : "Your"} audio is stored on{" "}
-                    <span className="text-vessel-text-primary font-medium">your own storage</span>
-                    , not Vessel's. We never see the file.
+                    Your recording is stored on{" "}
+                    <span className="text-vessel-text-primary font-medium">a storage server</span>
+                    , not on Vessel's server. Vessel never sees the file.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">
@@ -298,8 +298,7 @@ export default function ReceiptPage() {
                 <li className="flex items-start gap-3">
                   <Lock className="w-4 h-4 text-vessel-text-muted mt-0.5 shrink-0" />
                   <span>
-                    Only your browser can take this link down — the keys to revoke it never
-                    left this device.
+                    Only this device can take this link down.
                   </span>
                 </li>
               </ul>
@@ -355,7 +354,7 @@ function ReceiptErrorBlock({
   hostName: string;
   isHost: boolean;
 }) {
-  // Special case: if the user themselves revoked this archive from this
+  // Special case: if the user themselves revoked this share from this
   // device, render a confirmation tone rather than a generic error.
   const friendlyRevoke = code === "revoked" && wasLocallyRevoked;
   const icon =
@@ -371,9 +370,9 @@ function ReceiptErrorBlock({
       <FileWarning className="w-6 h-6" />
     );
   const title = friendlyRevoke
-    ? "You took this archive down"
+    ? "You took this share down"
     : code === "revoked"
-    ? "This archive has been taken down"
+    ? "This share has been taken down"
     : code === "missing_key"
     ? "This receipt link can't be opened"
     : code === "wrong_key"
@@ -386,17 +385,17 @@ function ReceiptErrorBlock({
     ? "Couldn't read this receipt"
     : "Connection trouble";
   const body = friendlyRevoke
-    ? `${sessionTitle} — ${
+    ? `${sessionTitle}: ${
         isHost ? "your share link" : `${hostName}'s access to your track`
-      } is no longer active. The file is gone from sharing servers.`
+      } is no longer active. The link no longer works.`
     : code === "revoked"
-    ? "This archive is no longer available. Whoever owns this track took the link down."
+    ? "This share is no longer available. Whoever owns this track took the link down."
     : code === "missing_key"
     ? "This link is missing the part that lets you read it. Make sure you copied the whole link, including everything after the # sign."
     : code === "wrong_key"
-    ? "The reading code in this link doesn't match this receipt. The link may have been edited or truncated."
+    ? "This link doesn't match this receipt."
     : code === "not_found"
-    ? "We couldn't find this receipt on any sharing server. It may have been removed, or it may not have finished publishing yet."
+    ? "We couldn't find this receipt. It may have been removed, or it may not have finished publishing yet."
     : code === "bad_pointer"
     ? "This receipt link looks broken or incomplete."
     : code === "bad_format"
@@ -526,8 +525,8 @@ function TrackDownloadCard({ track }: { track: RecipientManifest["tracks"][numbe
           <div className="text-xs leading-relaxed">
             <div className="font-bold mb-1">This file doesn't match what was published</div>
             <p className="opacity-90">
-              The bytes from your storage server don't match the fingerprint in your signed
-              archive. The file was not saved.
+              The file on the storage server doesn't match what was published, so it was
+              not saved.
             </p>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useIdentity } from "../hooks/use-identity";
 import { Layout } from "../components/layout";
 import { LobbyScreen } from "../components/lobby/LobbyScreen";
 import { SignedOutEmpty } from "../components/onboarding/SignedOutEmpty";
+import { RecoveryKeyPrompt } from "../components/account/RecoveryKeyPrompt";
 import { createSession, joinSession, extractInviteCodeFromInput } from "../lib/session";
 import { useToast } from "../hooks/use-toast";
 
@@ -63,6 +64,7 @@ export default function Home() {
 
   return (
     <Layout>
+      <RecoveryKeyPrompt className="mb-6" />
       <LobbyScreen
         state="default"
         onCreateSession={handleCreate}
