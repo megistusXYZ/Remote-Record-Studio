@@ -41,11 +41,17 @@
  * STUN / TURN
  * -----------
  * Default ICE config: a couple of public STUN servers (Google +
- * Cloudflare). Self-hosters can override via the `iceServers` constructor
- * option or the `VITE_VESSEL_STUN_URLS` env var (comma-separated). TURN
- * is intentionally out of scope for v1 — peers behind symmetric NATs will
- * see the same "video isn't connecting" state surfaced elsewhere in the
- * UI; a self-hostable TURN story is a follow-up task.
+ * Cloudflare), overridable via the `iceServers` constructor option (the
+ * live-transport hook passes the list from `GET /api/turn`, which adds
+ * short-lived TURN credentials when the operator runs a relay) or the
+ * `VITE_VESSEL_STUN_URLS` env var (comma-separated).
+ *
+ * Recovery
+ * --------
+ * A peer connection that reports `failed` gets an ICE restart right away;
+ * one that reports `disconnected` gets a short grace period first. Restarts
+ * back off and stop after a few attempts, at which point a `disconnected`
+ * event with a reason is emitted so the UI can say so.
  *
  * UI strings
  * ----------
@@ -67,6 +73,14 @@ const DEFAULT_STUN_URLS = [
   "stun:stun.l.google.com:19302",
   "stun:stun.cloudflare.com:3478",
 ];
+
+/** ICE restarts per peer before we give up and tell the UI. */
+export const MAX_ICE_RESTARTS = 5;
+/** How long a `disconnected` state may last before we restart ICE. */
+export const DISCONNECT_GRACE_MS = 3000;
+/** Base of the exponential backoff between restarts. */
+const RESTART_BACKOFF_BASE_MS = 1000;
+const RESTART_BACKOFF_MAX_MS = 8000;
 
 /** Read STUN urls from the build-time env var if present, else fall back
  *  to the public defaults. Comma-separated list. */
@@ -148,6 +162,9 @@ type PeerState = {
   /** Perfect negotiation flags. */
   makingOffer: boolean;
   ignoreOffer: boolean;
+  /** ICE restarts attempted since the last good connection. */
+  restartAttempts: number;
+  restartTimer: ReturnType<typeof setTimeout> | null;
 };
 
 export type WebRtcMeshConfig = {
@@ -157,6 +174,10 @@ export type WebRtcMeshConfig = {
   /** Override STUN servers. Default: a couple of public STUN servers,
    *  optionally overridden by `VITE_VESSEL_STUN_URLS`. */
   iceServers?: RTCIceServer[];
+  /** Returns the set of pubkeys allowed to signal us (the session
+   *  roster), or null to accept anyone whose signature verified. Signals
+   *  from outside the set are dropped before a connection is created. */
+  acceptedPeers?: () => ReadonlySet<string> | null;
 };
 
 export class WebRtcMesh {
@@ -281,6 +302,8 @@ export class WebRtcMesh {
       reportedByTrackId: new Map(),
       makingOffer: false,
       ignoreOffer: false,
+      restartAttempts: 0,
+      restartTimer: null,
     };
     this.peers.set(pubkey, peer);
     this.wirePeer(peer);
@@ -348,10 +371,21 @@ export class WebRtcMesh {
       const s = pc.iceConnectionState;
       if (s === "connected" || s === "completed") {
         peer.state = "connected";
+        peer.restartAttempts = 0;
+        this.clearRestart(peer);
       } else if (s === "closed") {
         peer.state = "closed";
-      } else if (s === "failed" || s === "disconnected") {
-        if (peer.state !== "closed") peer.state = "connecting";
+        this.clearRestart(peer);
+      } else if (s === "failed") {
+        if (peer.state !== "closed") {
+          peer.state = "connecting";
+          this.scheduleIceRestart(peer, 0);
+        }
+      } else if (s === "disconnected") {
+        if (peer.state !== "closed") {
+          peer.state = "connecting";
+          this.scheduleIceRestart(peer, DISCONNECT_GRACE_MS);
+        }
       }
       this.recomputeOverallConnected();
     };
@@ -367,6 +401,74 @@ export class WebRtcMesh {
       peer.meta = ev.channel;
       this.wireMeta(peer);
     };
+  }
+
+  private clearRestart(peer: PeerState): void {
+    if (peer.restartTimer) {
+      clearTimeout(peer.restartTimer);
+      peer.restartTimer = null;
+    }
+  }
+
+  /** Restart ICE for one peer after `delayMs` plus exponential backoff,
+   *  unless it reconnected on its own meanwhile. Gives up after
+   *  {@link MAX_ICE_RESTARTS} and reports it. */
+  private scheduleIceRestart(peer: PeerState, delayMs: number): void {
+    if (this.closed || peer.state === "closed") return;
+    this.clearRestart(peer);
+    const backoff = Math.min(
+      RESTART_BACKOFF_MAX_MS,
+      RESTART_BACKOFF_BASE_MS * 2 ** peer.restartAttempts,
+    );
+    peer.restartTimer = setTimeout(() => {
+      peer.restartTimer = null;
+      if (this.closed || peer.state === "closed") return;
+      const s = peer.pc.iceConnectionState;
+      if (s === "connected" || s === "completed") return;
+      if (peer.restartAttempts >= MAX_ICE_RESTARTS) {
+        this.emit({
+          type: "disconnected",
+          error: "Live video lost the connection to a participant.",
+        });
+        return;
+      }
+      peer.restartAttempts += 1;
+      this.restartIce(peer);
+      // If this attempt does not reconnect either, try again later.
+      this.scheduleIceRestart(peer, DISCONNECT_GRACE_MS);
+    }, delayMs + backoff);
+  }
+
+  /** `restartIce()` queues a fresh ICE offer through `onnegotiationneeded`,
+   *  so the existing perfect-negotiation path handles the exchange. Older
+   *  engines without it get an explicit restart offer from the impolite side. */
+  private restartIce(peer: PeerState): void {
+    const pc = peer.pc as RTCPeerConnection & { restartIce?: () => void };
+    try {
+      if (typeof pc.restartIce === "function") {
+        pc.restartIce();
+        return;
+      }
+    } catch (err) {
+      console.warn("[webrtc-mesh] restartIce failed", err);
+    }
+    if (peer.polite) return;
+    void (async () => {
+      try {
+        peer.makingOffer = true;
+        peer.state = "offering";
+        const offer = await pc.createOffer({ iceRestart: true });
+        await pc.setLocalDescription(offer);
+        await this.cfg.signaling.send(peer.pubkey, {
+          type: "offer",
+          sdp: pc.localDescription?.sdp ?? offer.sdp ?? "",
+        });
+      } catch (err) {
+        console.warn("[webrtc-mesh] ICE restart offer failed", err);
+      } finally {
+        peer.makingOffer = false;
+      }
+    })();
   }
 
   private wireMeta(peer: PeerState): void {
@@ -462,6 +564,7 @@ export class WebRtcMesh {
     const peer = this.peers.get(pubkey);
     if (!peer) return;
     peer.state = "closed";
+    this.clearRestart(peer);
     try {
       peer.meta?.close();
     } catch {
@@ -496,6 +599,10 @@ export class WebRtcMesh {
   ): Promise<void> {
     if (this.closed) return;
     if (from === this.cfg.selfPubkey) return;
+    // Only people on the session roster may open a connection to us. A
+    // valid signature proves a key, not membership.
+    const accepted = this.cfg.acceptedPeers?.();
+    if (accepted && !accepted.has(from)) return;
     if (!this.wantedPeers.has(from)) {
       // Lazily accept the connection. The remote may have noticed us
       // ahead of our own roster update — the polite/impolite split
