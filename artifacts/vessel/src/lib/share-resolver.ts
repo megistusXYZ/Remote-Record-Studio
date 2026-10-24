@@ -1,4 +1,5 @@
 import type { Event } from "nostr-tools/pure";
+import { rememberTrackKey } from "./track-keys";
 import { deploymentRelays } from "./runtime-config";
 import { sha256HexOfBlob as streamingSha256HexOfBlob } from "./streaming-hash";
 import { getRelayPool } from "./relay-pool";
@@ -22,6 +23,8 @@ import {
 export type RecipientStream = {
   url: string | null;
   hash: string | null;
+  /** Decrypts the stored file (v6+ manifests); null for older unencrypted files. */
+  key: string | null;
   sizeBytes: number;
   mimeType: string;
 };
@@ -37,6 +40,8 @@ export type RecipientTrack = {
   mimeType: string;
   url: string | null;
   hash: string | null;
+  /** Decrypts the stored combined file (v6+); null when unencrypted. */
+  key: string | null;
   /** Audio-only sibling blob (v≥2 manifests). Null when not present. */
   audio: RecipientStream | null;
   /** Video-only sibling blob (v≥3 manifests). Null when not present (legacy
@@ -79,6 +84,7 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     ? {
         url: rawAudio.url ? String(rawAudio.url) : null,
         hash: rawAudio.hash ? String(rawAudio.hash) : null,
+        key: typeof rawAudio.key === "string" ? rawAudio.key : null,
         sizeBytes: Number(rawAudio.sizeBytes ?? 0),
         mimeType: String(rawAudio.mimeType ?? "audio/webm"),
       }
@@ -88,6 +94,7 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     ? {
         url: rawVideo.url ? String(rawVideo.url) : null,
         hash: rawVideo.hash ? String(rawVideo.hash) : null,
+        key: typeof rawVideo.key === "string" ? rawVideo.key : null,
         sizeBytes: Number(rawVideo.sizeBytes ?? 0),
         mimeType: String(rawVideo.mimeType ?? "video/webm"),
       }
@@ -100,6 +107,7 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     ? {
         url: rawScreen.url ? String(rawScreen.url) : null,
         hash: rawScreen.hash ? String(rawScreen.hash) : null,
+        key: typeof rawScreen.key === "string" ? rawScreen.key : null,
         sizeBytes: Number(rawScreen.sizeBytes ?? 0),
         mimeType: String(rawScreen.mimeType ?? "video/webm"),
       }
@@ -122,6 +130,7 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     mimeType: String(t.mimeType ?? "application/octet-stream"),
     url: t.url ? String(t.url) : null,
     hash: t.hash ? String(t.hash) : null,
+    key: typeof t.key === "string" ? t.key : null,
     audio,
     video,
     screen,
@@ -371,6 +380,12 @@ export async function resolveShareLink(input: ResolveShareInput): Promise<Recipi
   }
 
   let tracks = (body.tracks as unknown[]).map(parseManifestTrack);
+  // Keep the keys on this device so a host can open guests' tracks later
+  // from the vault without the link.
+  for (const t of tracks) {
+    rememberTrackKey(t.hash, t.key);
+    for (const s of [t.audio, t.video, t.screen]) if (s) rememberTrackKey(s.hash, s.key);
+  }
 
   if (trackId) {
     tracks = tracks.filter((t) => t.recordingId === trackId);
