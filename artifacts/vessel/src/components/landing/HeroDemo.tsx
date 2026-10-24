@@ -25,8 +25,9 @@ import { RecordingDot } from "../vessel-ui/RecordingDot";
  *          saved on their own device, nothing uploaded to Vessel.
  *
  * Media: each tile shows `public/hero/<host|guest>.jpg` as a still and, on
- * desktop with motion allowed and no data saver, plays the matching
- * `.webm`/`.mp4` loop over it. Phones get the still; the ring, meters and
+ * desktop with motion allowed and no data saver, plays two muted loops over
+ * it: `<name>-talking.mp4` while that person holds the speaking ring and
+ * `<name>-listening.mp4` otherwise, crossfading as the ring moves. Phones get the still; the ring, meters and
  * clock keep the demo alive. With no files present the tiles fall back to
  * the avatar the real room shows for a person without a camera. Specs and
  * the image prompts live in `docs/HERO-MEDIA.md`.
@@ -42,7 +43,8 @@ type Person = {
   role: "Host" | "Guest";
   initials: string;
   hue: number;
-  /** Path under public/ without extension: .jpg still, .webm/.mp4 loop. */
+  /** Path under public/ without extension: .jpg still, -talking.mp4 and
+   *  -listening.mp4 loops. */
   media: string;
 };
 
@@ -318,33 +320,32 @@ function DemoTile({
         />
       )}
 
-      {/* Loop over it: desktop, motion allowed, no data saver. */}
-      {cameraOn && loopsAllowed && !clipMissing && (
-        <video
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-            showClip ? "opacity-100" : "opacity-0"
-          }`}
-          muted
-          loop
-          playsInline
-          autoPlay
-          preload="metadata"
-          onCanPlay={() => setClipReady(true)}
-          onError={() => setClipMissing(true)}
-          aria-hidden="true"
-        >
-          <source
-            src={`${base}.webm`}
-            type="video/webm"
-            onError={() => undefined}
-          />
-          <source
-            src={`${base}.mp4`}
-            type="video/mp4"
+      {/* Loops over it: desktop, motion allowed, no data saver. Both play
+          all the time so the swap is instant; the speaker's clip shows. */}
+      {cameraOn &&
+        loopsAllowed &&
+        !clipMissing &&
+        (["listening", "talking"] as const).map((take) => (
+          <video
+            key={take}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+              showClip && (take === "talking") === speaking
+                ? "opacity-100"
+                : "opacity-0"
+            }`}
+            src={`${base}-${take}.mp4`}
+            muted
+            loop
+            playsInline
+            autoPlay
+            preload="auto"
+            onCanPlay={
+              take === "listening" ? () => setClipReady(true) : undefined
+            }
             onError={() => setClipMissing(true)}
+            aria-hidden="true"
           />
-        </video>
-      )}
+        ))}
 
       {/* No media: the tile exactly as the room shows a person without a camera. */}
       <AnimatePresence initial={false}>
