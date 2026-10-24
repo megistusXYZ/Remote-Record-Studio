@@ -102,6 +102,10 @@ export type UseLocalStreamArgs = {
   micId: string | null;
   cameraEnabled: boolean;
   micEnabled: boolean;
+  /** True while a take is recording. A recorder stops if its stream gains
+   *  or loses a track, so then "camera off" only blanks the picture; the
+   *  camera is released as soon as this goes false. */
+  keepTracks?: boolean;
 };
 
 export type UseLocalStreamResult = {
@@ -121,6 +125,7 @@ export function useLocalStream({
   micId,
   cameraEnabled,
   micEnabled,
+  keepTracks = false,
 }: UseLocalStreamArgs): UseLocalStreamResult {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -215,12 +220,54 @@ export function useLocalStream({
     });
   }, [stream, micEnabled]);
 
-  useEffect(() => {
-    if (!stream) return;
-    stream.getVideoTracks().forEach((t) => {
-      t.enabled = cameraEnabled;
-    });
-  }, [stream, cameraEnabled]);
+  // Camera off releases the device (the light goes out) unless a take is
+  // recording; camera on opens it again. Either way the microphone track
+  // carries over into a fresh stream object so the preview republishes.
+  useEffect((): (() => void) | undefined => {
+    if (!stream) return undefined;
+    if (cameraEnabled) {
+      const live = stream.getVideoTracks().filter((t) => t.readyState === "live");
+      live.forEach((t) => {
+        t.enabled = true;
+      });
+      // Released earlier and nothing is recording: open the camera again.
+      // (Never during a take; a recorder stops when its tracks change.)
+      if (live.length > 0 || keepTracks || videoUnavailableReason) return undefined;
+      let cancelled = false;
+      navigator.mediaDevices
+        ?.getUserMedia({ video: cameraId ? { deviceId: { exact: cameraId }, width: 1280, height: 720 } : { width: 1280, height: 720 } })
+        .then((s) => {
+          const track = s.getVideoTracks()[0];
+          if (!track) return;
+          if (cancelled) {
+            track.stop();
+            return;
+          }
+          // A new stream object, so the live preview republishes; the
+          // microphone track carries over untouched.
+          const next = new MediaStream([...stream.getTracks(), track]);
+          currentStreamRef.current = next;
+          setStream(next);
+        })
+        .catch((err) => console.warn("Couldn't turn the camera back on", err));
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (keepTracks) {
+      stream.getVideoTracks().forEach((t) => {
+        t.enabled = false;
+      });
+      return undefined;
+    }
+    const video = stream.getVideoTracks();
+    if (video.length === 0) return undefined;
+    video.forEach((t) => t.stop());
+    const next = new MediaStream(stream.getAudioTracks());
+    currentStreamRef.current = next;
+    setStream(next);
+    return undefined;
+  }, [stream, cameraEnabled, keepTracks, cameraId, videoUnavailableReason]);
 
   useEffect(() => {
     return () => {
