@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { VesselBadge } from '../vessel-ui/VesselBadge';
+import { Eyebrow } from '../vessel-ui/Eyebrow';
 import { SketchCircle } from '../icons/SketchCircle';
 
 const fadeInUp = {
@@ -41,9 +41,7 @@ export function WaitingForGuestsEmpty() {
       </motion.div>
 
       <motion.div variants={fadeInUp}>
-        <VesselBadge variant="accent" className="mb-4">
-          Doors are open
-        </VesselBadge>
+        <Eyebrow className="mb-4">Doors are open</Eyebrow>
       </motion.div>
 
       <motion.h4
