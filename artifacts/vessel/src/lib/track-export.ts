@@ -599,6 +599,7 @@ ${aligned ? "The WAV files are padded with silence at the start so they line up:
 Reaper: open "${title}.RPP". Every speaker is a named track, placed on the timeline, with your markers.
 Audacity: import the WAVs, then File > Import > Labels > markers-audacity.txt.
 Anything else: markers.csv lists every marker with its time.
+If you made a transcript, transcript.srt and transcript.vtt are captions on the same timeline, and transcript.txt reads like show notes.
 
 tracks.json describes each file and its start time on a shared clock.
 
@@ -616,6 +617,8 @@ export async function downloadEditorBundle(input: {
   markers: Array<{ atServerMs: number; label: string }>;
   title: string;
   zipFilename: string;
+  /** A finished transcript to include as SRT, VTT and text. */
+  transcript?: Array<{ speaker: string; startMs: number; endMs: number; text: string }> | null;
 }): Promise<EditorBundleResult> {
   const { alignTracks, timelineOriginMs, padWavStart, buildReaperProject, buildAudacityLabels, buildMarkersCsv } =
     await import("./editor-export");
@@ -656,6 +659,14 @@ export async function downloadEditorBundle(input: {
     { path: "markers.csv", text: buildMarkersCsv(markers) },
     { path: "README.txt", text: EDITOR_README(input.title || "Vessel session", alignedCount === input.sources.length) },
   ];
+  if (input.transcript && input.transcript.length > 0) {
+    const { toSrt, toVtt, toText } = await import("./transcript");
+    extras.push(
+      { path: "transcript.srt", text: toSrt(input.transcript) },
+      { path: "transcript.vtt", text: toVtt(input.transcript) },
+      { path: "transcript.txt", text: toText(input.transcript, input.title || "Vessel session") },
+    );
+  }
 
   const picker = getSaveFilePicker();
   let writable: WritableStream<Uint8Array> | null = null;
