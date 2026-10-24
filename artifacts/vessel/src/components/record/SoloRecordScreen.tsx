@@ -82,6 +82,9 @@ export function SoloRecordScreen() {
     micId: selectedMicId,
     cameraEnabled,
     micEnabled,
+    // During a take the camera only blanks (a recorder stops if its tracks
+    // change); outside one, camera off frees the device and its light.
+    keepTracks: recording.isRecording,
   });
 
   // Background effect state. Mode is "none" by default (zero cost). When the

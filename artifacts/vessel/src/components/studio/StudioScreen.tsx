@@ -146,6 +146,9 @@ export function StudioScreen({
     micId: selectedMicId,
     cameraEnabled,
     micEnabled,
+    // During a take the camera only blanks (a recorder stops if its tracks
+    // change); outside one, camera off frees the device and its light.
+    keepTracks: recording.isRecording,
   });
 
   // Screen-share capture lifecycle. Surfaces a friendly toast on failure;
