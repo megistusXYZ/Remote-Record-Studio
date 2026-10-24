@@ -1,7 +1,7 @@
 /**
  * Per-session encryption for in-call signaling.
  *
- * Presence, chat, reactions, transcript fragments and WebRTC offers travel
+ * Presence, chat, reactions and WebRTC offers travel
  * through public relays. Until now their contents were plain JSON, so any
  * relay (or anyone watching one) could read names, messages and IP
  * addresses. Every participant already shares one secret, the invite code,
