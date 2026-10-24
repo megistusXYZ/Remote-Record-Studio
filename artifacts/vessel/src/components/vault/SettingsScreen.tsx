@@ -33,6 +33,7 @@ import { StorageServerList } from "./StorageServerList";
 import { EndpointList } from "./EndpointList";
 import { MoqClient } from "../../lib/moq";
 import { notifyRelayUrlChanged } from "../../hooks/use-live-transport";
+import { deploymentMoqRelayUrl } from "../../lib/runtime-config";
 import observationCabinAvif from "@/assets/illustrations/observation-cabin.avif";
 import observationCabinWebp from "@/assets/illustrations/observation-cabin.webp";
 import { VaultSidebar } from "./VaultSidebar";
@@ -43,7 +44,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 // Empty by default: the live preview runs over direct connections unless
 // the operator configured a relay of their own.
-const DEFAULT_RELAY_URL = (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) || "";
+const DEFAULT_RELAY_URL = deploymentMoqRelayUrl();
 
 export type SettingsScreenProps = {
   pubkey: string;

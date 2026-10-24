@@ -1,6 +1,7 @@
 import type { Event } from "nostr-tools/pure";
 import { getRelayPool } from "./relay-pool";
 import { getPublishRelays } from "./relay-config";
+import { deploymentStorageServer } from "./runtime-config";
 import type { VesselIdentity } from "./identity";
 
 /**
@@ -29,7 +30,9 @@ import type { VesselIdentity } from "./identity";
 export const STORAGE_URL_KEY = "vessel_storage_url";
 /** New plural slot — JSON-encoded ordered string[]. Primary first, then mirrors. */
 export const STORAGE_URLS_KEY = "vessel_storage_urls";
-export const DEFAULT_STORAGE_URL = "https://blossom.band";
+/** The deployment's own storage server when the operator set one, else a
+ *  public default. */
+export const DEFAULT_STORAGE_URL = deploymentStorageServer() ?? "https://blossom.band";
 const LEGACY_PLACEHOLDER = "https://storage.vessel.local";
 
 const KIND_USER_SERVER_LIST = 10063;
