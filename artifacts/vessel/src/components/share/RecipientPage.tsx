@@ -15,6 +15,7 @@ import {
 import { motion } from "framer-motion";
 import type { RecipientManifest, ShareResolveErrorCode } from "../../lib/share-resolver";
 import { isSafeDownloadUrl, verifyTrackHash } from "../../lib/share-resolver";
+import { openStoredTrack } from "../../lib/track-keys";
 import {
   downloadToBlob,
   saveBlob,
@@ -161,8 +162,10 @@ function TrackRow({ track }: TrackRowProps) {
         safeSetState({ status: "error", message: verification.message });
         return;
       }
-      // status === "ok" or "skipped" (no expected hash in the manifest)
-      saveBlob(blob, fileName);
+      // status === "ok" or "skipped" (no expected hash in the manifest).
+      // The stored file is encrypted; open it with the key from the manifest.
+      const playable = await openStoredTrack(blob, { key: track.key, hash: track.hash, type: track.mimeType });
+      saveBlob(playable, fileName);
       safeSetState({ status: "done" });
     } catch (err) {
       if (err instanceof DownloadCancelled) {

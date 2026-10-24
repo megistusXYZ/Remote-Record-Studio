@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { openStoredTrack } from "../lib/track-keys";
 import { useRoute, Link } from "wouter";
 import { format } from "date-fns";
 import {
@@ -466,7 +467,8 @@ function TrackDownloadCard({ track }: { track: RecipientManifest["tracks"][numbe
         setState({ status: "error", message: verification.message });
         return;
       }
-      saveBlob(blob, suggestedFilename(track));
+      const playable = await openStoredTrack(blob, { key: track.key, hash: track.hash, type: track.mimeType });
+      saveBlob(playable, suggestedFilename(track));
       setState({ status: "done" });
     } catch (err) {
       if (err instanceof DownloadCancelled) {
