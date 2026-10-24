@@ -57,9 +57,9 @@ export default defineConfig({
       formatter: "prettier",
       override: {
         zod: {
-          // The workspace is on zod 3. Without this, orval guesses zod 4
-          // when it cannot read the installed version.
-          version: 3,
+          // Matches the workspace's zod. Without this, orval guesses the
+          // version and can emit the wrong syntax.
+          version: 4,
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],
