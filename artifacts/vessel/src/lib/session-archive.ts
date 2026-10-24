@@ -3,6 +3,7 @@ import { generateSecretKey, getPublicKey, finalizeEvent } from "nostr-tools/pure
 import type { VesselIdentity } from "./identity";
 import { getRelayPool } from "./relay-pool";
 import { getPublishRelays } from "./relay-config";
+import { deploymentRelays } from "./runtime-config";
 import {
   encryptManifestContent,
   encodeShareKey,
@@ -119,11 +120,7 @@ const PUBLISH_RETRY_DELAY_MS = 800;
 
 function getConfiguredRelays(identity?: VesselIdentity | null): string[] {
   // Deployment-level override always wins. Set by ops, not the user.
-  const raw = (import.meta.env.VITE_NOSTR_RELAYS as string | undefined) || "";
-  const envList = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.startsWith("ws://") || s.startsWith("wss://"));
+  const envList = deploymentRelays();
   if (envList.length > 0) return envList;
   // Otherwise: the participant's own configured publish endpoints. When no
   // identity is supplied (e.g. anonymous publish), this falls back to the
