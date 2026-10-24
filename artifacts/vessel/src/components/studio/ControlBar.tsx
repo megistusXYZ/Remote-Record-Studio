@@ -1,4 +1,4 @@
-import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff, UserPlus } from "lucide-react";
+import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff, UserPlus, Flag } from "lucide-react";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -39,6 +39,9 @@ export type ControlBarProps = {
   /** Local raise-hand state (host AND guests). */
   handRaised?: boolean;
   onToggleHand?: () => void;
+  /** Drop a marker on the take (host, while recording). Also bound to M. */
+  onAddMarker?: () => void;
+  markerCount?: number;
   /** Screen-share controls. The button is hidden entirely when
    *  `screenShareSupported` is false (mobile / unsupported browsers).
    *  When omitted, the button is also hidden — keeps the control bar
@@ -85,6 +88,8 @@ export function ControlBar({
   raisedHandsCount = 0,
   handRaised = false,
   onToggleHand,
+  onAddMarker,
+  markerCount = 0,
   screenShareSupported = false,
   isScreenSharing = false,
   onToggleScreenShare,
@@ -205,6 +210,28 @@ export function ControlBar({
                 {isRecording ? `Stop · ${formatSeconds(recordingSeconds)}` : "Record"}
               </div>
             </div>
+          )}
+
+          {isHost && isRecording && onAddMarker && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="button-add-marker"
+                  onClick={onAddMarker}
+                  aria-label="Mark this moment"
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent"
+                >
+                  <Flag className="w-5 h-5 sm:w-6 sm:h-6" />
+                  {markerCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-vessel-accent text-[10px] font-bold text-vessel-bg-base flex items-center justify-center">
+                      {markerCount}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Mark this moment (M)</TooltipContent>
+            </Tooltip>
           )}
 
           <Tooltip>
