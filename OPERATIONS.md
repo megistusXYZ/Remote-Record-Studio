@@ -122,6 +122,37 @@ often as it likes without tripping anything.
 To find observed-but-not-blocked traffic in the logs, search for the
 string `rate-limit observed (would-block)`.
 
+## 4a. TURN for the live preview
+
+The live preview is a peer-to-peer WebRTC mesh. Peers behind strict NATs
+(office networks, some mobile carriers) cannot connect without a TURN
+relay. Run [coturn](https://github.com/coturn/coturn) and let the API hand
+out short-lived credentials:
+
+```
+# turnserver.conf (minimal)
+listening-port=3478
+tls-listening-port=5349
+realm=your-domain.example
+use-auth-secret
+static-auth-secret=<same value as TURN_SHARED_SECRET>
+fingerprint
+no-multicast-peers
+```
+
+API environment:
+
+| Variable             | Purpose                                                                 |
+| -------------------- | ----------------------------------------------------------------------- |
+| `TURN_URLS`          | Comma-separated `turn:`/`turns:` URLs the browser should use.            |
+| `TURN_SHARED_SECRET` | coturn's `static-auth-secret`. Never ships to the browser.               |
+| `TURN_TTL_SECONDS`   | Credential lifetime, default 43200 (12 hours).                          |
+| `STUN_URLS`          | Optional override of the public STUN defaults.                           |
+
+`GET /api/turn` (signed) returns the ICE server list with a credential tied
+to the caller. Open UDP 3478 and TCP 5349 (plus the relay port range) on the
+host. Without TURN configured the endpoint returns STUN only.
+
 ## 5. Verify the security posture (curl recipes)
 
 Run these against your deployed origin (or `localhost` in dev) after

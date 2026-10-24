@@ -2,41 +2,68 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
 /**
- * Mid-call transport-swap regression test for `useLiveTransport`.
+ * Transport-selection and mid-call transport-swap tests for
+ * `useLiveTransport`.
  *
  * The hook drives one of two underlying transports for the studio's
- * live A/V plane, picked by `selectTransport()` from a roster of peer
- * capabilities:
+ * live A/V plane, picked by `selectTransport()` from the roster of peer
+ * capabilities plus the state of the (optional) relay:
  *
- *   - "moq":    the high-capacity Chromium-only path.
- *   - "webrtc": the cross-browser peer-to-peer mesh fallback.
+ *   - "webrtc": the cross-browser peer-to-peer mesh. The default.
+ *   - "moq":    the higher-capacity Chromium-only path through a relay
+ *               the operator configured, used only once that relay has
+ *               answered a probe.
  *
- * The contract this suite protects is that switching between them
- * mid-call is clean: when a non-Chromium peer joins a Chromium-only
- * room the MoQ client must shut down before the WebRTC mesh starts,
- * and when that peer leaves we must flip back the same way. Either
- * leak (an old client kept open after the swap, or a new one created
- * while the old one is still alive) would silently double the
- * upstream bandwidth and risk a connection storm against the relay.
+ * What this suite protects:
+ *
+ *   1. No relay configured ⇒ the mesh, always, with no probe traffic.
+ *   2. A configured relay is probed first; nothing starts while the
+ *      probe is in flight, so a room never stands up the mesh only to
+ *      swap a second later.
+ *   3. Switching between the transports mid-call is clean: the old
+ *      client shuts down before the new one starts. Either leak would
+ *      silently double the upstream bandwidth.
+ *   4. A relay that refuses or drops the connection flips the room to
+ *      the mesh for the rest of the session.
+ *   5. The mesh gets the API's ICE servers (STUN + short-lived TURN) and
+ *      the session roster as its accepted-peer gate; a failed ICE
+ *      lookup still yields a mesh on the built-in defaults.
  *
  * Both transports are mocked at the module boundary because real
- * `RTCPeerConnection` / `WebTransport` machinery is browser-only and
- * stateful enough that exercising it here would test the browser, not
- * the hook. The tests assert on instance creation/teardown — the
+ * `RTCPeerConnection` / `WebTransport` machinery is browser-only. The
+ * tests assert on instance creation/teardown and configuration — the
  * lifecycle the hook is responsible for — not on the transports'
- * internal behaviour, which is covered by their own unit suites
- * (`webrtc-mesh.test.ts`).
+ * internals, which have their own suites (`webrtc-mesh.test.ts`).
  */
 
 // ─── Hoisted mock state ────────────────────────────────────────────────
-// `vi.hoisted` runs BEFORE any `vi.mock` factories, so the mock factories
-// below can safely reference these closure-captured arrays/classes. We
-// can't use plain top-level `let` for this — `vi.mock` is hoisted above
-// imports, which would put it above the bindings.
 const hoisted = vi.hoisted(() => {
   type AnyEvent = Record<string, unknown>;
 
+  const state = {
+    /** Make the next MoqClient.connect() reject. */
+    failNextConnect: false,
+    /** Probe verdict for the configured relay. */
+    probeOk: true,
+    /** When set, probes wait on it (lets a test hold the probe open). */
+    probeGate: null as Promise<void> | null,
+  };
+
+  const probe = vi.fn(
+    async (
+      _url: string,
+    ): Promise<
+      { ok: true; latencyMs: number } | { ok: false; reason: string }
+    > => {
+      if (state.probeGate) await state.probeGate;
+      return state.probeOk
+        ? { ok: true, latencyMs: 12 }
+        : { ok: false, reason: "Couldn't reach this server." };
+    },
+  );
+
   class MockMoqClient {
+    static probe = probe;
     listeners = new Set<(ev: AnyEvent) => void>();
     closed = false;
     constructor(
@@ -49,11 +76,14 @@ const hoisted = vi.hoisted(() => {
       this.listeners.add(l);
       return () => this.listeners.delete(l);
     }
-    // Intentionally a no-op: the transport-swap tests don't depend on
-    // the connected-state branch (which gates the publish effect),
-    // and emitting "connected" here would push state updates outside
-    // act() and noise up the suite.
-    async connect(): Promise<void> {}
+    // Resolves without emitting "connected": the publish effect is gated
+    // on a local stream these tests never provide.
+    async connect(): Promise<void> {
+      if (state.failNextConnect) {
+        state.failNextConnect = false;
+        throw new Error("relay refused the connection");
+      }
+    }
     close(): void {
       this.closed = true;
     }
@@ -62,13 +92,20 @@ const hoisted = vi.hoisted(() => {
     }
   }
 
+  type MeshConfig = {
+    selfPubkey: string;
+    signaling: unknown;
+    iceServers?: RTCIceServer[];
+    acceptedPeers?: () => ReadonlySet<string> | null;
+  };
+
   class MockWebRtcMesh {
     listeners = new Set<(ev: AnyEvent) => void>();
     closed = false;
     setPeers = vi.fn<(peers: string[]) => void>();
     setLocalCameraStream = vi.fn<(s: MediaStream | null) => void>();
     setLocalScreenStream = vi.fn<(s: MediaStream | null) => void>();
-    constructor(public cfg: { selfPubkey: string; signaling: unknown }) {
+    constructor(public cfg: MeshConfig) {
       meshInstances.push(this);
     }
     on(l: (ev: AnyEvent) => void): () => void {
@@ -80,19 +117,36 @@ const hoisted = vi.hoisted(() => {
     }
   }
 
+  const ICE_FROM_API = [
+    { urls: ["stun:stun.test:3478"] },
+    {
+      urls: ["turn:turn.test:3478?transport=udp"],
+      username: "1700000600:self",
+      credential: "c2VjcmV0",
+    },
+  ];
+  const getIceServers = vi.fn(async () => ({
+    iceServers: ICE_FROM_API,
+    ttlSeconds: 600,
+    turnConfigured: true,
+  }));
+
   const moqInstances: MockMoqClient[] = [];
   const meshInstances: MockWebRtcMesh[] = [];
 
-  return { MockMoqClient, MockWebRtcMesh, moqInstances, meshInstances };
+  return {
+    MockMoqClient,
+    MockWebRtcMesh,
+    moqInstances,
+    meshInstances,
+    state,
+    probe,
+    getIceServers,
+    ICE_FROM_API,
+  };
 });
 
 // ─── Module mocks ──────────────────────────────────────────────────────
-// We replace the transport modules with our mock classes, but leave
-// `transport-select` and `codec` as-is: `selectTransport` is a pure
-// function we want to exercise for real, and `codec` is only touched
-// by the publish effect (gated on a present localStream + connected
-// state, neither of which these tests provide).
-
 vi.mock("../lib/moq", () => ({
   MoqClient: hoisted.MockMoqClient,
   isLivePreviewSupported: () => true,
@@ -107,8 +161,19 @@ vi.mock("../lib/codec", () => ({
   publishStream: vi.fn(async () => ({ stop: vi.fn(async () => {}) })),
 }));
 
-import { useLiveTransport, type LivePeer } from "./use-live-transport";
+vi.mock("@workspace/api-client-react", () => ({
+  getIceServers: hoisted.getIceServers,
+}));
+
+import {
+  useLiveTransport,
+  __resetLiveTransportCaches,
+  type LivePeer,
+} from "./use-live-transport";
 import type { WebRtcSignaling } from "../lib/webrtc-mesh";
+
+const RELAY_KEY = "vessel_relay_url";
+const RELAY = "https://relay.test";
 
 function makeSignaling(): WebRtcSignaling {
   return {
@@ -117,12 +182,33 @@ function makeSignaling(): WebRtcSignaling {
   };
 }
 
+/** Let probes, the ICE lookup and the effects they trigger run to rest. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 3; i += 1) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+}
+
+const ALL_MOQ: LivePeer[] = [{ pubkey: "peer1", supportsMoq: true }];
+const MIXED: LivePeer[] = [
+  { pubkey: "peer1", supportsMoq: true },
+  { pubkey: "safari", supportsMoq: false },
+];
+
 beforeEach(() => {
   hoisted.moqInstances.length = 0;
   hoisted.meshInstances.length = 0;
+  hoisted.state.failNextConnect = false;
+  hoisted.state.probeOk = true;
+  hoisted.state.probeGate = null;
+  hoisted.probe.mockClear();
+  hoisted.getIceServers.mockClear();
+  localStorage.removeItem(RELAY_KEY);
+  __resetLiveTransportCaches();
   // Make `isWebRtcAvailable()` (which probes globalThis.RTCPeerConnection)
-  // return true so `selectTransport` will pick "webrtc" when the room
-  // calls for it.
+  // return true so `selectTransport` can pick "webrtc".
   (globalThis as unknown as { RTCPeerConnection: unknown }).RTCPeerConnection =
     class {};
 });
@@ -130,32 +216,194 @@ beforeEach(() => {
 afterEach(() => {
   delete (globalThis as unknown as { RTCPeerConnection?: unknown })
     .RTCPeerConnection;
+  localStorage.removeItem(RELAY_KEY);
 });
 
-describe("useLiveTransport — mid-call transport swap", () => {
-  it("starts in MoQ mode in an all-MoQ-capable room — no mesh constructed", () => {
+describe("useLiveTransport — default transport", () => {
+  it("uses direct connections when no relay is configured, even in an all-capable room", async () => {
+    const signaling = makeSignaling();
+    const { result } = renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-default",
+        selfPubkey: "self",
+        localStream: null,
+        peers: ALL_MOQ,
+        signaling,
+        selfSupportsMoq: true,
+      }),
+    );
+    await settle();
+
+    expect(result.current.mode).toBe("webrtc");
+    expect(result.current.isSupported).toBe(true);
+    expect(hoisted.moqInstances).toHaveLength(0);
+    expect(hoisted.meshInstances).toHaveLength(1);
+    // No relay URL ⇒ nothing to probe.
+    expect(hoisted.probe).not.toHaveBeenCalled();
+  });
+
+  it("hands the mesh the API's ICE servers and the session roster as its gate", async () => {
+    const signaling = makeSignaling();
+    renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-ice",
+        selfPubkey: "self",
+        localStream: null,
+        peers: ALL_MOQ,
+        signaling,
+        selfSupportsMoq: true,
+        acceptedPeers: ["peer1", "host"],
+      }),
+    );
+    await settle();
+
+    expect(hoisted.getIceServers).toHaveBeenCalledTimes(1);
+    const mesh = hoisted.meshInstances[0];
+    expect(mesh.cfg.iceServers).toEqual(hoisted.ICE_FROM_API);
+    expect(mesh.cfg.acceptedPeers?.()).toEqual(new Set(["peer1", "host"]));
+    // The roster pushed while the ICE lookup was pending still lands.
+    expect(mesh.setPeers).toHaveBeenCalledWith(["peer1"]);
+  });
+
+  it("still builds the mesh on built-in ICE defaults when the lookup fails", async () => {
+    hoisted.getIceServers.mockRejectedValueOnce(new Error("offline"));
+    const signaling = makeSignaling();
+    const { result } = renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-ice-fail",
+        selfPubkey: "self",
+        localStream: null,
+        peers: ALL_MOQ,
+        signaling,
+        selfSupportsMoq: true,
+      }),
+    );
+    await settle();
+
+    expect(result.current.mode).toBe("webrtc");
+    expect(hoisted.meshInstances).toHaveLength(1);
+    expect(hoisted.meshInstances[0].cfg.iceServers).toBeUndefined();
+  });
+
+  it("refuses to stand up the mesh when signaling is missing — surfaces an error instead of crashing", async () => {
+    const { result } = renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-no-sig",
+        selfPubkey: "self",
+        localStream: null,
+        peers: MIXED,
+        signaling: null,
+        selfSupportsMoq: true,
+      }),
+    );
+    await settle();
+
+    expect(result.current.mode).toBe("webrtc");
+    expect(hoisted.meshInstances).toHaveLength(0);
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.isConnected).toBe(false);
+  });
+});
+
+describe("useLiveTransport — configured relay", () => {
+  beforeEach(() => {
+    localStorage.setItem(RELAY_KEY, RELAY);
+  });
+
+  it("uses the relay in an all-capable room once it answers the probe — no mesh constructed", async () => {
     const signaling = makeSignaling();
     const { result } = renderHook(() =>
       useLiveTransport({
         sessionId: "sess-1",
         selfPubkey: "self",
         localStream: null,
-        peers: [{ pubkey: "peer1", supportsMoq: true }],
+        peers: ALL_MOQ,
         signaling,
         selfSupportsMoq: true,
       }),
     );
+    await settle();
 
+    expect(hoisted.probe).toHaveBeenCalledWith(RELAY);
     expect(result.current.mode).toBe("moq");
     expect(result.current.isSupported).toBe(true);
     expect(hoisted.moqInstances).toHaveLength(1);
+    expect(hoisted.moqInstances[0].url).toBe(RELAY);
     expect(hoisted.moqInstances[0].closed).toBe(false);
-    // Critical: the WebRTC mesh must NOT have been stood up. Building
-    // it would open peer connections we'd never need.
     expect(hoisted.meshInstances).toHaveLength(0);
   });
 
-  it("flips MoQ → WebRTC the moment a non-MoQ peer joins, tearing down the old client", () => {
+  it("starts nothing while the probe is in flight, then picks the relay without a mesh detour", async () => {
+    let openGate!: () => void;
+    hoisted.state.probeGate = new Promise<void>((r) => {
+      openGate = r;
+    });
+    const signaling = makeSignaling();
+    renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-probing",
+        selfPubkey: "self",
+        localStream: null,
+        peers: ALL_MOQ,
+        signaling,
+        selfSupportsMoq: true,
+      }),
+    );
+    await settle();
+    expect(hoisted.moqInstances).toHaveLength(0);
+    expect(hoisted.meshInstances).toHaveLength(0);
+
+    openGate();
+    await settle();
+    expect(hoisted.moqInstances).toHaveLength(1);
+    expect(hoisted.meshInstances).toHaveLength(0);
+  });
+
+  it("falls back to direct connections when the relay fails its probe", async () => {
+    hoisted.state.probeOk = false;
+    const signaling = makeSignaling();
+    const { result } = renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-bad-probe",
+        selfPubkey: "self",
+        localStream: null,
+        peers: ALL_MOQ,
+        signaling,
+        selfSupportsMoq: true,
+      }),
+    );
+    await settle();
+
+    expect(result.current.mode).toBe("webrtc");
+    expect(hoisted.moqInstances).toHaveLength(0);
+    expect(hoisted.meshInstances).toHaveLength(1);
+  });
+
+  it("drops to direct connections for the rest of the session when the relay refuses the connection", async () => {
+    hoisted.state.failNextConnect = true;
+    const signaling = makeSignaling();
+    const { result } = renderHook(() =>
+      useLiveTransport({
+        sessionId: "sess-refused",
+        selfPubkey: "self",
+        localStream: null,
+        peers: ALL_MOQ,
+        signaling,
+        selfSupportsMoq: true,
+      }),
+    );
+    await settle();
+
+    expect(result.current.mode).toBe("webrtc");
+    expect(hoisted.moqInstances).toHaveLength(1);
+    expect(hoisted.moqInstances[0].closed).toBe(true);
+    expect(hoisted.meshInstances).toHaveLength(1);
+    expect(hoisted.meshInstances[0].closed).toBe(false);
+    // The user-facing error stays clear: the mesh took over.
+    expect(result.current.error).toBeNull();
+  });
+
+  it("flips relay → direct the moment a non-capable peer joins, tearing down the old client", async () => {
     const signaling = makeSignaling();
     const { result, rerender } = renderHook(
       (props: { peers: LivePeer[] }) =>
@@ -167,44 +415,34 @@ describe("useLiveTransport — mid-call transport swap", () => {
           signaling,
           selfSupportsMoq: true,
         }),
-      {
-        initialProps: { peers: [{ pubkey: "peer1", supportsMoq: true }] },
-      },
+      { initialProps: { peers: ALL_MOQ } },
     );
+    await settle();
 
-    // Sanity: starts on MoQ.
     expect(result.current.mode).toBe("moq");
     expect(hoisted.moqInstances).toHaveLength(1);
     const firstMoq = hoisted.moqInstances[0];
     expect(firstMoq.closed).toBe(false);
 
     // A Safari peer joins.
-    act(() => {
-      rerender({
-        peers: [
-          { pubkey: "peer1", supportsMoq: true },
-          { pubkey: "safari", supportsMoq: false },
-        ],
-      });
+    await act(async () => {
+      rerender({ peers: MIXED });
     });
+    await settle();
 
-    // The selector must have flipped, the old MoQ client must be
-    // closed (no double-publishing), and a fresh mesh must be up.
     expect(result.current.mode).toBe("webrtc");
     expect(firstMoq.closed).toBe(true);
     expect(hoisted.meshInstances).toHaveLength(1);
     const mesh = hoisted.meshInstances[0];
     expect(mesh.closed).toBe(false);
     expect(mesh.cfg.selfPubkey).toBe("self");
-    // The roster-push effect runs after the mesh constructor effect
-    // and must hand the full peer list (sorted) to the new mesh so
-    // every peer — Chromium and otherwise — gets paired up.
+    // The full (sorted) roster reaches the new mesh so every peer gets paired.
     expect(mesh.setPeers).toHaveBeenCalledWith(["peer1", "safari"]);
-    // Critically NO new MoQ client was constructed during the swap.
+    // No new relay client was constructed during the swap.
     expect(hoisted.moqInstances).toHaveLength(1);
   });
 
-  it("flips WebRTC → MoQ when the only non-MoQ peer leaves, tearing down the mesh", () => {
+  it("flips direct → relay when the only non-capable peer leaves, tearing down the mesh", async () => {
     const signaling = makeSignaling();
     const { result, rerender } = renderHook(
       (props: { peers: LivePeer[] }) =>
@@ -216,83 +454,48 @@ describe("useLiveTransport — mid-call transport swap", () => {
           signaling,
           selfSupportsMoq: true,
         }),
-      {
-        initialProps: {
-          peers: [
-            { pubkey: "peer1", supportsMoq: true },
-            { pubkey: "safari", supportsMoq: false },
-          ],
-        },
-      },
+      { initialProps: { peers: MIXED } },
     );
+    await settle();
 
-    // Sanity: starts on WebRTC because of the Safari peer.
     expect(result.current.mode).toBe("webrtc");
     expect(hoisted.meshInstances).toHaveLength(1);
     expect(hoisted.moqInstances).toHaveLength(0);
     const firstMesh = hoisted.meshInstances[0];
 
-    // Safari peer leaves.
-    act(() => {
-      rerender({ peers: [{ pubkey: "peer1", supportsMoq: true }] });
+    await act(async () => {
+      rerender({ peers: ALL_MOQ });
     });
+    await settle();
 
-    // Mesh must be torn down (no idle peer connections lingering),
-    // and the higher-capacity MoQ path must take over.
     expect(result.current.mode).toBe("moq");
     expect(firstMesh.closed).toBe(true);
     expect(hoisted.moqInstances).toHaveLength(1);
     expect(hoisted.moqInstances[0].closed).toBe(false);
-    // Critically NO new mesh was constructed during the swap.
     expect(hoisted.meshInstances).toHaveLength(1);
   });
 
-  it("never spins up the MoQ client on a WebRTC-only browser even if every peer reports MoQ support", () => {
+  it("never spins up the relay client on a browser without the capability", async () => {
     const signaling = makeSignaling();
     const { result } = renderHook(() =>
       useLiveTransport({
         sessionId: "sess-4",
         selfPubkey: "self",
         localStream: null,
-        peers: [{ pubkey: "peer1", supportsMoq: true }],
+        peers: ALL_MOQ,
         signaling,
-        // Local browser can't speak MoQ regardless of what peers
-        // can — Safari/Firefox today.
         selfSupportsMoq: false,
       }),
     );
+    await settle();
 
     expect(result.current.mode).toBe("webrtc");
-    expect(result.current.isSupported).toBe(true);
     expect(hoisted.moqInstances).toHaveLength(0);
     expect(hoisted.meshInstances).toHaveLength(1);
+    expect(hoisted.probe).not.toHaveBeenCalled();
   });
 
-  it("refuses to stand up the mesh when WebRTC is needed but signaling is missing — surfaces an error instead of crashing", () => {
-    // Regression guard for the explicit `if (!signaling)` branch in
-    // the WebRTC effect. Without this gate a future refactor could
-    // hand a null signaling adapter to `new WebRtcMesh(...)` and
-    // crash on the first `.on(...)` call inside the constructor.
-    const { result } = renderHook(() =>
-      useLiveTransport({
-        sessionId: "sess-no-sig",
-        selfPubkey: "self",
-        localStream: null,
-        peers: [{ pubkey: "safari", supportsMoq: false }],
-        signaling: null,
-        selfSupportsMoq: true,
-      }),
-    );
-
-    // Mode still reports "webrtc" — the room demands it — but no
-    // mesh is constructed and an error is surfaced for the chrome.
-    expect(result.current.mode).toBe("webrtc");
-    expect(hoisted.meshInstances).toHaveLength(0);
-    expect(result.current.error).toBeTruthy();
-    expect(result.current.isConnected).toBe(false);
-  });
-
-  it("tears down both transports cleanly on unmount — no leaked clients", () => {
+  it("tears down both transports cleanly on unmount — no leaked clients", async () => {
     const signaling = makeSignaling();
     const { unmount, rerender } = renderHook(
       (props: { peers: LivePeer[] }) =>
@@ -304,30 +507,23 @@ describe("useLiveTransport — mid-call transport swap", () => {
           signaling,
           selfSupportsMoq: true,
         }),
-      {
-        initialProps: { peers: [{ pubkey: "peer1", supportsMoq: true }] },
-      },
+      { initialProps: { peers: ALL_MOQ } },
     );
+    await settle();
 
-    // Kick a swap so we exercise both transports in one lifetime.
-    act(() => {
-      rerender({
-        peers: [
-          { pubkey: "peer1", supportsMoq: true },
-          { pubkey: "safari", supportsMoq: false },
-        ],
-      });
+    await act(async () => {
+      rerender({ peers: MIXED });
     });
+    await settle();
 
     expect(hoisted.moqInstances).toHaveLength(1);
     expect(hoisted.meshInstances).toHaveLength(1);
-    expect(hoisted.moqInstances[0].closed).toBe(true); // closed by the swap
+    expect(hoisted.moqInstances[0].closed).toBe(true);
     expect(hoisted.meshInstances[0].closed).toBe(false);
 
     unmount();
 
-    // Whatever transport was active when the component went away
-    // must end up closed — otherwise refs survive past the React tree.
+    expect(hoisted.moqInstances[0].closed).toBe(true);
     expect(hoisted.meshInstances[0].closed).toBe(true);
   });
 });

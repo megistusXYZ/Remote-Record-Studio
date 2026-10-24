@@ -41,9 +41,9 @@ import { VesselCard } from "../vessel-ui/VesselCard";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-const DEFAULT_RELAY_URL =
-  (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) ||
-  "https://relay.quic.video";
+// Empty by default: the live preview runs over direct connections unless
+// the operator configured a relay of their own.
+const DEFAULT_RELAY_URL = (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) || "";
 
 export type SettingsScreenProps = {
   pubkey: string;
@@ -138,7 +138,12 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   // MoqClient.probe.
   const relayProbeAbortRef = useRef<AbortController | null>(null);
   const runRelayReachabilityCheck = useCallback((url: string) => {
-    if (!url || !url.startsWith("https://")) {
+    if (!url.trim()) {
+      // Empty is the default: direct connections, nothing to test.
+      setRelayReachability({ kind: "idle" });
+      return;
+    }
+    if (!url.startsWith("https://")) {
       setRelayReachability({ kind: "error", reason: "Enter an https:// URL." });
       return;
     }
@@ -169,13 +174,18 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   }, []);
 
   const handleSaveRelayUrl = () => {
-    if (!relayUrl || !relayUrl.startsWith("https://")) {
-      toast({ title: "Can't save", description: "Enter an https:// URL.", variant: "destructive" });
+    const trimmed = relayUrl.trim();
+    if (trimmed && !trimmed.startsWith("https://")) {
+      toast({ title: "Can't save", description: "Enter an https:// URL, or leave it empty.", variant: "destructive" });
       return;
     }
-    localStorage.setItem("vessel_relay_url", relayUrl);
+    if (trimmed) localStorage.setItem("vessel_relay_url", trimmed);
+    else localStorage.removeItem("vessel_relay_url");
     notifyRelayUrlChanged();
-    toast({ title: "Saved", description: "Live preview server updated." });
+    toast({
+      title: "Saved",
+      description: trimmed ? "Live preview server updated." : "Live video will use direct connections.",
+    });
   };
 
   const handleRestoreDefaultRelay = () => {
@@ -451,7 +461,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 
                   <div className="space-y-1.5">
                     <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Live preview server</label>
-                    <p className="text-xs text-vessel-text-muted">Powers the live video preview during recording. Recording quality is unaffected.</p>
+                    <p className="text-xs text-vessel-text-muted">Optional. Live video normally connects directly between participants; a preview server can help with larger rooms. Recording quality is unaffected either way.</p>
                     <div className="flex gap-2 mt-2">
                       <Input
                         value={relayUrl}
@@ -465,7 +475,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                     <div className="flex items-center justify-between gap-3 min-h-[1.25rem]">
                       <div className="flex items-center gap-1.5 text-xs flex-1 min-w-0" data-testid="relay-reachability">
                         {relayReachability.kind === "idle" && (
-                          <span className="text-vessel-text-muted truncate">Enter a URL to test it.</span>
+                          <span className="text-vessel-text-muted truncate">Not set. Live video uses direct connections.</span>
                         )}
                         {relayReachability.kind === "checking" && (
                           <>
