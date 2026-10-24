@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, isNull } from "drizzle-orm";
-import { db, sessionsTable, participantsTable } from "@workspace/db";
+import { deliveriesTable, db, sessionsTable, participantsTable } from "@workspace/db";
 import {
   CreateSessionBody,
   ListSessionsQueryParams,
@@ -374,6 +374,11 @@ router.delete("/sessions/:sessionId", requireSignedRequest(), async (req, res): 
   await db
     .delete(participantsTable)
     .where(eq(participantsTable.sessionId, params.data.sessionId));
+
+  // Sealed delivery notes belong to the session; they go with it.
+  await db
+    .delete(deliveriesTable)
+    .where(eq(deliveriesTable.sessionId, params.data.sessionId));
 
   await db
     .delete(sessionsTable)
