@@ -101,6 +101,11 @@ a redeploy. Set the variable, restart the API server workflow, done.
 | Helmet security headers (API)  | `VESSEL_HELMET_ENABLED`                          | `true`  | `VESSEL_HELMET_ENABLED=false`                  |
 | Web client CSP                 | `VESSEL_CSP_ENFORCE`                             | `false` (Report-Only) | leave at `false` for Report-Only |
 
+Signed requests are bound to their body and each auth event is accepted once; the
+"already used" memory is per process (two minutes). Behind a load balancer with
+several API instances a replay could land on a different instance, so pin
+clients to one instance or back the cache with a shared store before scaling out.
+
 **`/api/healthz` is never rate-limited** — your monitoring can hit it as
 often as it likes without tripping anything.
 
