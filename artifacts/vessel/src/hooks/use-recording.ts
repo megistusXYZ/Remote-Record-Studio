@@ -14,6 +14,8 @@ import {
   type RecordingStream,
 } from "../lib/recordings-storage";
 import { useIdentity } from "./use-identity";
+import { measureServerOffset } from "../lib/server-time";
+import { useRecordingActivity } from "../lib/recording-activity";
 
 export type {
   RecordingMeta,
@@ -87,6 +89,9 @@ export function useRecording(): UseRecordingResult {
     audio: 0,
     video: 0,
   });
+  const serverOffsetRef = useRef<number | null>(null);
+  const activityBegin = useRecordingActivity((st) => st.begin);
+  const activityEnd = useRecordingActivity((st) => st.end);
 
   const [isSupported] = useState(DualChunkedRecorder.isSupported());
   const [isRecording, setIsRecording] = useState(false);
@@ -212,6 +217,18 @@ export function useRecording(): UseRecordingResult {
           mimeTypes: rec.getMimeTypes(),
         }).catch(() => {});
 
+        // Express the start on the server's clock too, so tracks from
+        // different devices can be lined up later. Non-blocking.
+        serverOffsetRef.current = null;
+        void measureServerOffset().then((offset) => {
+          if (recordingIdRef.current !== recordingId) return;
+          serverOffsetRef.current = offset;
+          void updateInProgressRecording(recordingId, {
+            serverOffsetMs: offset,
+          }).catch(() => {});
+        });
+
+        activityBegin();
         setIsRecording(true);
       } catch (err) {
         console.error("Failed to start recording", err);
@@ -223,7 +240,7 @@ export function useRecording(): UseRecordingResult {
         recordingIdRef.current = null;
       }
     },
-    [isSupported, identity, teardownListeners],
+    [isSupported, identity, teardownListeners, activityBegin],
   );
 
   const stop = useCallback(async (): Promise<RecordingResult | null> => {
@@ -234,6 +251,7 @@ export function useRecording(): UseRecordingResult {
     try {
       const dual = await rec.stop();
       setIsRecording(false);
+      activityEnd();
 
       const r = await finalizeRecording({
         recordingId,
@@ -255,6 +273,7 @@ export function useRecording(): UseRecordingResult {
         durationSeconds: dual.durationSeconds,
         startedAtMs: dual.startedAtMs,
         startedAtPerfMs: dual.startedAtPerfMs,
+        serverOffsetMs: serverOffsetRef.current,
         combinedChunkCount: dual.combinedChunkCount,
         persistStats: dual.persistStats,
         onSync: (u) => {
@@ -279,7 +298,7 @@ export function useRecording(): UseRecordingResult {
       recorderRef.current = null;
       recordingIdRef.current = null;
     }
-  }, [identity, teardownListeners]);
+  }, [identity, teardownListeners, activityEnd]);
 
   const reset = useCallback(() => {
     teardownListeners();
@@ -329,6 +348,7 @@ export function useRecording(): UseRecordingResult {
       const rec = recorderRef.current;
       const recordingId = recordingIdRef.current;
       if (rec && recordingId && rec.getStatus() === "recording") {
+        activityEnd();
         rec
           .stop()
           .catch(() => null)
@@ -340,7 +360,7 @@ export function useRecording(): UseRecordingResult {
       }
       teardownListeners();
     };
-  }, [teardownListeners]);
+  }, [teardownListeners, activityEnd]);
 
   return {
     isSupported,

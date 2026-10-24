@@ -137,7 +137,7 @@ export function StudioScreen({
     setSelectedMicId,
   } = useMediaDevices();
 
-  const { stream: localStream, error: localStreamError } = useLocalStream({
+  const { stream: localStream, error: localStreamError, videoUnavailableReason } = useLocalStream({
     cameraId: selectedCameraId,
     micId: selectedMicId,
     cameraEnabled,
@@ -719,6 +719,13 @@ export function StudioScreen({
     }
   }, [session.status, localStream, recording, session.id, session.title, isHost]);
 
+  // Camera missing or blocked: recording continues as audio only; say so once.
+  useEffect(() => {
+    if (!videoUnavailableReason) return;
+    toast({ title: "Recording audio only", description: videoUnavailableReason });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoUnavailableReason]);
+
   // Mid-recording local write failures (usually a full disk) are rare and
   // serious enough to interrupt for.
   useEffect(() => {
@@ -873,6 +880,8 @@ export function StudioScreen({
             mimeType: r.meta.mimeType,
             sizeBytes: r.meta.sizeBytes,
             durationSeconds: r.meta.durationSeconds,
+            startedAtMs: r.startedAtMs,
+            serverOffsetMs: r.serverOffsetMs,
             audio:
               r.audio && r.audio.remoteUrl
                 ? {
