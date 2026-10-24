@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   parseShareUrl,
-  KIND_PERSONAL_ARCHIVE_POINTER,
   POINTER_LISTEN_WINDOW_MS,
   computePointerWaitState,
   buildExportSource,
@@ -15,14 +14,6 @@ import {
   hasVideoOnlyExport,
   buildExportFilename,
 } from "../lib/track-export";
-
-describe("KIND_PERSONAL_ARCHIVE_POINTER", () => {
-  it("uses kind 27009, distinct from the signaling LEAVE kind (27006)", () => {
-    expect(KIND_PERSONAL_ARCHIVE_POINTER).toBe(27009);
-    expect(KIND_PERSONAL_ARCHIVE_POINTER).toBeGreaterThanOrEqual(20000);
-    expect(KIND_PERSONAL_ARCHIVE_POINTER).toBeLessThan(30000);
-  });
-});
 
 describe("parseShareUrl", () => {
   it("parses a root-mounted share URL with a fragment key", () => {

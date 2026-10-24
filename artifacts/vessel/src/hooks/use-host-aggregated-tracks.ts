@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { NostrEvent } from "nostr-tools";
-import { getRelayPool } from "../lib/relay-pool";
+import { listDeliveries, recordDelivery } from "@workspace/api-client-react";
 import { useIdentity } from "./use-identity";
-import { DEFAULT_SIGNAL_RELAYS } from "./use-call-signal";
 import type { TrackExportSource } from "../lib/track-export";
 import {
   resolveShareLink,
@@ -11,14 +9,9 @@ import {
   type RecipientTrack,
 } from "../lib/share-resolver";
 
-/** Replaceable kind for personal-archive pointers (latest wins on
- *  `["d", sessionId]`). */
-// 27009: its own ephemeral kind. It used to share 27006 with the
-// signaling LEAVE event, so a delivery pointer read as "X left the session"
-// in every peer's roster.
-export const KIND_PERSONAL_ARCHIVE_POINTER = 27009;
-
-/** How long the host listens for pointer events after the call ends. */
+/** How long the host keeps checking for deliveries after the call ends.
+ *  Deliveries are stored by the API, so anything later still shows up the
+ *  next time the host opens the session. */
 export const POINTER_LISTEN_WINDOW_MS = 60_000;
 
 /** Pure helper for the host pointer-listen window. Exported for unit
@@ -75,7 +68,7 @@ export function parseShareUrl(raw: string): { pointer: string; fragment: string 
   return { pointer, fragment: url.hash || "" };
 }
 
-/** Backoff schedule (ms) for the pointer publish — 5 tries over ~30s. */
+/** Backoff schedule (ms) for recording a delivery — 5 tries over ~30s. */
 export const POINTER_PUBLISH_BACKOFF_MS = [0, 1_500, 4_000, 9_000, 16_000];
 
 /** Decide whether the local device should publish its personal-archive
@@ -135,55 +128,61 @@ export function deriveHostRowStorageState(args: {
   return "remote";
 }
 
-/** Publish this device's personal-archive pointer. Replaceable on
- *  `["d", sessionId]`. Retries with backoff so a transient relay failure
- *  doesn't strand a participant from the host's aggregated view. */
-export async function publishPersonalArchivePointer(args: {
-  signer: { signEvent: (ev: any) => Promise<NostrEvent> };
+type Nip44Signer = {
+  nip44?: {
+    encrypt: (pubkey: string, plaintext: string) => Promise<string>;
+    decrypt: (pubkey: string, ciphertext: string) => Promise<string>;
+  };
+};
+
+/** Raised when the participant's key app cannot seal a note to the host. */
+export class DeliveryUnsupportedError extends Error {
+  constructor() {
+    super("Your key app can't send your track to the host automatically.");
+    this.name = "DeliveryUnsupportedError";
+  }
+}
+
+/** Tell the host where this participant's archive is. The share link (which
+ *  carries the archive key) is sealed to the host's key on this device, so
+ *  neither relays nor the Vessel server can open it, then recorded by the
+ *  API. Retries with backoff; a later re-delivery replaces this one. */
+export async function deliverPersonalArchive(args: {
+  signer: Nip44Signer;
+  hostPubkey: string;
   sessionId: string;
   shareUrl: string;
-  relays?: string[];
-  /** Override backoff schedule. Must contain at least one entry. */
   backoffMs?: number[];
-  /** Sleep override (testing). */
   sleep?: (ms: number) => Promise<void>;
-}): Promise<string> {
+}): Promise<void> {
   const {
     signer,
+    hostPubkey,
     sessionId,
     shareUrl,
-    relays = DEFAULT_SIGNAL_RELAYS,
     backoffMs = POINTER_PUBLISH_BACKOFF_MS,
     sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)),
   } = args;
+  if (!signer.nip44) throw new DeliveryUnsupportedError();
   const payload: PersonalArchivePointerPayload = { shareUrl };
-  const tmpl = {
-    kind: KIND_PERSONAL_ARCHIVE_POINTER,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [["d", sessionId]],
-    content: JSON.stringify(payload),
-  };
-  const signed = await signer.signEvent(tmpl);
-  const pool = getRelayPool();
+  const sealed = await signer.nip44.encrypt(hostPubkey, JSON.stringify(payload));
   const schedule = backoffMs.length > 0 ? backoffMs : [0];
   let lastErr: unknown = null;
   for (let i = 0; i < schedule.length; i += 1) {
     if (schedule[i] > 0) await sleep(schedule[i]);
     try {
-      await pool.publish(relays, signed);
-      return signed.id;
+      await recordDelivery(sessionId, { sealed });
+      return;
     } catch (err) {
       lastErr = err;
-      console.warn(
-        `[personal-archive-pointer] publish attempt ${i + 1}/${schedule.length} failed`,
-        err,
-      );
+      console.warn(`[delivery] attempt ${i + 1}/${schedule.length} failed`, err);
     }
   }
-  throw lastErr instanceof Error
-    ? lastErr
-    : new Error("Failed to publish personal-archive pointer after retries");
+  throw lastErr instanceof Error ? lastErr : new Error("Couldn't deliver the track to the host.");
 }
+
+/** While waiting, how often the host checks for new deliveries. */
+export const DELIVERY_POLL_MS = 4000;
 
 /** A participant track aggregated from a resolved personal archive. */
 export type AggregatedTrack = {
@@ -212,8 +211,6 @@ export type UseHostAggregatedTracksOptions = {
   /** Stamp at which the session ended. The pointer-listen window starts
    *  from here (NOT hook mount). Pass null while the call is still live. */
   sessionEndedAtMs?: number | null;
-  /** Override relays for testing. */
-  relays?: string[];
 };
 
 type PointerRecord = {
@@ -257,7 +254,6 @@ export function useHostAggregatedTracks({
   acceptedPubkeys,
   enabled = true,
   sessionEndedAtMs = null,
-  relays = DEFAULT_SIGNAL_RELAYS,
 }: UseHostAggregatedTracksOptions) {
   const { identity } = useIdentity();
   const [pointers, setPointers] = useState<Map<string, PointerRecord>>(new Map());
@@ -274,52 +270,54 @@ export function useHostAggregatedTracks({
     setResolveErrors(new Map());
   }, [sessionId]);
 
+  // Deliveries come from the API: one read on open (a host who reloads or
+  // returns later sees everything already delivered), then a check every
+  // few seconds while the post-call window is open.
+  const [refreshTick, setRefreshTick] = useState(0);
   useEffect(() => {
     if (!enabled || !sessionId || !identity) return;
-    const pool = getRelayPool();
-    const obs = pool.subscription(relays, [
-      {
-        kinds: [KIND_PERSONAL_ARCHIVE_POINTER],
-        "#d": [sessionId],
-      },
-    ]);
+    const signer = identity._signer as Nip44Signer;
     let cancelled = false;
-    const sub = obs.subscribe({
-      next: (payload: NostrEvent | "EOSE" | unknown) => {
-        if (cancelled || payload === "EOSE") return;
-        if (!payload || typeof payload !== "object" || !("kind" in (payload as object))) return;
-        const ev = payload as NostrEvent;
-        if (ev.kind !== KIND_PERSONAL_ARCHIVE_POINTER) return;
+    void (async () => {
+      let rows: Awaited<ReturnType<typeof listDeliveries>>;
+      try {
+        rows = await listDeliveries(sessionId);
+      } catch (err) {
+        console.warn("[host-deliveries] list failed", err);
+        return;
+      }
+      if (!Array.isArray(rows)) return;
+      for (const row of rows) {
+        if (cancelled) return;
         const accept = acceptSetRef.current;
-        if (accept && !accept.has(ev.pubkey)) return;
-        const parsed = safeJson<PersonalArchivePointerPayload>(ev.content);
-        if (!parsed || typeof parsed.shareUrl !== "string" || !parsed.shareUrl) return;
-        const receivedAtMs = ev.created_at * 1000;
+        if (accept && !accept.has(row.senderPubkey)) continue;
+        const receivedAtMs = Date.parse(row.updatedAt) || Date.now();
+        let parsed: PersonalArchivePointerPayload | null = null;
+        try {
+          if (!signer.nip44) throw new DeliveryUnsupportedError();
+          parsed = safeJson<PersonalArchivePointerPayload>(await signer.nip44.decrypt(row.senderPubkey, row.sealed));
+        } catch (err) {
+          console.warn("[host-deliveries] could not open a delivery", err);
+        }
+        if (cancelled) return;
+        if (!parsed || typeof parsed.shareUrl !== "string" || !parsed.shareUrl) {
+          setResolveErrors((prev) => new Map(prev).set(row.senderPubkey, "Couldn't open this guest's delivery."));
+          continue;
+        }
+        const shareUrlValue = parsed.shareUrl;
         setPointers((prev) => {
-          const existing = prev.get(ev.pubkey);
+          const existing = prev.get(row.senderPubkey);
           if (existing && existing.receivedAtMs >= receivedAtMs) return prev;
           const next = new Map(prev);
-          next.set(ev.pubkey, {
-            pubkey: ev.pubkey,
-            shareUrl: parsed.shareUrl,
-            receivedAtMs,
-          });
+          next.set(row.senderPubkey, { pubkey: row.senderPubkey, shareUrl: shareUrlValue, receivedAtMs });
           return next;
         });
-      },
-      error: (err: unknown) => {
-        console.warn("[personal-archive-pointer] subscription error:", err);
-      },
-    });
+      }
+    })();
     return () => {
       cancelled = true;
-      try {
-        sub.unsubscribe();
-      } catch {
-        // ignore
-      }
     };
-  }, [enabled, sessionId, identity, relays]);
+  }, [enabled, sessionId, identity, refreshTick]);
 
   // Pointer wait window starts at session-end, not hook mount.
   useEffect(() => {
@@ -457,6 +455,15 @@ export function useHostAggregatedTracks({
   );
 
   /** Manually clear the cache (e.g. when the host starts a new call). */
+  useEffect(() => {
+    if (!isWaiting) return undefined;
+    const id = window.setInterval(() => setRefreshTick((t) => t + 1), DELIVERY_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [isWaiting]);
+
+  /** Check for deliveries now (a "Check again" button). */
+  const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
+
   const reset = useCallback(() => {
     setPointers(new Map());
     setResolved(new Map());
@@ -472,5 +479,6 @@ export function useHostAggregatedTracks({
      *  surfaces these as a small inline message on the placeholder row. */
     resolveErrors,
     reset,
+    refresh,
   };
 }
