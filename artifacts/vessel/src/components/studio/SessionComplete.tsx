@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TranscriptCard } from "./TranscriptCard";
+import type { TranscriptLine } from "../../lib/transcript";
 import { friendlyError } from "../../lib/friendly-error";
 import { loadSessionMarkers } from "../../hooks/use-recording-markers";
 import { motion, AnimatePresence } from "framer-motion";
@@ -806,6 +808,9 @@ export function SessionComplete({
   };
 
   // Bundle download for all selected rows; serialized behind `busy`.
+  // Transcript made on this device after the session; joins the editor bundle.
+  const [transcript, setTranscript] = useState<TranscriptLine[] | null>(null);
+
   // Editor bundle: every selected speaker on a synced, labelled track with
   // the session's markers, ready for Reaper, Audacity or any editor.
   const handleEditorDownload = async () => {
@@ -820,6 +825,7 @@ export function SessionComplete({
       const result = await downloadEditorBundle({
         sources: chosen.map(trackToExportSource),
         markers: loadSessionMarkers(sessionId ?? null),
+        transcript,
         title: sessionTitle || "Vessel session",
         zipFilename: bundleFilename(sessionTitle, sessionDate).replace(/\.zip$/, "-for-editing.zip"),
       });
@@ -1159,6 +1165,13 @@ export function SessionComplete({
                         </VesselButton>
                       </div>
                     </div>
+
+                    <TranscriptCard
+                      sources={tracks.filter((t) => selected.has(t.participantId)).map(trackToExportSource)}
+                      title={sessionTitle || "Vessel session"}
+                      fileStem={bundleFilename(sessionTitle, sessionDate).replace(/\.zip$/, "")}
+                      onReady={setTranscript}
+                    />
 
                     <div
                       className="w-full p-4 rounded-xl bg-vessel-accent/[0.06] border border-vessel-accent/30 text-left mb-3 flex flex-col sm:flex-row sm:items-center gap-3"
