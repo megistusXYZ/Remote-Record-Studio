@@ -24,40 +24,43 @@ import { RecordingDot } from "../vessel-ui/RecordingDot";
  *          land in the vault, a 48 kHz WAV and a 1080p video per person,
  *          saved on their own device, nothing uploaded to Vessel.
  *
- * No drawings of people and no stock faces: the point of the page is that
- * this is real software you can trust with your recordings. When real
- * footage exists, drop `hero/host.webm` and `hero/guest.webm` into
- * `public/`; the tiles play them (muted, looping) instead of the avatars.
+ * Media: each tile shows `public/hero/<host|guest>.jpg` as a still and, on
+ * desktop with motion allowed and no data saver, plays two muted loops over
+ * it: `<name>-talking.mp4` while that person holds the speaking ring and
+ * `<name>-listening.mp4` otherwise, crossfading as the ring moves. Phones get the still; the ring, meters and
+ * clock keep the demo alive. With no files present the tiles fall back to
+ * the avatar the real room shows for a person without a camera. Specs and
+ * the image prompts live in `docs/HERO-MEDIA.md`.
  */
+
+/** True while the hero media are generated stand-ins rather than footage of
+ *  real people. Shows a small "Illustration" note under the demo. Set false
+ *  once real, consenting people replace them. */
+const ILLUSTRATIVE_MEDIA = true;
 
 type Person = {
   name: string;
   role: "Host" | "Guest";
   initials: string;
   hue: number;
-  clip: string;
+  /** Path under public/ without extension: .jpg still, -talking.mp4 and
+   *  -listening.mp4 loops. */
+  media: string;
 };
 
 const PEOPLE: Person[] = [
-  {
-    name: "Ben",
-    role: "Host",
-    initials: "B",
-    hue: 168,
-    clip: "hero/host.webm",
-  },
-  {
-    name: "Sam",
-    role: "Guest",
-    initials: "S",
-    hue: 24,
-    clip: "hero/guest.webm",
-  },
+  // Maya's room leans warm amber, Theo's cool teal: two places, one session.
+  { name: "Maya", role: "Host", initials: "M", hue: 32, media: "hero/host" },
+  { name: "Theo", role: "Guest", initials: "T", hue: 168, media: "hero/guest" },
 ];
 
 const SPEAKER_SWAP_MS = 3800;
 /** Bytes per second of a mono 48 kHz 24-bit WAV, for the saved-files beat. */
 const WAV_BYTES_PER_SECOND = 48_000 * 3;
+/** A 1080p camera file at about 5 Mbit/s. */
+const VIDEO_BYTES_PER_SECOND = 625_000;
+/** The take is already under way when the visitor arrives. */
+const START_SECONDS = 23 * 60 + 41;
 
 function formatClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -65,8 +68,28 @@ function formatClock(totalSeconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function formatMegabytes(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+function formatSize(bytes: number): string {
+  return bytes >= 1_000_000_000
+    ? `${(bytes / 1_000_000_000).toFixed(2)} GB`
+    : `${Math.round(bytes / 1_000_000)} MB`;
+}
+
+/** Loops only where they are worth it: wide screens, motion allowed, and no
+ *  data-saver. Everyone else gets the still frame. */
+function useLoopsAllowed(reduceMotion: boolean | null): boolean {
+  const [allowed, setAllowed] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(min-width: 640px)");
+    const saveData =
+      (navigator as Navigator & { connection?: { saveData?: boolean } })
+        .connection?.saveData === true;
+    const update = () => setAllowed(mq.matches && !reduceMotion && !saveData);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, [reduceMotion]);
+  return allowed;
 }
 
 type HeroDemoProps = {
@@ -81,7 +104,10 @@ export function HeroDemo({ reduceMotion }: HeroDemoProps) {
   const [micOn, setMicOn] = React.useState(true);
   const [cameraOn, setCameraOn] = React.useState(true);
   const [speaker, setSpeaker] = React.useState(0);
-  const [seconds, setSeconds] = React.useState(0);
+  const [seconds, setSeconds] = React.useState(START_SECONDS);
+  const loopsAllowed = useLoopsAllowed(reduceMotion);
+  const [mediaShown, setMediaShown] = React.useState(false);
+  const markMediaShown = React.useCallback(() => setMediaShown(true), []);
   const [takeSeconds, setTakeSeconds] = React.useState(0);
 
   // The recording clock and the speaker hand-off only run while the demo is
@@ -107,7 +133,7 @@ export function HeroDemo({ reduceMotion }: HeroDemoProps) {
     setPhase("saved");
   };
   const startAgain = () => {
-    setSeconds(0);
+    setSeconds(START_SECONDS);
     setPhase("live");
   };
 
@@ -167,6 +193,8 @@ export function HeroDemo({ reduceMotion }: HeroDemoProps) {
                     micOn={micOn}
                     speaking={running && micOn && speaker === i}
                     reduceMotion={reduceMotion}
+                    loopsAllowed={loopsAllowed}
+                    onMediaShown={markMediaShown}
                   />
                 ))}
               </div>
@@ -210,6 +238,14 @@ export function HeroDemo({ reduceMotion }: HeroDemoProps) {
           )}
         </AnimatePresence>
       </div>
+      {ILLUSTRATIVE_MEDIA && mediaShown && (
+        <p
+          className="mt-2 text-center text-[11px] text-vessel-text-muted"
+          data-testid="hero-illustration-note"
+        >
+          Illustration. Maya and Theo are not real people.
+        </p>
+      )}
     </div>
   );
 }
@@ -222,6 +258,8 @@ type DemoTileProps = {
   micOn: boolean;
   speaking: boolean;
   reduceMotion: boolean | null;
+  loopsAllowed: boolean;
+  onMediaShown: () => void;
 };
 
 function DemoTile({
@@ -230,11 +268,20 @@ function DemoTile({
   micOn,
   speaking,
   reduceMotion,
+  loopsAllowed,
+  onMediaShown,
 }: DemoTileProps) {
+  const base = `${import.meta.env.BASE_URL}${person.media}`;
+  const [posterReady, setPosterReady] = React.useState(false);
+  const [posterMissing, setPosterMissing] = React.useState(false);
   const [clipReady, setClipReady] = React.useState(false);
   const [clipMissing, setClipMissing] = React.useState(false);
-  const showClip = cameraOn && clipReady && !clipMissing;
-  const clipSrc = `${import.meta.env.BASE_URL}${person.clip}`;
+  const showPoster = cameraOn && posterReady && !posterMissing;
+  const showClip = cameraOn && loopsAllowed && clipReady && !clipMissing;
+  const showMedia = showPoster || showClip;
+  React.useEffect(() => {
+    if (showMedia) onMediaShown();
+  }, [showMedia, onMediaShown]);
 
   return (
     <motion.div
@@ -258,27 +305,51 @@ function DemoTile({
           : { duration: 0.4 }
       }
     >
-      {/* Real footage, when the operator has recorded some. */}
-      {cameraOn && !clipMissing && (
-        <video
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-            showClip ? "opacity-100" : "opacity-0"
-          }`}
-          src={clipSrc}
-          muted
-          loop
-          playsInline
-          autoPlay
-          preload="metadata"
-          onCanPlay={() => setClipReady(true)}
-          onError={() => setClipMissing(true)}
+      {/* Still frame: every screen. */}
+      {cameraOn && !posterMissing && (
+        <img
+          src={`${base}.jpg`}
+          alt=""
           aria-hidden="true"
+          decoding="async"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+            showPoster ? "opacity-100" : "opacity-0"
+          }`}
+          onLoad={() => setPosterReady(true)}
+          onError={() => setPosterMissing(true)}
         />
       )}
 
-      {/* Otherwise: the tile exactly as the room shows a person without a camera. */}
+      {/* Loops over it: desktop, motion allowed, no data saver. Both play
+          all the time so the swap is instant; the speaker's clip shows. */}
+      {cameraOn &&
+        loopsAllowed &&
+        !clipMissing &&
+        (["listening", "talking"] as const).map((take) => (
+          <video
+            key={take}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+              showClip && (take === "talking") === speaking
+                ? "opacity-100"
+                : "opacity-0"
+            }`}
+            src={`${base}-${take}.mp4`}
+            muted
+            loop
+            playsInline
+            autoPlay
+            preload="auto"
+            onCanPlay={
+              take === "listening" ? () => setClipReady(true) : undefined
+            }
+            onError={() => setClipMissing(true)}
+            aria-hidden="true"
+          />
+        ))}
+
+      {/* No media: the tile exactly as the room shows a person without a camera. */}
       <AnimatePresence initial={false}>
-        {!showClip && (
+        {!showMedia && (
           <motion.div
             key="avatar"
             initial={{ opacity: 0 }}
@@ -320,6 +391,19 @@ function DemoTile({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div
+        className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-vessel-bg-surface/80 border border-vessel-border backdrop-blur-md text-[10px] text-vessel-text-secondary z-10"
+        title="Recording on this person's own device"
+      >
+        <span
+          className="w-1.5 h-1.5 rounded-full bg-vessel-green"
+          aria-label="Connection good"
+        />
+        <span>
+          On device<span className="hidden sm:inline"> · 48 kHz</span>
+        </span>
+      </div>
 
       <AnimatePresence>
         {speaking && (
@@ -382,6 +466,7 @@ function SavedFiles({
   onStartAgain: () => void;
 }) {
   const wavBytes = seconds * WAV_BYTES_PER_SECOND;
+  const videoBytes = seconds * VIDEO_BYTES_PER_SECOND;
   return (
     <div className="p-4 sm:p-5">
       <div className="flex items-baseline justify-between gap-3 mb-3">
@@ -410,10 +495,11 @@ function SavedFiles({
               <p className="text-sm font-medium truncate">{person.name}</p>
               <p className="text-xs text-vessel-text-muted truncate">
                 {person.name.toLowerCase()}.wav · 48 kHz · 24-bit ·{" "}
-                {formatMegabytes(wavBytes)}
+                {formatSize(wavBytes)}
                 <span className="hidden sm:inline">
                   {" "}
-                  · {person.name.toLowerCase()}-camera.webm · 1080p
+                  · {person.name.toLowerCase()}-camera.webm · 1080p ·{" "}
+                  {formatSize(videoBytes)}
                 </span>
               </p>
             </div>
