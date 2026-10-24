@@ -48,6 +48,10 @@ export type RecipientTrack = {
    *  combined track's duration because the screen recorder starts/stops
    *  on Share-screen, not on session start/end. Null when no screen file. */
   screenDurationSeconds: number | null;
+  /** Start of this track in ms since epoch on the recording device (v>=5). */
+  startedAtMs: number | null;
+  /** Server clock minus the recording device's clock at start, ms (v>=5). */
+  serverOffsetMs: number | null;
   eventId: string | null;
 };
 
@@ -120,6 +124,8 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     video,
     screen,
     screenDurationSeconds,
+    startedAtMs: typeof t.startedAtMs === "number" ? t.startedAtMs : null,
+    serverOffsetMs: typeof t.serverOffsetMs === "number" ? t.serverOffsetMs : null,
     eventId: t.eventId ? String(t.eventId) : null,
   };
 }

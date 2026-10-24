@@ -7,6 +7,8 @@
  */
 export interface HealthStatus {
   status: string;
+  /** Server clock, milliseconds since the Unix epoch. Clients use it to express recording start times on one clock. */
+  nowMs?: number;
 }
 
 export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];

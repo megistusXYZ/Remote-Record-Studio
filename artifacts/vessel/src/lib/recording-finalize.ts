@@ -72,6 +72,8 @@ export type RecordingResult = {
   startedAtMs: number;
   /** High-resolution start on the recording device. */
   startedAtPerfMs: number;
+  /** Server clock minus this device's clock at start, ms. Null when it could not be measured. */
+  serverOffsetMs: number | null;
   /** True when the finished combined file was written to this device's storage. */
   persistedLocally: boolean;
   /** Set when a local write failed (usually quota); the remote copy may still exist. */
@@ -100,6 +102,7 @@ export type FinalizeInput = {
   durationSeconds: number;
   startedAtMs: number;
   startedAtPerfMs: number;
+  serverOffsetMs: number | null;
   combinedChunkCount: number;
   persistStats: PersistStats;
   /** Live progress of the combined upload; drives the saving UI. */
@@ -347,6 +350,7 @@ export async function finalizeRecording(
     video: videoStream,
     startedAtMs: input.startedAtMs,
     startedAtPerfMs: input.startedAtPerfMs,
+    serverOffsetMs: input.serverOffsetMs,
     persistedLocally,
     localSaveError,
     incrementalSaved: input.persistStats.persisted,

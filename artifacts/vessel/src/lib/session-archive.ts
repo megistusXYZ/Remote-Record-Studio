@@ -68,6 +68,10 @@ export type TrackDescriptor = {
    *  recorder errored before producing a blob. */
   screen?: ArchiveStream | null;
   screenDurationSeconds?: number | null;
+  /** When the track started, ms since epoch on the recording device. */
+  startedAtMs?: number | null;
+  /** Server clock minus the recording device's clock at start, ms. */
+  serverOffsetMs?: number | null;
 };
 
 export type SessionArchiveInput = {
@@ -175,8 +179,10 @@ async function buildEncryptedManifestEvent(opts: {
   // during the call) parallel to `audio` (v=2) and `video` (v=3). Older
   // recipients that only know v=1/v=2/v=3 still see all their existing
   // fields in the same place — `screen` is purely additive.
+  // v: 5 — adds `startedAtMs` and `serverOffsetMs` per track so an editor
+  // can line up tracks recorded on different devices. Also additive.
   const plaintext = JSON.stringify({
-    v: 4,
+    v: 5,
     sessionTitle: session.sessionTitle,
     hostName: session.hostName,
     endedAt: session.endedAt.toISOString(),
@@ -223,6 +229,8 @@ async function buildEncryptedManifestEvent(opts: {
         audio,
         video,
         screen,
+        startedAtMs: t.startedAtMs ?? null,
+        serverOffsetMs: t.serverOffsetMs ?? null,
         eventId: trackEvents[i]?.id ?? null,
       };
     }),

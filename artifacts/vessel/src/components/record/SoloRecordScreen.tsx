@@ -77,7 +77,7 @@ export function SoloRecordScreen() {
 
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const { stream: localStream, error: localStreamError } = useLocalStream({
+  const { stream: localStream, error: localStreamError, videoUnavailableReason } = useLocalStream({
     cameraId: selectedCameraId,
     micId: selectedMicId,
     cameraEnabled,
@@ -112,6 +112,13 @@ export function SoloRecordScreen() {
       toast({ variant: "destructive", description: bgError });
     }
   }, [bgError, toast]);
+
+  // Camera missing or blocked: the take continues as audio only; say so once.
+  useEffect(() => {
+    if (videoUnavailableReason) {
+      toast({ title: "Recording audio only", description: videoUnavailableReason });
+    }
+  }, [videoUnavailableReason, toast]);
 
   // Revoke the previous custom-image object URL whenever it changes or the
   // component unmounts.
@@ -333,6 +340,8 @@ export function SoloRecordScreen() {
           mimeType: r.meta.mimeType,
           sizeBytes: r.meta.sizeBytes,
           durationSeconds: r.meta.durationSeconds,
+          startedAtMs: r.startedAtMs,
+          serverOffsetMs: r.serverOffsetMs,
           audio:
             r.audio && r.audio.remoteUrl
               ? {

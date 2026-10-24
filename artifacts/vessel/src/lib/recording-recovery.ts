@@ -134,6 +134,7 @@ async function recoverFromSavedFiles(
         : null,
     startedAtMs: row.startedAtMs,
     startedAtPerfMs: row.startedAtPerfMs,
+    serverOffsetMs: row.serverOffsetMs ?? null,
     persistedLocally: true,
     localSaveError: null,
     incrementalSaved:
@@ -183,6 +184,7 @@ async function recoverFromChunks(
     durationSeconds: estimateDurationSeconds(row),
     startedAtMs: row.startedAtMs,
     startedAtPerfMs: row.startedAtPerfMs,
+    serverOffsetMs: row.serverOffsetMs ?? null,
     combinedChunkCount: counts.combined,
     persistStats: { captured: persisted, persisted, failed: 0 },
     onSync,

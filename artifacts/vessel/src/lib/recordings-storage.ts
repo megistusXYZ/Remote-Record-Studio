@@ -60,6 +60,8 @@ export type InProgressRecording = {
   mimeTypes: Partial<Record<RecordingStream, string>>;
   chunkCounts: Record<RecordingStream, number>;
   context: InProgressContext;
+  /** Server clock minus this device's clock at start, ms. Null when unknown. */
+  serverOffsetMs?: number | null;
   /** Set once the finished files were saved and uploaded; lets recovery skip both. */
   finalOutcome?: FinalOutcome;
 };
