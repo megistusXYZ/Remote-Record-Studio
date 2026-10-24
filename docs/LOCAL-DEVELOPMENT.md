@@ -60,13 +60,29 @@ or `lib/`.
 Stopping the database: `docker compose down` keeps your data in the
 `vessel_vessel-pgdata` volume; `docker compose down -v` wipes it.
 
+Schema changes: edit `lib/db/src/schema`, then
+
+```bash
+pnpm db:generate --name what_changed   # writes lib/db/drizzle/NNNN_what_changed.sql
+pnpm db:migrate                        # applies it to your database
+```
+
+and commit the SQL with the schema. `pnpm db:push` still works for a
+throwaway database, but production only ever runs the SQL files
+(OPERATIONS.md § 11).
+
 ## Checks before you push
 
 ```bash
-pnpm typecheck   # what CI runs (TypeScript project refs + every app)
+pnpm typecheck   # TypeScript project refs + every app
 pnpm test        # vitest in api-server (supertest) and vessel (jsdom)
 pnpm exec prettier --write .   # formatting
 ```
+
+CI (`.github/workflows/ci.yml`) runs the typecheck, the tests, both
+production builds, and a check that the generated API clients match
+`lib/api-spec/openapi.yaml` (run `pnpm --filter @workspace/api-spec run codegen`
+after editing the spec). A second workflow builds the Docker images.
 
 `pnpm test` runs every package and keeps going after a failure, so both
 suites report. On Node 25 and newer the web tests rely on
