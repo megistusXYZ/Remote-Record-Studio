@@ -1,15 +1,47 @@
+import type { RecordingStream } from "./recordings-storage";
+
 export type RecorderEvent =
   | { type: "recording-started"; startedAt: number }
-  | { type: "chunk-saved-locally"; index: number; sizeBytes: number }
-  | { type: "recording-complete"; durationSeconds: number; sizeBytes: number; mimeType: string; blob: Blob; chunkCount: number };
+  /** A slice came out of MediaRecorder and is held in memory. */
+  | { type: "chunk-captured"; index: number; sizeBytes: number }
+  /** The slice reached durable local storage. */
+  | { type: "chunk-persisted"; index: number; sizeBytes: number }
+  /** The slice could not be written locally; it is still held in memory. */
+  | { type: "chunk-persist-failed"; index: number; error: unknown }
+  | {
+      type: "recording-complete";
+      durationSeconds: number;
+      sizeBytes: number;
+      mimeType: string;
+      blob: Blob;
+      chunkCount: number;
+    };
 
 export type RecorderListener = (event: RecorderEvent) => void;
+
+/**
+ * Durable sink for slices. Called once per slice as soon as MediaRecorder
+ * hands it over; the recorder waits for every call to settle before it
+ * reports completion, so a resolved `stop()` means every slice was offered
+ * to storage.
+ */
+export type PersistChunk = (index: number, blob: Blob) => Promise<void>;
 
 export type RecorderOptions = {
   stream: MediaStream;
   timesliceMs?: number;
   preferredMimeTypes?: string[];
+  persistChunk?: PersistChunk;
 };
+
+export type RecorderStartTime = {
+  /** Wall clock, ms since epoch. Comparable across devices once a server offset is known. */
+  startedAtMs: number;
+  /** High-resolution time on this device (`performance.timeOrigin + performance.now()`). */
+  startedAtPerfMs: number;
+};
+
+export type PersistStats = { captured: number; persisted: number; failed: number };
 
 const DEFAULT_MIME_TYPES = [
   "video/webm;codecs=vp9,opus",
@@ -27,6 +59,13 @@ export function pickSupportedMimeType(preferred?: string[]): string {
   return "";
 }
 
+function nowPerfMs(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return (performance.timeOrigin ?? 0) + performance.now();
+  }
+  return Date.now();
+}
+
 export const __test__ = {
   DEFAULT_MIME_TYPES,
   AUDIO_MIME_PREFERENCES: () => AUDIO_MIME_PREFERENCES,
@@ -37,7 +76,8 @@ export class ChunkedRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private listeners = new Set<RecorderListener>();
-  private startTime = 0;
+  private startedAtMs = 0;
+  private startedAtPerfMs = 0;
   private chunkIndex = 0;
   private mimeType = "";
   private finalBlob: Blob | null = null;
@@ -45,6 +85,9 @@ export class ChunkedRecorder {
   private stopPromise: Promise<Blob> | null = null;
   private resolveStop: ((blob: Blob) => void) | null = null;
   private rejectStop: ((err: unknown) => void) | null = null;
+  private persistChunk: PersistChunk | null = null;
+  private persistPromises: Promise<void>[] = [];
+  private persistStats: PersistStats = { captured: 0, persisted: 0, failed: 0 };
 
   static isSupported(): boolean {
     return typeof window !== "undefined" && typeof MediaRecorder !== "undefined";
@@ -72,14 +115,16 @@ export class ChunkedRecorder {
     if (!ChunkedRecorder.isSupported()) {
       throw new Error("Recording is not supported in this browser.");
     }
-    const { stream, timesliceMs = 5000, preferredMimeTypes } = options;
+    const { stream, timesliceMs = 5000, preferredMimeTypes, persistChunk } = options;
     const mimeType = pickSupportedMimeType(preferredMimeTypes);
     this.mimeType = mimeType;
     this.chunks = [];
     this.chunkIndex = 0;
     this.finalBlob = null;
+    this.persistChunk = persistChunk ?? null;
+    this.persistPromises = [];
+    this.persistStats = { captured: 0, persisted: 0, failed: 0 };
     this.status = "recording";
-    this.startTime = Date.now();
 
     const recorderOptions: MediaRecorderOptions = mimeType ? { mimeType } : {};
     this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
@@ -88,25 +133,14 @@ export class ChunkedRecorder {
       if (ev.data && ev.data.size > 0) {
         this.chunks.push(ev.data);
         const idx = this.chunkIndex++;
-        this.emit({ type: "chunk-saved-locally", index: idx, sizeBytes: ev.data.size });
+        this.persistStats.captured += 1;
+        this.emit({ type: "chunk-captured", index: idx, sizeBytes: ev.data.size });
+        this.offerToStorage(idx, ev.data);
       }
     };
 
     this.mediaRecorder.onstop = () => {
-      const finalMime = this.mimeType || (this.chunks[0]?.type ?? "video/webm");
-      const blob = new Blob(this.chunks, { type: finalMime });
-      this.finalBlob = blob;
-      const durationSeconds = Math.max(1, Math.round((Date.now() - this.startTime) / 1000));
-      this.emit({
-        type: "recording-complete",
-        durationSeconds,
-        sizeBytes: blob.size,
-        mimeType: finalMime,
-        blob,
-        chunkCount: this.chunks.length,
-      });
-      this.status = "stopped";
-      this.resolveStop?.(blob);
+      void this.finish();
     };
 
     this.mediaRecorder.onerror = (ev) => {
@@ -114,8 +148,46 @@ export class ChunkedRecorder {
       this.rejectStop?.(err);
     };
 
+    // Stamp the start as close to the first captured frame as possible.
+    this.startedAtMs = Date.now();
+    this.startedAtPerfMs = nowPerfMs();
     this.mediaRecorder.start(timesliceMs);
-    this.emit({ type: "recording-started", startedAt: this.startTime });
+    this.emit({ type: "recording-started", startedAt: this.startedAtMs });
+  }
+
+  private offerToStorage(index: number, blob: Blob): void {
+    if (!this.persistChunk) return;
+    const p = Promise.resolve()
+      .then(() => this.persistChunk!(index, blob))
+      .then(() => {
+        this.persistStats.persisted += 1;
+        this.emit({ type: "chunk-persisted", index, sizeBytes: blob.size });
+      })
+      .catch((error: unknown) => {
+        this.persistStats.failed += 1;
+        this.emit({ type: "chunk-persist-failed", index, error });
+      });
+    this.persistPromises.push(p);
+  }
+
+  private async finish(): Promise<void> {
+    // Every slice, including the one MediaRecorder flushes on stop, has been
+    // offered to storage by now; wait for those writes before reporting done.
+    await Promise.allSettled(this.persistPromises);
+    const finalMime = this.mimeType || (this.chunks[0]?.type ?? "video/webm");
+    const blob = new Blob(this.chunks, { type: finalMime });
+    this.finalBlob = blob;
+    const durationSeconds = Math.max(1, Math.round((Date.now() - this.startedAtMs) / 1000));
+    this.status = "stopped";
+    this.emit({
+      type: "recording-complete",
+      durationSeconds,
+      sizeBytes: blob.size,
+      mimeType: finalMime,
+      blob,
+      chunkCount: this.chunks.length,
+    });
+    this.resolveStop?.(blob);
   }
 
   stop(): Promise<Blob> {
@@ -136,6 +208,20 @@ export class ChunkedRecorder {
     return this.stopPromise;
   }
 
+  /**
+   * Ask MediaRecorder to hand over whatever it has buffered right now, so it
+   * reaches storage without waiting for the next timeslice. Used when the tab
+   * is hidden or the page is about to unload. No-op unless recording.
+   */
+  flush(): void {
+    if (this.status !== "recording" || !this.mediaRecorder) return;
+    try {
+      if (this.mediaRecorder.state === "recording") this.mediaRecorder.requestData();
+    } catch {
+      // Some browsers throw if a slice is already being delivered; harmless.
+    }
+  }
+
   getStatus(): "idle" | "recording" | "stopped" {
     return this.status;
   }
@@ -144,9 +230,7 @@ export class ChunkedRecorder {
     return this.chunks.length;
   }
 
-  /** Snapshot of the chunk at `index`, or null if out of bounds. Public,
-   *  typed accessor used by the upload pipeline so callers don't have to
-   *  reach into private state via type escapes. */
+  /** Snapshot of the chunk at `index`, or null if out of bounds. */
   getChunkAt(index: number): Blob | null {
     return this.chunks[index] ?? null;
   }
@@ -155,9 +239,21 @@ export class ChunkedRecorder {
     return this.finalBlob;
   }
 
+  getMimeType(): string {
+    return this.mimeType;
+  }
+
+  getStartTime(): RecorderStartTime {
+    return { startedAtMs: this.startedAtMs, startedAtPerfMs: this.startedAtPerfMs };
+  }
+
+  getPersistStats(): PersistStats {
+    return { ...this.persistStats };
+  }
+
   getDurationSeconds(): number {
-    if (this.startTime === 0) return 0;
-    return Math.max(0, Math.round((Date.now() - this.startTime) / 1000));
+    if (this.startedAtMs === 0) return 0;
+    return Math.max(0, Math.round((Date.now() - this.startedAtMs) / 1000));
   }
 }
 
@@ -188,6 +284,9 @@ export type DualRecorderResult = {
    *  "Video + Audio" vs "Audio only" copy in the UI. */
   hasVideo: boolean;
   durationSeconds: number;
+  /** When the combined recorder started; see `RecorderStartTime`. */
+  startedAtMs: number;
+  startedAtPerfMs: number;
   combinedChunkCount: number;
   audioChunkCount: number;
   videoOnlyChunkCount: number;
@@ -196,6 +295,8 @@ export type DualRecorderResult = {
   audioRecordingOk: boolean;
   /** True when the video-only recorder ran for the full duration. */
   videoRecordingOk: boolean;
+  /** Local persistence totals across all streams. */
+  persistStats: PersistStats;
 };
 
 const AUDIO_MIME_PREFERENCES = [
@@ -209,6 +310,17 @@ const VIDEO_ONLY_MIME_PREFERENCES = [
   "video/webm;codecs=vp8",
   "video/webm",
 ];
+
+/** Per-stream durable sink. */
+export type PersistStreamChunk = (
+  stream: RecordingStream,
+  index: number,
+  blob: Blob,
+) => Promise<void>;
+
+export type DualRecorderOptions = Omit<RecorderOptions, "persistChunk"> & {
+  persistChunk?: PersistStreamChunk;
+};
 
 /** Combined recorder + best-effort audio-only and video-only siblings.
  *  Top-level listeners forward only the combined stream; sibling listeners
@@ -257,14 +369,24 @@ export class DualChunkedRecorder {
   }
   private pendingVideoListeners: RecorderListener[] = [];
 
-  start(options: RecorderOptions): void {
-    const { stream } = options;
+  start(options: DualRecorderOptions): void {
+    const { stream, persistChunk } = options;
     const videoTracks = stream.getVideoTracks();
     const audioTracks = stream.getAudioTracks();
     this.hasVideo = videoTracks.length > 0;
 
-    // Combined recorder — required.
-    this.combined.start(options);
+    const sinkFor = (s: RecordingStream): PersistChunk | undefined =>
+      persistChunk ? (index, blob) => persistChunk(s, index, blob) : undefined;
+
+    // Combined recorder — required. An audio-only stream gets an audio
+    // container so downstream code can tell the two apart by mime type.
+    this.combined.start({
+      stream,
+      timesliceMs: options.timesliceMs,
+      preferredMimeTypes:
+        options.preferredMimeTypes ?? (this.hasVideo ? undefined : AUDIO_MIME_PREFERENCES),
+      persistChunk: sinkFor("combined"),
+    });
 
     // Audio-only sibling (best-effort).
     if (audioTracks.length > 0) {
@@ -277,6 +399,7 @@ export class DualChunkedRecorder {
           stream: audioStream,
           timesliceMs: options.timesliceMs,
           preferredMimeTypes: AUDIO_MIME_PREFERENCES,
+          persistChunk: sinkFor("audio"),
         });
         this.audioOnly = rec;
         this.audioStream = audioStream;
@@ -300,6 +423,7 @@ export class DualChunkedRecorder {
           stream: videoStream,
           timesliceMs: options.timesliceMs,
           preferredMimeTypes: VIDEO_ONLY_MIME_PREFERENCES,
+          persistChunk: sinkFor("video"),
         });
         this.videoOnly = rec;
         this.videoStream = videoStream;
@@ -349,6 +473,7 @@ export class DualChunkedRecorder {
     const videoOnlyMime = videoOnlyBlob
       ? videoOnlyBlob.type || (videoRec?.getFinalBlob()?.type ?? "video/webm")
       : null;
+    const start = this.combined.getStartTime();
 
     return {
       combinedBlob,
@@ -362,12 +487,22 @@ export class DualChunkedRecorder {
       videoOnlySizeBytes: videoOnlyBlob ? videoOnlyBlob.size : 0,
       hasVideo: this.hasVideo,
       durationSeconds: this.combined.getDurationSeconds(),
+      startedAtMs: start.startedAtMs,
+      startedAtPerfMs: start.startedAtPerfMs,
       combinedChunkCount: this.combined.getChunkCount(),
       audioChunkCount: audioRec?.getChunkCount() ?? 0,
       videoOnlyChunkCount: videoRec?.getChunkCount() ?? 0,
       audioRecordingOk: this.audioStarted && !!audioBlob,
       videoRecordingOk: this.videoStarted && !!videoOnlyBlob,
+      persistStats: this.getPersistStats(),
     };
+  }
+
+  /** Force every running recorder to hand over its buffered slice now. */
+  flush(): void {
+    this.combined.flush();
+    this.audioOnly?.flush();
+    this.videoOnly?.flush();
   }
 
   getStatus(): "idle" | "recording" | "stopped" {
@@ -378,22 +513,48 @@ export class DualChunkedRecorder {
     return this.combined.getDurationSeconds();
   }
 
-  /** Underlying combined recorder — exposed so `useRecording` can reach the
-   *  internal `chunks` array for incremental slice uploads (mirrors the
-   *  existing single-recorder behavior). */
+  getStartTime(): RecorderStartTime {
+    return this.combined.getStartTime();
+  }
+
+  /** Which streams actually started, and with which container types. */
+  getMimeTypes(): Partial<Record<RecordingStream, string>> {
+    const out: Partial<Record<RecordingStream, string>> = {
+      combined: this.combined.getMimeType() || "video/webm",
+    };
+    if (this.audioOnly) out.audio = this.audioOnly.getMimeType() || "audio/webm";
+    if (this.videoOnly) out.video = this.videoOnly.getMimeType() || "video/webm";
+    return out;
+  }
+
+  getPersistStats(): PersistStats {
+    const all = [this.combined, this.audioOnly, this.videoOnly].filter(
+      (r): r is ChunkedRecorder => r !== null,
+    );
+    return all.reduce<PersistStats>(
+      (acc, r) => {
+        const s = r.getPersistStats();
+        return {
+          captured: acc.captured + s.captured,
+          persisted: acc.persisted + s.persisted,
+          failed: acc.failed + s.failed,
+        };
+      },
+      { captured: 0, persisted: 0, failed: 0 },
+    );
+  }
+
+  /** Underlying combined recorder. */
   getCombinedRecorder(): ChunkedRecorder {
     return this.combined;
   }
 
-  /** Underlying audio-only recorder, or null when audio recording was not
-   *  started. Same shape as the combined recorder so the upload queue can
-   *  treat both uniformly. */
+  /** Underlying audio-only recorder, or null when audio recording was not started. */
   getAudioRecorder(): ChunkedRecorder | null {
     return this.audioOnly;
   }
 
-  /** Underlying video-only recorder, or null when no camera was attached.
-   *  Local-only by design — exposed for diagnostics, not for upload. */
+  /** Underlying video-only recorder, or null when no camera was attached. */
   getVideoOnlyRecorder(): ChunkedRecorder | null {
     return this.videoOnly;
   }

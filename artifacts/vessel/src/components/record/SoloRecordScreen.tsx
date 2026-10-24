@@ -21,6 +21,7 @@ import {
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
+import { markRecordingRegistered } from "../../lib/recording-finalize";
 import {
   useScreenRecording,
   type ScreenRecordingResult,
@@ -272,7 +273,7 @@ export function SoloRecordScreen() {
       // Feed the recorder the *processed* stream when an effect is active so
       // the recording matches the preview. When no effect is active this is
       // just the raw camera stream (the hook is a passthrough).
-      await recording.start(recordableStream);
+      await recording.start(recordableStream, { kind: "camera", role: "solo" });
     } catch (err) {
       console.error("Failed to start recording", err);
       // Surface a controlled, jargon-free message — never the raw underlying
@@ -362,6 +363,10 @@ export function SoloRecordScreen() {
           screenDurationSeconds: screenResult?.meta.durationSeconds ?? null,
         },
       );
+
+      // The receipt is this recording's permanent home for a solo take; once
+      // it is published, recovery bookkeeping can go.
+      void markRecordingRegistered(r.recordingId);
 
       const noneAccepted = archive.publish.successCount === 0;
       const partial =
@@ -455,7 +460,7 @@ export function SoloRecordScreen() {
   const incrementalSync = recording.incrementalSync;
   const incrementalChip = useMemo(() => {
     if (phase !== "recording") return null;
-    if (incrementalSync.total === 0) return "Backing up to your storage…";
+    if (incrementalSync.total === 0) return "Saving on this device…";
     if (incrementalSync.failed > 0) {
       return `Saved ${incrementalSync.saved} of ${incrementalSync.total} parts (${incrementalSync.failed} retrying).`;
     }
