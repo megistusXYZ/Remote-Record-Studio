@@ -38,6 +38,7 @@ import {
 import { ParticipantCard } from "./ParticipantCard";
 import { InviteModal } from "./InviteModal";
 import { HostMicCheck } from "./HostMicCheck";
+import { ScheduleInvite } from "./ScheduleInvite";
 import wheelhouseAvif from "@/assets/illustrations/wheelhouse.avif";
 import wheelhouseWebp from "@/assets/illustrations/wheelhouse.webp";
 
@@ -413,6 +414,12 @@ export function LobbyScreen({
                     QR Code
                   </VesselButton>
                 </div>
+                <ScheduleInvite
+                  sessionId={session.id}
+                  title={session.title}
+                  hostName={session.hostName}
+                  joinUrl={buildInviteUrl(session.inviteCode, session.hostPubkey)}
+                />
               </div>
             </VesselCard>
             )}
