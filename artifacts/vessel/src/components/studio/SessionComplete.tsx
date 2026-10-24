@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { friendlyError } from "../../lib/friendly-error";
+import { loadSessionMarkers } from "../../hooks/use-recording-markers";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -32,6 +34,7 @@ import { useToast } from "../../hooks/use-toast";
 import {
   buildExportFilename,
   downloadSelectionsAsZip,
+  downloadEditorBundle,
   resolveStreamBlob,
   downloadBlobAsFile,
   type TrackExportSource,
@@ -122,6 +125,8 @@ export type SessionCompleteProps = {
   hostName: string;
   /** Session title, used to name the bundle zip download. */
   sessionTitle?: string;
+  /** Session id; the editor bundle reads this session's markers by it. */
+  sessionId?: string;
   /** Wall-clock the session ended; used for the zip filename date stamp. */
   sessionDate?: Date;
   syncStatus: "idle" | "syncing" | "complete" | "partial-failure";
@@ -666,6 +671,7 @@ export function SessionComplete({
   isHost,
   hostName,
   sessionTitle,
+  sessionId,
   sessionDate,
   syncStatus,
   syncProgress,
@@ -800,6 +806,43 @@ export function SessionComplete({
   };
 
   // Bundle download for all selected rows; serialized behind `busy`.
+  // Editor bundle: every selected speaker on a synced, labelled track with
+  // the session's markers, ready for Reaper, Audacity or any editor.
+  const handleEditorDownload = async () => {
+    if (busy) return;
+    const chosen = tracks.filter((t) => selected.has(t.participantId));
+    if (chosen.length === 0) {
+      toast({ description: "Pick at least one participant first." });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await downloadEditorBundle({
+        sources: chosen.map(trackToExportSource),
+        markers: loadSessionMarkers(sessionId ?? null),
+        title: sessionTitle || "Vessel session",
+        zipFilename: bundleFilename(sessionTitle, sessionDate).replace(/\.zip$/, "-for-editing.zip"),
+      });
+      if (result.cancelled) return;
+      if (result.includedFilenames.length === 0) {
+        toast({ variant: "destructive", description: "None of the selected tracks were available to download." });
+        return;
+      }
+      toast({
+        title: "Ready for your editor",
+        description:
+          result.alignedCount === chosen.length
+            ? "Every track lines up. Open the .RPP in Reaper, or drop the WAVs in at 0:00."
+            : "Some tracks had no timing, so they start at 0:00 and may need nudging.",
+      });
+    } catch (err) {
+      console.error("Editor bundle failed", err);
+      toast({ variant: "destructive", description: friendlyError(err, "Couldn't build the download. Try again in a moment.") });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleBundleDownload = async (kind: TrackStreamKind) => {
     if (busy) return;
     const chosen = tracks.filter((t) => selected.has(t.participantId));
@@ -1115,6 +1158,28 @@ export function SessionComplete({
                           Download selected (.zip)
                         </VesselButton>
                       </div>
+                    </div>
+
+                    <div
+                      className="w-full p-4 rounded-xl bg-vessel-accent/[0.06] border border-vessel-accent/30 text-left mb-3 flex flex-col sm:flex-row sm:items-center gap-3"
+                      data-testid="card-editor-bundle"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-vessel-text-primary">Ready for your editor</p>
+                        <p className="text-xs text-vessel-text-secondary">
+                          Every speaker on their own synced track, with your markers. Opens in Reaper and Audacity; works in any editor.
+                        </p>
+                      </div>
+                      <VesselButton
+                        variant="primary"
+                        size="sm"
+                        disabled={busy || selectedCount === 0}
+                        onClick={handleEditorDownload}
+                        data-testid="button-editor-bundle"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Music className="w-4 h-4 mr-2" />}
+                        Download for editing
+                      </VesselButton>
                     </div>
 
 
