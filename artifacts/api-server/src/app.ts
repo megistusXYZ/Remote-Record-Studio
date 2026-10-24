@@ -10,7 +10,7 @@ import { errorHandler, notFoundHandler } from "./middlewares/error-handler";
 
 const app: Express = express();
 
-// Trust the upstream proxy (Replit edge / any CDN in front) so that
+// Trust the upstream proxy (the CDN or reverse proxy in front) so that
 // `req.protocol` and `req.get("host")` reflect what the client actually
 // targeted. NIP-98 binds the auth event to the absolute request URL, so
 // these must match what the client signed.

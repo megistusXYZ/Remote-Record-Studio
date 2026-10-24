@@ -27,6 +27,9 @@ Implementation details belong in the commits, not here. -->
       (`git commit -s`). I understand my contribution will be licensed
       under [AGPL-3.0-or-later](../LICENSE).
 - [ ] `pnpm run typecheck` passes locally.
+- [ ] Nothing here belongs outside a public repo: no internal notes, secrets
+      or vulnerability details (see
+      [What goes in the public repo](../CONTRIBUTING.md#what-goes-in-the-public-repo)).
 - [ ] The PR description above explains the *why*, not just the *what*.
 - [ ] If this changes user-facing behavior, I've updated `README.md` or
       the relevant docs.

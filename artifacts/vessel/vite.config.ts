@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { VitePWA } from "vite-plugin-pwa";
 
 const rawPort = process.env.PORT;
@@ -34,16 +33,16 @@ const basePath = rawBasePath.endsWith("/") ? rawBasePath : `${rawBasePath}/`;
 
 // Local development: forward `/api/*` from the Vite dev server to the API
 // server so the web client's same-origin fetches work without a path router
-// in front (Replit provides one; `pnpm dev` on a laptop does not). The Host
+// in front (a deployment's reverse proxy does this; `pnpm dev` does not). The Host
 // header is deliberately left untouched (no `changeOrigin`): NIP-98 request
 // signing binds each call to the URL the browser targeted, and the API
-// rebuilds that URL from the Host header it receives. Unset on Replit and in
+// rebuilds that URL from the Host header it receives. Unset in
 // production builds, where this is a no-op.
 const apiProxyTarget = process.env["VESSEL_API_PROXY_TARGET"];
 
 // Headers required for advanced web platform features (WebCodecs, WebTransport,
-// SharedArrayBuffer). `credentialless` is used in dev so the Replit preview
-// iframe can still embed third-party resources without CORP headers — switch to
+// SharedArrayBuffer). `credentialless` is used in dev so pages can still
+// embed third-party resources without CORP headers — switch to
 // `require-corp` for the strictest cross-origin isolation in production servers.
 const crossOriginIsolationHeaders = {
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -56,8 +55,8 @@ const crossOriginIsolationHeaders = {
 // default and to give the Vessel web client a strong posture even before a
 // CDN/WAF is in front of it.
 //
-// The Content-Security-Policy ships in REPORT-ONLY mode first (per the
-// Task #68 plan). Flip `VESSEL_CSP_ENFORCE=true` to send the enforcing
+// The Content-Security-Policy ships in REPORT-ONLY mode first (see
+// OPERATIONS.md). Flip `VESSEL_CSP_ENFORCE=true` to send the enforcing
 // header instead — only do that after a week of clean Report-Only telemetry
 // so user-supplied storage / signaling origins have time to surface.
 //
@@ -121,7 +120,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
     VitePWA({
       // "prompt": a new version waits until the person applies it. The old
       // auto-update took over open tabs on deploy, reloading them mid-session.
@@ -185,19 +183,6 @@ export default defineConfig({
         enabled: false,
       },
     }),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
   ],
   resolve: {
     alias: {
