@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useGetSession, useJoinSession } from "@workspace/api-client-react";
 import { useIdentity } from "../hooks/use-identity";
-import { Greenroom, type GreenroomResult } from "../components/onboarding/Greenroom";
+import {
+  Greenroom,
+  type GreenroomResult,
+} from "../components/onboarding/Greenroom";
 import {
   ConsentScreen,
   type RoomFullInfo,
@@ -38,7 +41,11 @@ export default function Join() {
   } = useGetSession(inviteCode || "");
 
   const joinSessionMutation = useJoinSession();
-  const { displayName, createGuestIdentity } = useIdentity();
+  const {
+    displayName,
+    identity: currentIdentity,
+    createGuestIdentity,
+  } = useIdentity();
 
   const [phase, setPhase] = useState<Phase>("greenroom");
   const [chosen, setChosen] = useState<GreenroomResult | null>(null);
@@ -66,7 +73,9 @@ export default function Join() {
         </div>
         <div className="relative z-10 flex flex-col items-center gap-4">
           <div className="h-10 w-10 border-2 border-vessel-accent border-t-transparent rounded-full animate-spin" />
-          <p className="text-vessel-text-secondary text-sm animate-pulse">Finding session…</p>
+          <p className="text-vessel-text-secondary text-sm animate-pulse">
+            Finding session…
+          </p>
         </div>
       </div>
     );
@@ -79,10 +88,12 @@ export default function Join() {
           <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-vessel-accent/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2" />
         </div>
         <div className="relative z-10 max-w-md text-center">
-          <h2 className="font-display text-2xl font-bold mb-4">Session not found</h2>
+          <h2 className="font-display text-2xl font-bold mb-4">
+            Session not found
+          </h2>
           <p className="text-vessel-text-secondary mb-8">
-            This invite link doesn't work any more. The host may have ended the session
-            or made a new link.
+            This invite link doesn't work any more. The host may have ended the
+            session or made a new link.
           </p>
           <button
             type="button"
@@ -102,7 +113,12 @@ export default function Join() {
     setError(null);
     setRoomFull(null);
     try {
-      const identity = await createGuestIdentity(chosen.name);
+      // Someone signed in to their own studio joins as themselves; everyone
+      // else gets this device's guest key (kept across visits).
+      const identity =
+        currentIdentity && !currentIdentity.isGuest
+          ? currentIdentity
+          : await createGuestIdentity(chosen.name);
       const joined = await joinSessionMutation.mutateAsync({
         sessionId: inviteCode,
         data: { guestName: chosen.name, guestPubkey: identity._pubkey },
@@ -153,7 +169,9 @@ export default function Join() {
  * branch. We tolerate a few shapes since the orval-generated client doesn't
  * always carry the response body in a typed way for non-2xx codes.
  */
-function parseJoinError(err: unknown):
+function parseJoinError(
+  err: unknown,
+):
   | { kind: "room_full"; info: RoomFullInfo }
   | { kind: "generic"; message: string } {
   const fallback =
