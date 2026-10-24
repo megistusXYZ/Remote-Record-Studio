@@ -41,7 +41,7 @@ Minimum settings:
 | TLS minimum version  | TLS 1.2 (TLS 1.3 if all your guests can reach it).                                       |
 | Bot Fight Mode       | On (Cloudflare). Equivalent on other CDNs.                                               |
 | Rate limiting (edge) | 600 req/min/IP for `/api/*`, 30 req/min/IP for `/api/sessions/*` GETs, unlimited otherwise. |
-| Cache rules          | Cache everything under `/assets/*`, never cache `/api/*`.                                |
+| Cache rules          | Cache everything under `/assets/*`; never cache `/api/*`, `/index.html`, `/config.js`, `/sw.js`. |
 | Security headers     | Leave the ones the app sends in place. Optionally add CDN-side HSTS preload.            |
 
 The application server already sets HSTS (`max-age=1y, includeSubDomains`),
@@ -55,30 +55,35 @@ least an A grade**.
 
 ## 2. Required environment variables
 
-| Variable          | Purpose                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| `DATABASE_URL`    | PostgreSQL connection string. Required.                                              |
-| `SESSION_SECRET`  | Server-side signing secret. Required. **Rotate quarterly** — see § 3.                |
-| `PORT`            | TCP port the API server listens on. Required.                                        |
-| `BASE_PATH`       | Web client base path (use `/` for a root-mounted deploy).                           |
-| `NODE_ENV`        | Set to `production` in production. Disables verbose logging and dev plugins.        |
+The API reads these from its process environment. `deploy/compose.yaml`
+sets them from `deploy/.env` (template: `deploy/.env.example`).
 
-## 3. Rotating `SESSION_SECRET`
+| Variable                                                              | Purpose                                                                   |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                        | PostgreSQL connection string. Required.                                   |
+| `PORT`                                                                | TCP port the API listens on. Required.                                    |
+| `NODE_ENV`                                                            | `production` in production.                                               |
+| `LOG_LEVEL`                                                           | pino level: `trace`, `debug`, `info` (default), `warn`, `error`.          |
+| `TURN_URLS`, `TURN_SHARED_SECRET`, `TURN_TTL_SECONDS`, `STUN_URLS`    | Live preview relay credentials, § 4a.                                     |
+| `VESSEL_*`                                                            | Abuse controls and headers, § 4.                                          |
 
-`SESSION_SECRET` is used to sign server-side state. Treat it like a
-short-lived credential.
+The web client holds no secrets. Its deployment settings (`VESSEL_DOMAIN`,
+`VESSEL_RELAYS`, `VESSEL_STORAGE_SERVER`, …) are read by the web container
+at start and handed to the browser; see § 10.
 
-```sh
-# Generate a new value (32 bytes, base64-encoded).
-openssl rand -base64 32
+There is no session secret: the API keeps no sessions and sets no cookies.
+Every request that changes state carries a signature from the caller's key,
+bound to the request URL and body (`require-signed-request.ts`).
 
-# Set it on the deployment, then restart the API server workflow.
-# All previously-issued state is invalidated immediately.
-```
+## 3. Rotating secrets
 
-Cadence: at least once per quarter, and immediately if you suspect a
-leak. There are no signed-cookie sessions to invalidate today, so the
-rotation is essentially free of user-visible impact.
+| Secret               | Where         | How to rotate                                                                                                                                                             |
+| -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`  | `deploy/.env` | `ALTER USER vessel PASSWORD '<new>'` on the database, update the file, then `up -d` (api, migrate and backup restart with the new value).                                   |
+| `TURN_SHARED_SECRET` | `deploy/.env` | Update the file, then `up -d api turn`. Credentials issued before the change expire within `TURN_TTL_SECONDS`; a call in progress keeps its allocation.                     |
+
+Generate values with `openssl rand -hex 32`. Rotate at once if you suspect a
+leak; otherwise once a year is plenty.
 
 ## 4. Rate-limiting & quota controls (rollback switch table)
 
@@ -107,7 +112,9 @@ several API instances a replay could land on a different instance, so pin
 clients to one instance or back the cache with a shared store before scaling out.
 
 **`/api/healthz` is never rate-limited** — your monitoring can hit it as
-often as it likes without tripping anything.
+often as it likes without tripping anything. It answers 200 only when the
+database answers too, and 503 `{"status":"degraded"}` otherwise, so point
+uptime monitoring at it.
 
 ### How the modes work
 
@@ -159,7 +166,8 @@ Run these against your deployed origin (or `localhost` in dev) after
 every deploy. They take five seconds and catch most regressions.
 
 ```sh
-# 1. API health endpoint should return 200 and the security headers.
+# 1. API health endpoint should return 200 (503 means the database is down)
+#    and the security headers.
 curl -sSI https://your-domain.example/api/healthz
 
 # 2. Unknown API path should return a generic 404 — no stack trace, no
@@ -279,3 +287,119 @@ connections):
 
 If any number is outside the budget, set the relevant subsystem to
 `off` (see § 4) and open an issue before promoting further.
+
+## 10. Deploy with Docker Compose
+
+`deploy/compose.yaml` is the whole stack: Caddy (TLS and the web client),
+the API, PostgreSQL, a one-shot migration step, a sync server (strfry), a
+storage server (blossom-server), a TURN relay (coturn) and a daily backup.
+The flagship and a self-hosted instance use the same file.
+
+### What you need
+
+- A Linux host with 2 vCPUs, 4 GB RAM and 40 GB of disk to start, x86-64 or
+  arm64, running Docker Engine 24 or newer with the Compose plugin.
+- A domain. The stack uses four names, all pointing at the host:
+
+  | Name                 | Record | CDN proxy                | Serves                      |
+  | -------------------- | ------ | ------------------------ | --------------------------- |
+  | `vessel.example.com` | A/AAAA | yes                      | the app and `/api`          |
+  | `relay.example.com`  | A/AAAA | yes (websockets pass)    | sync server                 |
+  | `files.example.com`  | A/AAAA | no, DNS-only (see below) | storage server              |
+  | `turn.example.com`   | A/AAAA | no, DNS-only (required)  | TURN; UDP cannot be proxied |
+
+  Cloudflare's proxy caps each request body at 100 MB on the free plan. Whole
+  recordings exceed that, so keep `files` DNS-only or upgrade the plan.
+
+- Host firewall: open 80 and 443 (TCP and UDP) to everyone so Caddy can obtain
+  certificates for the DNS-only names too, plus 3478 (TCP and UDP) and the TURN
+  relay range 49160–49200 (UDP). If every hostname is proxied you may limit 443
+  to the CDN's ranges (§ 1); the DNS-only names then need Cloudflare origin
+  certificates instead of Let's Encrypt.
+
+### First start
+
+```sh
+git clone https://github.com/megistusXYZ/Remote-Record-Studio.git vessel
+cd vessel
+cp deploy/.env.example deploy/.env
+openssl rand -hex 32    # paste as POSTGRES_PASSWORD
+openssl rand -hex 32    # paste as TURN_SHARED_SECRET
+$EDITOR deploy/.env     # domain, email, the two secrets, TURN_URLS
+docker compose -f deploy/compose.yaml --env-file deploy/.env pull
+docker compose -f deploy/compose.yaml --env-file deploy/.env up -d
+docker compose -f deploy/compose.yaml --env-file deploy/.env ps
+```
+
+`migrate` runs once and exits 0; `api` starts after it. Caddy obtains a
+certificate for each hostname on its first request. Then check:
+
+```sh
+curl -sS https://vessel.example.com/api/healthz     # {"status":"ok","nowMs":...}
+curl -sSI https://files.example.com/ | head -1      # HTTP/2 200
+```
+
+and run the recipes in § 5. Open the site, create a studio, start a session
+from a second device on a mobile connection: the live preview should connect,
+which proves TURN.
+
+### Day two
+
+- **Update**: `git pull` (for the compose file and configs), then `pull` and
+  `up -d` again. Migrations run first; a failed migration stops the rollout
+  and the API is not replaced until it is fixed.
+- **Pin a version**: set `VESSEL_IMAGE_TAG=v0.3.0` in `deploy/.env`. Rolling
+  back is the same with the previous tag, as long as no migration in between
+  dropped anything (read the files in `lib/db/drizzle`).
+- **Logs**: `docker compose -f deploy/compose.yaml --env-file deploy/.env logs -f api web`.
+- **Data**: the named volumes `pgdata`, `strfry-db`, `blossom-data`,
+  `caddy-data` and `db-backups`. `down` keeps them; `down -v` destroys them.
+- **One API container**: the signed-request replay cache is per process
+  (§ 4), so scale the machine before scaling out.
+- **Build locally instead of pulling**: add `--build` to `up`. Images build
+  for the host's own architecture.
+- **Name your servers**: `relay.info` in `deploy/strfry.conf` and the rules
+  in `deploy/blossom.yml` are yours to edit; `up -d relay files` applies them.
+
+### Settings the browser receives
+
+The web container writes `/config.js` at start from `VESSEL_RELAYS`,
+`VESSEL_STORAGE_SERVER` and `VESSEL_MOQ_RELAY_URL` (defaults: this
+deployment's own sync and storage servers). Changing them is `up -d web`,
+no rebuild. The `VITE_*` variables in `artifacts/vessel/.env.example` are
+the build-time equivalents for custom builds.
+
+## 11. Database migrations
+
+The schema lives in `lib/db/src/schema`; the SQL migrations generated from
+it live in `lib/db/drizzle` and are committed.
+
+- After a schema change: `pnpm db:generate --name <what_changed>`, read the
+  SQL, commit both.
+- Apply locally: `pnpm db:migrate`. `pnpm db:push` remains a shortcut for a
+  throwaway development database.
+- In production the `migrate` service applies pending files before the API
+  starts (`dist/migrate.mjs` in the API image).
+- Databases created with `db:push` before migrations existed: the first
+  migration uses `IF NOT EXISTS`, so applying it records the baseline without
+  touching data.
+
+## 12. Backups and restore
+
+The `backup` service writes a `pg_dump` custom-format file to the
+`db-backups` volume once a day and keeps `BACKUP_KEEP_DAYS` (default 14) of
+them. Copy them off the host on a schedule; a backup on the same disk is not
+a backup.
+
+```sh
+C="docker compose -f deploy/compose.yaml --env-file deploy/.env"
+$C exec backup ls -lh /backups                                   # list
+$C cp backup:/backups/vessel-<stamp>.dump .                      # copy one out
+$C exec -T postgres pg_restore -U vessel -d vessel --clean --if-exists \
+  < vessel-<stamp>.dump                                          # restore (replaces current rows)
+```
+
+Recordings are not in PostgreSQL. They live on participants' devices and on
+the storage server (`blossom-data`, or the bucket configured in
+`deploy/blossom.yml`); back that volume up with your usual file tooling.
+

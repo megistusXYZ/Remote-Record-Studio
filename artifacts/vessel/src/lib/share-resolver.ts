@@ -1,4 +1,5 @@
 import type { Event } from "nostr-tools/pure";
+import { deploymentRelays } from "./runtime-config";
 import { sha256HexOfBlob as streamingSha256HexOfBlob } from "./streaming-hash";
 import { getRelayPool } from "./relay-pool";
 import {
@@ -156,11 +157,7 @@ const FALLBACK_RELAYS = [
 const FETCH_TIMEOUT_MS = 8000;
 
 function envRelays(): string[] {
-  const raw = (import.meta.env.VITE_NOSTR_RELAYS as string | undefined) || "";
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.startsWith("ws://") || s.startsWith("wss://"));
+  return deploymentRelays();
 }
 
 export type ResolveShareInput = {

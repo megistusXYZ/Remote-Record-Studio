@@ -174,6 +174,9 @@ export default defineConfig({
         globPatterns: [
           "**/*.{js,css,html,svg,png,ico,woff2,webp,avif}",
         ],
+        // The deployment writes config.js at container start; precaching it
+        // would pin an old deployment's settings in every installed app.
+        globIgnores: ["**/config.js"],
         navigateFallback: `${basePath}index.html`,
         navigateFallbackDenylist: [/^\/api\//],
       },

@@ -1,5 +1,6 @@
 import type { Event } from "nostr-tools/pure";
 import { getRelayPool } from "./relay-pool";
+import { deploymentRelays } from "./runtime-config";
 import type { VesselIdentity } from "./identity";
 
 /**
@@ -29,18 +30,22 @@ import type { VesselIdentity } from "./identity";
 
 /** Legacy name mirrors storage-config's STORAGE_URL_KEY pattern. */
 export const PUBLISH_RELAYS_KEY = "vessel_publish_relays";
-/** Default list when no user pref exists. Matches the historical hard-coded
+/** Default list when no user pref exists: the deployment's own servers
+ *  (runtime-config) when the operator set any, else the historical public
  *  set used across storage-config / session-archive / share-resolver /
  *  use-call-signal so existing users see no behavior change.
  *
  *  Typed as a mutable `string[]` (and not frozen) to stay structurally
  *  compatible with the publish APIs that take `string[]`. Treat the value
  *  as a constant — `getPublishRelays` always returns a fresh copy. */
-export const DEFAULT_PUBLISH_RELAYS: string[] = [
+const BUILT_IN_PUBLISH_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
   "wss://relay.nostr.band",
 ];
+const configured = deploymentRelays();
+export const DEFAULT_PUBLISH_RELAYS: string[] =
+  configured.length > 0 ? configured : [...BUILT_IN_PUBLISH_RELAYS];
 
 const KIND_RELAY_LIST = 10002;
 const REMOTE_FETCH_TIMEOUT_MS = 4000;

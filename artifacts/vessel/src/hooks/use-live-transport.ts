@@ -39,11 +39,12 @@ import {
 } from "../lib/transport-select";
 import { WebRtcMesh, type WebRtcSignaling } from "../lib/webrtc-mesh";
 import { getIceServers } from "@workspace/api-client-react";
+import { deploymentMoqRelayUrl } from "../lib/runtime-config";
 
 // No shipped relay: public MoQ relays do not speak Vessel's framing, so a
 // default would only ever fail. The WebRTC mesh is the default transport;
 // MoQ is opt-in through an operator-run relay.
-const DEFAULT_RELAY_URL = (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) || "";
+const DEFAULT_RELAY_URL = deploymentMoqRelayUrl();
 
 // ── Relay probe cache ─────────────────────────────────────────────────
 // A configured relay is used only after it answered a connection probe.
