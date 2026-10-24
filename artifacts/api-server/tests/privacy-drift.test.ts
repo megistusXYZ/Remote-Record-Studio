@@ -2,10 +2,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { describe, it, expect } from "vitest";
-import { getTableColumns } from "drizzle-orm";
+import { getTableColumns, getTableName, is } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
+import * as schema from "@workspace/db/schema";
 import { sessionsTable } from "@workspace/db/schema";
 import { participantsTable } from "@workspace/db/schema";
 import { recordingsTable } from "@workspace/db/schema";
+import { deliveriesTable } from "@workspace/db/schema";
 import {
   reqSerializer,
   resSerializer,
@@ -44,6 +47,17 @@ const DISCLOSED_DB_COLUMNS = {
     "role",
     "joined_at",
     "left_at",
+  ]),
+  // Guest-to-host deliveries: who delivered, to which session, when, and a
+  // note sealed to the host's key on the guest's device. The server cannot
+  // open `sealed`.
+  deliveries: new Set([
+    "id",
+    "session_id",
+    "sender_pubkey",
+    "sealed",
+    "created_at",
+    "updated_at",
   ]),
   recordings: new Set([
     "id",
@@ -98,6 +112,49 @@ function diff(actual: Set<string>, allowed: Set<string>) {
 
 describe("privacy notice drift guard", () => {
   describe("database schema", () => {
+    it("every table the server stores is covered by the Privacy notice", () => {
+      const tables = Object.values(schema)
+        .filter((v) => is(v, PgTable))
+        .map((t) => getTableName(t as PgTable))
+        .sort();
+      const uncovered = tables.filter((t) => !(t in DISCLOSED_DB_COLUMNS));
+      expect(
+        uncovered,
+        `Tables the Privacy notice never mentions: ${JSON.stringify(uncovered)}.` +
+          failureHint("The database schema"),
+      ).toEqual([]);
+    });
+
+    it("the Privacy notice has a section for every disclosed table", () => {
+      const notice = readFileSync(
+        resolve(__dirname, "../../vessel/src/pages/privacy.tsx"),
+        "utf8",
+      );
+      const missing = Object.keys(DISCLOSED_DB_COLUMNS).filter(
+        (t) => !notice.includes(`data-disclosure="${t}"`),
+      );
+      expect(
+        missing,
+        `Privacy notice has no data-disclosure section for: ${JSON.stringify(missing)}.` +
+          failureHint("The Privacy notice"),
+      ).toEqual([]);
+    });
+
+    it("deliveries table columns match the Privacy notice disclosure", () => {
+      const { undisclosed, stale } = diff(
+        actualColumnNames(deliveriesTable),
+        DISCLOSED_DB_COLUMNS.deliveries,
+      );
+      expect(
+        undisclosed,
+        `Undisclosed deliveries columns: ${JSON.stringify(undisclosed)}.`,
+      ).toEqual([]);
+      expect(
+        stale,
+        `Privacy notice mentions removed deliveries columns: ${JSON.stringify(stale)}.`,
+      ).toEqual([]);
+    });
+
     it("sessions table columns match the Privacy notice disclosure", () => {
       const { undisclosed, stale } = diff(
         actualColumnNames(sessionsTable),

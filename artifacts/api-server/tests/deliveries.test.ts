@@ -213,4 +213,17 @@ describe.skipIf(!available)("deliveries", () => {
       ).status,
     ).toBe(400);
   });
+
+  it("forgets a session's deliveries when the host deletes the session", async () => {
+    const host = person();
+    const guest = person();
+    const sessionId = await seedSession(host, [guest]);
+    await call(guest, "POST", `/api/sessions/${sessionId}/deliveries`, { sealed: "x" });
+
+    const deleted = await call(host, "DELETE", `/api/sessions/${sessionId}`);
+    expect(deleted.status).toBeLessThan(300);
+
+    const { rows } = await dbm.pool.query("select count(*)::int as n from deliveries where session_id = $1", [sessionId]);
+    expect(rows[0].n).toBe(0);
+  });
 });
