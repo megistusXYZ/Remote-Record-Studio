@@ -1,3 +1,4 @@
+import { friendlyError } from "../lib/friendly-error";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DualChunkedRecorder } from "../lib/recorder";
 import type { SyncProgress, SyncStatus } from "../lib/blossom";
@@ -245,7 +246,7 @@ export function useRecording(): UseRecordingResult {
       } catch (err) {
         console.error("Failed to start recording", err);
         setError(
-          err instanceof Error ? err.message : "Failed to start recording",
+          friendlyError(err, "Recording couldn't start. Check your microphone, then try again."),
         );
         teardownListeners();
         recorderRef.current = null;
@@ -300,7 +301,7 @@ export function useRecording(): UseRecordingResult {
     } catch (err) {
       console.error("Failed to finalize recording", err);
       setError(
-        err instanceof Error ? err.message : "Failed to finalize recording",
+        friendlyError(err, "The recording couldn't be finished. It is kept on this device; reopen Vessel to recover it."),
       );
       return null;
     } finally {

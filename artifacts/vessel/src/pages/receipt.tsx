@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { friendlyError } from "../lib/friendly-error";
 import { openStoredTrack } from "../lib/track-keys";
 import { useRoute, Link } from "wouter";
 import { format } from "date-fns";
@@ -475,12 +476,8 @@ function TrackDownloadCard({ track }: { track: RecipientManifest["tracks"][numbe
         setState({ status: "idle" });
         return;
       }
-      const message =
-        err instanceof DownloadError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : "The download failed.";
+      console.warn("download failed", err);
+      const message = friendlyError(err, "The download failed. Try again in a moment.");
       setState({ status: "error", message });
     } finally {
       setController(null);
