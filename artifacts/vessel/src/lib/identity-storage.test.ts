@@ -2,6 +2,7 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
+  createGuestIdentity,
   createNewIdentity,
   loadSavedIdentity,
   clearStoredIdentity,
@@ -151,5 +152,54 @@ describe("identity key at rest", () => {
     setScreen(844, 390); // landscape now
     const restored = await loadSavedIdentity();
     expect(restored).not.toBeNull();
+  });
+});
+
+/** A tab closing takes sessionStorage and the in-memory caches with it. */
+function closeTab() {
+  sessionStorage.clear();
+  __resetDeviceSecretCache();
+}
+
+describe("guest key", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it("survives closing the tab, so a guest's receipts stay theirs", async () => {
+    const guest = await createGuestIdentity("Sam");
+    closeTab();
+    const restored = await loadSavedIdentity();
+    expect(restored?._pubkey).toBe(guest._pubkey);
+    expect(restored?.isGuest).toBe(true);
+  });
+
+  it("never replaces a studio already saved in this browser", async () => {
+    const studio = await createNewIdentity("Ben");
+    await createGuestIdentity("Ben as guest");
+    closeTab();
+    const restored = await loadSavedIdentity();
+    expect(restored?._pubkey).toBe(studio._pubkey);
+    expect(restored?.isGuest).toBe(false);
+  });
+
+  it("reuses the same key when the guest joins again", async () => {
+    const first = await createGuestIdentity("Sam");
+    closeTab();
+    const second = await createGuestIdentity("Sam B.");
+    expect(second._pubkey).toBe(first._pubkey);
+    expect(second.displayName).toBe("Sam B.");
+  });
+
+  it("moves a guest key an older version kept in the tab onto the device", async () => {
+    const legacy = await createGuestIdentity("Sam");
+    const blob = localStorage.getItem("vessel_guest_identity_v1")!;
+    localStorage.removeItem("vessel_guest_identity_v1");
+    sessionStorage.setItem("vessel_identity_v3", blob);
+
+    expect((await loadSavedIdentity())?._pubkey).toBe(legacy._pubkey);
+    closeTab();
+    expect((await loadSavedIdentity())?._pubkey).toBe(legacy._pubkey);
   });
 });

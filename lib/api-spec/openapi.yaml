@@ -211,6 +211,65 @@ paths:
         "404":
           description: Session or participant not found
 
+  /sessions/{sessionId}/deliveries:
+    post:
+      operationId: recordDelivery
+      tags: [sessions]
+      summary: Record this participant's track delivery to the host
+      description: |
+        Stores a note sealed to the host's key on the sender's device (the
+        share link to the sender's archive). The server cannot read it. Must
+        be signed by a participant of the session; latest delivery per sender
+        wins.
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryInput"
+      responses:
+        "201":
+          description: Delivery recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "400":
+          description: Invalid body
+        "403":
+          description: Caller is not a participant of this session
+        "404":
+          description: Session not found
+    get:
+      operationId: listDeliveries
+      tags: [sessions]
+      summary: List track deliveries for a session (host only)
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deliveries, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Delivery"
+        "403":
+          description: Caller is not the host
+        "404":
+          description: Session not found
+
   /recordings:
     get:
       operationId: listRecordings
@@ -368,6 +427,39 @@ components:
         - iceServers
         - ttlSeconds
         - turnConfigured
+
+    DeliveryInput:
+      type: object
+      properties:
+        sealed:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          description: NIP-44 ciphertext addressed to the host. Opaque to the server.
+      required:
+        - sealed
+
+    Delivery:
+      type: object
+      properties:
+        id:
+          type: string
+        senderPubkey:
+          type: string
+        sealed:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - senderPubkey
+        - sealed
+        - createdAt
+        - updatedAt
 
     HealthStatus:
       type: object

@@ -77,7 +77,7 @@ const cspDirectives = [
   // JSON-LD <script> in index.html. The CSP is Report-Only today so this
   // does not weaken anything in production yet — we'll either move that
   // block to an external file or add a hash before flipping enforce.
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
   // wss: is needed for signaling channels; https: covers user-chosen storage
   // origins which we cannot enumerate at build time.
   "connect-src 'self' https: wss:",
@@ -176,7 +176,7 @@ export default defineConfig({
         ],
         // The deployment writes config.js at container start; precaching it
         // would pin an old deployment's settings in every installed app.
-        globIgnores: ["**/config.js"],
+        globIgnores: ["**/config.js", "**/mediapipe/**"],
         navigateFallback: `${basePath}index.html`,
         navigateFallbackDenylist: [/^\/api\//],
       },

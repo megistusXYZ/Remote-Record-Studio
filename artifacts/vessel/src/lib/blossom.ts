@@ -1,3 +1,5 @@
+import { encryptTrack } from "./track-crypto";
+import { rememberTrackKey } from "./track-keys";
 import type { ISigner } from "applesauce-signers";
 import { sha256HexOfBlob } from "./streaming-hash";
 import { normalizeStorageUrl } from "./storage-config";
@@ -53,12 +55,39 @@ export type UploadQueueOptions = {
   signer: ISigner;
   /** Hint for splitting progress events. Real upload is one PUT regardless. */
   chunkSizeBytes?: number;
+  /** Waits between attempts after a temporary failure. One retry per entry. */
+  retryDelaysMs?: number[];
+  /** Encrypt on the device before upload (default true). The storage server
+   *  then holds ciphertext only; the key comes back in the sync result and
+   *  travels inside the encrypted share manifest. */
+  encrypt?: boolean;
 };
+
+const DEFAULT_RETRY_DELAYS_MS = [1000, 3000, 8000];
+
+/** An upload the storage server answered, with its status. */
+export class StorageUploadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+  ) {
+    super(message);
+    this.name = "StorageUploadError";
+  }
+
+  /** Worth trying again: no answer at all, or the server said "later". */
+  get temporary(): boolean {
+    return this.status === null || this.status === 408 || this.status === 425 || this.status === 429 || this.status >= 500;
+  }
+}
 
 export type SyncResult = {
   status: SyncStatus;
   remoteUrl: string | null;
+  /** SHA-256 of the bytes stored (the ciphertext when encrypted). */
   hash: string;
+  /** Key that decrypts the stored file (base64url); absent when unencrypted. */
+  key?: string;
   errorMessage?: string;
 };
 
@@ -188,15 +217,15 @@ export class BlossomClient {
           const message = xhr.responseText
             ? `Storage server rejected upload (${xhr.status}): ${xhr.responseText.slice(0, 200)}`
             : `Storage server rejected upload (${xhr.status})`;
-          reject(new Error(message));
+          reject(new StorageUploadError(message, xhr.status));
         }
       };
 
       xhr.onerror = () => {
-        reject(new Error("Network error contacting storage server."));
+        reject(new StorageUploadError("Network error contacting storage server.", null));
       };
       xhr.ontimeout = () => {
-        reject(new Error("Storage server timed out."));
+        reject(new StorageUploadError("Storage server timed out.", null));
       };
       xhr.onabort = () => {
         reject(new DOMException("Upload aborted", "AbortError"));
@@ -233,6 +262,8 @@ export class BlossomClient {
 export class BlossomUploadQueue {
   private readonly client: BlossomClient;
   private readonly chunkSizeBytes: number;
+  private readonly retryDelaysMs: number[];
+  private readonly encrypt: boolean;
   private listeners = new Set<UploadListener>();
   private status: SyncStatus = "idle";
   private progress: SyncProgress = { synced: 0, total: 0, percent: 0, failed: 0 };
@@ -252,6 +283,24 @@ export class BlossomUploadQueue {
     // discrete progress events the UI sees. Default ≈ 1MB per tick, capped at
     // 12 ticks for short recordings so the bar moves smoothly either way.
     this.chunkSizeBytes = Math.max(64 * 1024, opts.chunkSizeBytes ?? 1024 * 1024);
+    this.retryDelaysMs = opts.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+    this.encrypt = opts.encrypt ?? true;
+  }
+
+  /** PUT with retries on temporary failures; permanent ones throw at once. */
+  private async uploadWithRetry(
+    blob: Blob,
+    opts: Parameters<BlossomClient["upload"]>[1],
+  ): Promise<BlobDescriptor> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.client.upload(blob, opts);
+      } catch (err) {
+        const temporary = err instanceof StorageUploadError && err.temporary;
+        if (!temporary || attempt >= this.retryDelaysMs.length || opts.signal?.aborted) throw err;
+        await new Promise((r) => setTimeout(r, this.retryDelaysMs[attempt]));
+      }
+    }
   }
 
   on(listener: UploadListener): () => void {
@@ -364,11 +413,19 @@ export class BlossomUploadQueue {
    * (or chunk-sync-failed + sync-complete on failure). Resolves with a
    * structured result the caller can persist to local recording metadata.
    */
-  async sync(blob: Blob): Promise<SyncResult> {
+  async sync(plain: Blob): Promise<SyncResult> {
     if (this.status === "syncing") {
       throw new Error("Sync already in progress");
     }
     this.cancelController = new AbortController();
+
+    let blob = plain;
+    let key: string | undefined;
+    if (this.encrypt) {
+      const sealed = await encryptTrack(plain);
+      blob = sealed.blob;
+      key = sealed.key;
+    }
 
     const totalBytes = Math.max(1, blob.size);
     const totalChunks = Math.max(
@@ -428,11 +485,16 @@ export class BlossomUploadQueue {
     };
 
     try {
-      const descriptor = await this.client.upload(blob, {
-        hash,
-        onProgress,
-        signal: this.cancelController.signal,
-      });
+      // Resume: a retry after a reload, or a second device, may find the
+      // exact bytes already stored. Content addressing makes that safe.
+      const alreadyStored = await this.client.has(hash, this.cancelController.signal);
+      const descriptor: BlobDescriptor = alreadyStored
+        ? { sha256: hash }
+        : await this.uploadWithRetry(blob, {
+            hash,
+            onProgress,
+            signal: this.cancelController.signal,
+          });
 
       // Final tick → 100% so the UI lands cleanly even if the last
       // `upload.onprogress` event didn't reach the chunk boundary.
@@ -462,7 +524,10 @@ export class BlossomUploadQueue {
         progress: { ...this.progress },
         remoteUrl,
       });
-      return { status: this.status, remoteUrl, hash };
+      // This device keeps the key; it reaches anyone else only inside an
+      // encrypted share manifest.
+      rememberTrackKey(hash, key);
+      return { status: this.status, remoteUrl, hash, key };
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Couldn't reach storage server.";
@@ -484,6 +549,7 @@ export class BlossomUploadQueue {
         status: this.status,
         remoteUrl: null,
         hash,
+        key,
         errorMessage: message,
       };
     } finally {

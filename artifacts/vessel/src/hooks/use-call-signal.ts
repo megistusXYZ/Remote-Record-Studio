@@ -40,13 +40,6 @@ export const KIND_LOWER_HAND_REQUEST = 27005;
  *  drop, tab killed before the ws can flush), the existing stale/drop
  *  TTLs still clean things up within ~45s. */
 export const KIND_LEAVE = 27006;
-/** A short transcript fragment from the author's own microphone. Each
- *  device transcribes only its own audio and broadcasts the result over
- *  this channel so every participant assembles the same merged-but-
- *  per-speaker live transcript. The author's signature scopes the
- *  fragment to a single speaker; we never trust a peer's claim to be
- *  speaking on someone else's behalf. */
-export const KIND_TRANSCRIPT = 27007;
 /** Direct peer-to-peer signalling for the WebRTC mesh fallback transport.
  *  Each event carries one offer / answer / ICE candidate addressed to a
  *  specific recipient via a `["p", recipientPubkey]` tag. The relay-pool's
@@ -67,7 +60,6 @@ const ALL_KINDS = [
   KIND_MUTE_REQUEST,
   KIND_LOWER_HAND_REQUEST,
   KIND_LEAVE,
-  KIND_TRANSCRIPT,
   KIND_WEBRTC_SIGNAL,
 ];
 
@@ -103,12 +95,6 @@ const RECENT_EVENT_RING_SIZE = 200;
 /** Hard caps so a misbehaving relay can't eat unbounded memory. */
 const MAX_CHAT_HISTORY = 100;
 const MAX_REACTION_HISTORY = 30;
-/** Live transcripts can grow much larger than chat — a long session
- *  produces one fragment every ~5s per active speaker. The cap is well
- *  above what a 90-minute show needs (≈ 1080 fragments for two
- *  alternating speakers) so the visible transcript scrolls naturally
- *  without losing recent lines, while still bounding memory. */
-const MAX_TRANSCRIPT_HISTORY = 1000;
 
 // ─── Default relays ────────────────────────────────────────────────────────
 // Public free relays. The signaling channel is best-effort: as long as ONE
@@ -181,23 +167,6 @@ export type ReactionPing = {
   createdAtMs: number;
 };
 
-/** A short live-caption fragment originating from one participant's
- *  microphone. Each device transcribes only its own audio locally and
- *  then broadcasts the result here, so the assembled per-speaker
- *  transcript is identical for every viewer in the room. */
-export type TranscriptFragment = {
-  id: string;
-  fromPubkey: string;
-  fromName: string;
-  text: string;
-  /** Wall-clock ms when the audio window began on the sender's clock. */
-  startMs: number;
-  /** Wall-clock ms when the audio window ended on the sender's clock. */
-  endMs: number;
-  /** Wall-clock ms when this fragment landed locally — used for stable
-   *  ordering when start times tie across speakers. */
-  createdAtMs: number;
-};
 
 export type UseCallSignalArgs = {
   sessionId: string;
@@ -286,15 +255,6 @@ export type UseCallSignalResult = {
    *  by id once the animation completes. */
   reactions: ReactionPing[];
   removeReaction: (id: string) => void;
-  /** Most recent live-caption fragments, oldest-first, capped at
-   *  {@link MAX_TRANSCRIPT_HISTORY}. Each fragment carries the speaker's
-   *  pubkey + display name so the transcript pane can colour bubbles
-   *  consistently with the rest of the UI. */
-  transcripts: TranscriptFragment[];
-  /** Publish a transcript fragment captured from the local microphone.
-   *  Best-effort — relays may drop, but the local viewer always sees its
-   *  own fragments via the optimistic echo. */
-  sendTranscript: (fragment: { text: string; startMs: number; endMs: number }) => Promise<void>;
   /** Rolling count of mute requests received targeting the local user (so a
    *  guest's UI can surface a toast). The most recent request is also
    *  exposed. */
@@ -463,7 +423,6 @@ export function useCallSignal({
   const [peers, setPeers] = useState<Map<string, Peer>>(new Map());
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [reactions, setReactions] = useState<ReactionPing[]>([]);
-  const [transcripts, setTranscripts] = useState<TranscriptFragment[]>([]);
   const [handRaised, setHandRaised] = useState(false);
   const [handRaisedAtMs, setHandRaisedAtMs] = useState<number | null>(null);
   const [incomingMuteRequest, setIncomingMuteRequest] =
@@ -804,47 +763,6 @@ export function useCallSignal({
           }
           break;
         }
-        case KIND_TRANSCRIPT: {
-          // A peer (or our own echoed event coming back from the relay)
-          // is publishing a caption fragment. Trust ev.pubkey as the
-          // speaker — relays only deliver events whose signature matches
-          // the claimed key. We dedupe by ev.id via the seen-ring above
-          // so the local optimistic echo isn't duplicated when the
-          // signed copy round-trips back.
-          const c = safeParseContent<{
-            displayName?: string;
-            text?: string;
-            startMs?: number;
-            endMs?: number;
-          }>(ev.content);
-          if (!c) return;
-          const text = clampString(c.text, 600);
-          if (!text) return;
-          const fromName = clampString(c.displayName, 80) || "Guest";
-          const startMs = typeof c.startMs === "number" && isFinite(c.startMs) ? c.startMs : ev.created_at * 1000;
-          const endMs =
-            typeof c.endMs === "number" && isFinite(c.endMs) && c.endMs >= startMs
-              ? c.endMs
-              : startMs;
-          setTranscripts((prev) => {
-            const next = [
-              ...prev,
-              {
-                id: ev.id,
-                fromPubkey: ev.pubkey,
-                fromName,
-                text,
-                startMs,
-                endMs,
-                createdAtMs: Date.now(),
-              },
-            ];
-            if (next.length > MAX_TRANSCRIPT_HISTORY)
-              next.splice(0, next.length - MAX_TRANSCRIPT_HISTORY);
-            return next;
-          });
-          break;
-        }
         case KIND_LEAVE: {
           // The sender is telling us they've left the room. Drop their
           // roster row immediately so we don't pretend they're still
@@ -897,7 +815,6 @@ export function useCallSignal({
     peersRef.current = new Map();
     setChat([]);
     setReactions([]);
-    setTranscripts([]);
     setIncomingMuteRequest(null);
     setHandLoweredByHost(null);
     setHandRaised(false);
@@ -918,8 +835,7 @@ export function useCallSignal({
       setPeers(new Map());
       setChat([]);
       setReactions([]);
-      setTranscripts([]);
-      setIncomingMuteRequest(null);
+        setIncomingMuteRequest(null);
       setIsConnected(false);
       return;
     }
@@ -1140,47 +1056,6 @@ export function useCallSignal({
     [enabled, sessionId, identity, myPubkey, publishSigned],
   );
 
-  const sendTranscript = useCallback(
-    async (fragment: { text: string; startMs: number; endMs: number }) => {
-      const trimmed = fragment.text.trim().slice(0, 600);
-      if (!trimmed || !enabled || !sessionId || !identity) return;
-      const startMs = isFinite(fragment.startMs) ? fragment.startMs : Date.now();
-      const endMs = isFinite(fragment.endMs) && fragment.endMs >= startMs ? fragment.endMs : startMs;
-      const tmpl = buildEventTemplate(KIND_TRANSCRIPT, sessionId, {
-        displayName: myNameRef.current,
-        text: trimmed,
-        startMs,
-        endMs,
-      });
-      // Optimistic local echo so the speaker sees their own captions
-      // immediately, before the relay round-trip completes. The seen-id
-      // ring in handleIncoming dedupes by event id, so when the signed
-      // copy lands later it won't duplicate the locally-echoed entry —
-      // we use a synthetic id here that won't collide with any real
-      // event id (those are 32-byte hex; ours is base36).
-      const localId = `local-${genId()}`;
-      setTranscripts((prev) => {
-        const next = [
-          ...prev,
-          {
-            id: localId,
-            fromPubkey: myPubkey,
-            fromName: myNameRef.current || "You",
-            text: trimmed,
-            startMs,
-            endMs,
-            createdAtMs: Date.now(),
-          },
-        ];
-        if (next.length > MAX_TRANSCRIPT_HISTORY)
-          next.splice(0, next.length - MAX_TRANSCRIPT_HISTORY);
-        return next;
-      });
-      await publishSigned(tmpl);
-    },
-    [enabled, sessionId, identity, myPubkey, publishSigned],
-  );
-
   const sendReaction = useCallback(
     async (emoji: string) => {
       const e = emoji.slice(0, 8);
@@ -1397,8 +1272,6 @@ export function useCallSignal({
     chat,
     reactions,
     removeReaction,
-    transcripts,
-    sendTranscript,
     incomingMuteRequest,
     acknowledgeMuteRequest,
     isConnected,

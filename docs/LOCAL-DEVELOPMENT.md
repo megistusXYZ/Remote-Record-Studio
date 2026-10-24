@@ -139,7 +139,7 @@ artifacts/
     hooks/              media capture, transports, recording
     lib/                recorder, WebRTC mesh, session API calls, archives
     store/              zustand stores
-    workers/            captions / transcription workers
+    workers/            background workers (file hashing)
 lib/
   db/                   Drizzle schema + pg pool  (`pnpm --filter @workspace/db run push`)
   api-zod/              request/response schemas shared by API and client
