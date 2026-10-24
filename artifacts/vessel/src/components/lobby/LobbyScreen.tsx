@@ -57,6 +57,10 @@ export type LobbyScreenProps = {
   isCreating?: boolean;
   isJoining?: boolean;
   isStarting?: boolean;
+  /** Whether the viewer is the session's host. When omitted, derived by
+   *  comparing the signed-in pubkey with `session.hostPubkey`. Guests get a
+   *  trimmed waiting room: no invite card, code chip or host-only controls. */
+  isHost?: boolean;
 };
 
 export function LobbyScreen({
@@ -69,9 +73,13 @@ export function LobbyScreen({
   isCreating,
   isJoining,
   isStarting,
+  isHost: isHostProp,
 }: LobbyScreenProps) {
   const [, setLocation] = useLocation();
   const { pubkey, displayName } = useIdentity();
+  const isHost =
+    isHostProp ?? (session ? !!pubkey && session.hostPubkey === pubkey : false);
+  const hostFirstName = session?.hostName?.trim().split(/\s+/)[0] || "the host";
   const joinWithMic = useStoredJoinWithMic();
   const joinWithCamera = useStoredJoinWithCamera();
   
@@ -170,7 +178,7 @@ export function LobbyScreen({
               <VesselCard className="p-5 sm:p-6 md:p-8 mb-4 sm:mb-6 border-vessel-accent/30 shadow-[0_0_40px_rgba(0,212,170,0.08)]">
                 <div className="mb-5 sm:mb-6">
                   <h2 className="font-display text-xl sm:text-2xl font-bold text-vessel-text-primary leading-tight mb-1">
-                    Start a new studio session
+                    Start a new session
                   </h2>
                   <p className="text-vessel-text-secondary text-sm sm:text-base">
                     Create a private room, invite your guests, and record in studio quality.
@@ -248,7 +256,7 @@ export function LobbyScreen({
             <div className="flex flex-col">
               <div className="mb-6 sm:mb-8 md:mb-10">
                 <p className="font-mono-vessel text-[11px] uppercase tracking-[0.18em] text-vessel-accent mb-2">
-                  Studio history
+                  Session history
                 </p>
                 <h2 className="font-display text-2xl sm:text-3xl font-bold text-vessel-text-primary tracking-tight leading-[1.15]">
                   Recent sessions
@@ -346,13 +354,19 @@ export function LobbyScreen({
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.8)] animate-pulse shrink-0" />
-                <span className="text-vessel-text-secondary text-sm">Your studio is open</span>
+                <span className="text-vessel-text-secondary text-sm" data-testid="text-lobby-eyebrow">
+                  {isHost ? "Your session is open" : session.title}
+                </span>
               </div>
-              <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-vessel-text-primary tracking-tight leading-[1.15] break-words">
-                {session.title}
+              <h1
+                className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-vessel-text-primary tracking-tight leading-[1.15] break-words"
+                data-testid="text-lobby-title"
+              >
+                {isHost ? session.title : `Waiting for ${hostFirstName} to start`}
               </h1>
             </div>
 
+            {isHost && (
             <VesselCard className="p-5 sm:p-6 border-vessel-accent/40 shadow-[0_0_30px_rgba(0,212,170,0.12)]">
               <label className="block text-xs text-vessel-text-muted uppercase tracking-wider mb-3">
                 Invite guests
@@ -400,23 +414,26 @@ export function LobbyScreen({
                 </div>
               </div>
             </VesselCard>
+            )}
 
-            <div className="mt-8 sm:mt-10">
+            <div className={isHost ? "mt-8 sm:mt-10" : "mt-2"}>
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3 min-w-0">
                   <h2 className="font-display text-base sm:text-lg font-bold text-vessel-text-primary">In the room</h2>
                   <VesselBadge variant="default">{session.participants.length}</VesselBadge>
                 </div>
-                <VesselButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowInviteModal(true)}
-                  className="shrink-0"
-                  data-testid="button-invite-more"
-                >
-                  <Users className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Invite More</span>
-                </VesselButton>
+                {isHost && (
+                  <VesselButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowInviteModal(true)}
+                    className="shrink-0"
+                    data-testid="button-invite-more"
+                  >
+                    <Users className="w-4 h-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Invite More</span>
+                  </VesselButton>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -452,17 +469,22 @@ export function LobbyScreen({
               </p>
             </div>
 
-            <div className="mt-8 text-center">
-              {session.participants.length <= 1 ? (
-                <WaitingForGuestsEmpty />
-              ) : (
-                <p className="text-vessel-accent text-base font-medium">
-                  Everyone's here — let's go!
-                </p>
-              )}
-            </div>
+            {/* Host-only cue: the empty state tells the host to share the
+                invite link, and the "let's go" line is a prompt to press
+                Start. Guests just see the footer below. */}
+            {isHost && (
+              <div className="mt-8 text-center">
+                {session.participants.length <= 1 ? (
+                  <WaitingForGuestsEmpty />
+                ) : (
+                  <p className="text-vessel-accent text-base font-medium">
+                    Everyone's here. Let's go!
+                  </p>
+                )}
+              </div>
+            )}
 
-            {(onStartRecording || onCancelSession) ? (
+            {isHost && (onStartRecording || onCancelSession) ? (
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
                 {onStartRecording && (
                   <VesselButton
@@ -497,12 +519,14 @@ export function LobbyScreen({
               </div>
             )}
 
-            <InviteModal
-              open={showInviteModal}
-              onOpenChange={setShowInviteModal}
-              inviteUrl={buildInviteUrl(session.inviteCode, session.hostPubkey)}
-              inviteCode={session.inviteCode}
-            />
+            {isHost && (
+              <InviteModal
+                open={showInviteModal}
+                onOpenChange={setShowInviteModal}
+                inviteUrl={buildInviteUrl(session.inviteCode, session.hostPubkey)}
+                inviteCode={session.inviteCode}
+              />
+            )}
           </div>
         ) : null}
       </div>

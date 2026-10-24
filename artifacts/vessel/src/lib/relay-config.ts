@@ -6,7 +6,7 @@ import type { VesselIdentity } from "./identity";
  * Per-participant publish-endpoint configuration.
  *
  * "Publish endpoint" in code = a Nostr relay (NIP-65 / Kind 10002 relay-list
- * metadata). The user-facing surface always calls these "network endpoints" —
+ * metadata). The user-facing surface always calls these "sync servers" —
  * "relay" / "Nostr" / "wss" / "kind" / "pubkey" are forbidden in rendered UI.
  *
  * Layout mirrors storage-config:
@@ -254,8 +254,8 @@ export async function checkRelayReachability(
     try {
       ws = new WebSocket(normalized);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : "Couldn't reach server.";
-      settle({ state: "unreachable", reason });
+      console.warn("Sync server test failed:", err);
+      settle({ state: "unreachable", reason: "Couldn't reach this server." });
       return;
     }
     ws.onopen = () => {

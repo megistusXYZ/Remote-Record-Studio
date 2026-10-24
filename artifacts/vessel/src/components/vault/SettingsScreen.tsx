@@ -70,6 +70,22 @@ type ReachabilityState =
   | { kind: "ok"; latencyMs: number }
   | { kind: "error"; reason: string };
 
+// Reasons MoqClient.probe produces on purpose. Anything else is a raw
+// browser / transport error: log it and show a plain message instead.
+const KNOWN_PREVIEW_REASONS = new Set([
+  "Live preview is not supported in this browser.",
+  "Enter an https:// URL.",
+  "Timed out reaching the preview server.",
+  "Couldn't reach the preview server.",
+  "Cancelled.",
+]);
+
+function friendlyPreviewReason(reason: string): string {
+  if (KNOWN_PREVIEW_REASONS.has(reason)) return reason;
+  console.warn("Live preview server test failed:", reason);
+  return "Couldn't reach this server.";
+}
+
 export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   const [, setLocation] = useLocation();
   const { identity, displayName, setDisplayName, signOut, signerType } = useIdentity();
@@ -136,7 +152,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
       if (result.ok) {
         setRelayReachability({ kind: "ok", latencyMs: result.latencyMs });
       } else {
-        setRelayReachability({ kind: "error", reason: result.reason });
+        setRelayReachability({ kind: "error", reason: friendlyPreviewReason(result.reason) });
       }
     })();
   }, []);
@@ -176,7 +192,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
   };
 
   const handleDeleteAccount = async () => {
-    if (window.confirm("Sign out and remove your identity from this device?")) {
+    if (window.confirm("Sign out and remove your studio from this device?")) {
       await signOut();
       setLocation("/");
     }
@@ -380,10 +396,8 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                       <div className="text-sm font-medium text-vessel-text-primary truncate" data-testid="text-signer-type">{signerLabel}</div>
                       <div className="text-xs text-vessel-text-muted truncate">
                         {signerType === "local"
-                          ? "Encrypted on this device only."
-                          : signerType === "extension"
-                          ? "Signing happens inside your browser extension."
-                          : "Signing happens in your remote signer app."}
+                          ? "Your key is stored encrypted on this device."
+                          : "Your key stays in your key app."}
                       </div>
                     </div>
                   </div>
@@ -419,8 +433,8 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                     <Settings className="w-4 h-4 text-vessel-text-muted" />
                   </div>
                   <div className="text-left">
-                    <h2 className="font-display text-lg font-bold text-vessel-text-primary">Advanced settings</h2>
-                    <p className="text-xs text-vessel-text-muted">Storage, identity, and danger zone</p>
+                    <h2 className="font-display text-lg font-bold text-vessel-text-primary">Advanced</h2>
+                    <p className="text-xs text-vessel-text-muted">Storage, servers, and your recovery key</p>
                   </div>
                 </div>
                 <ChevronDown className={`w-5 h-5 text-vessel-text-muted transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`} />
@@ -493,9 +507,9 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 
                   {isLocalSigner ? (
                     <div className="space-y-1.5">
-                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Backup key</label>
+                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Recovery key</label>
                       <p className="text-xs text-vessel-text-muted">
-                        This key is your account. Save it somewhere private &mdash; it's the only way to restore your studio on a new device.
+                        The only way into your studio from another device. Save it somewhere private.
                       </p>
                       <div className="mt-2">
                         <VesselButton
@@ -505,15 +519,15 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                           data-testid="button-show-backup"
                         >
                           <Key className="w-4 h-4 mr-2" />
-                          Reveal backup key
+                          Show recovery key
                         </VesselButton>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-1.5">
-                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Backup key</label>
+                      <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Recovery key</label>
                       <p className="text-xs text-vessel-text-muted">
-                        Your key lives in your {signerType === "extension" ? "browser extension" : "signer app"}, not in Vessel. Use that app to back it up or move it to a new device.
+                        Your key lives in your key app, not in Vessel. Back it up there.
                       </p>
                     </div>
                   )}
@@ -533,11 +547,11 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2">
                       <div>
-                        <div className="text-sm font-medium text-vessel-text-primary">Delete account</div>
-                        <div className="text-xs text-vessel-text-muted mt-0.5">Removes your studio identity from this device. Your recordings stay safe in your vault.</div>
+                        <div className="text-sm font-medium text-vessel-text-primary">Sign out and forget this device</div>
+                        <div className="text-xs text-vessel-text-muted mt-0.5">Removes your studio from this device. Recordings in your Vault are not deleted.</div>
                       </div>
                       <VesselButton variant="danger" size="sm" onClick={handleDeleteAccount} data-testid="button-delete-account" className="shrink-0">
-                        Delete account
+                        Forget this device
                       </VesselButton>
                     </div>
                   </div>
@@ -564,7 +578,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
               <div className="space-y-2 text-xs text-vessel-text-secondary leading-relaxed pl-11">
                 <p>
                   Vessel&rsquo;s server keeps a short list of plain things: studio
-                  names, public identities, invite codes, timestamps, and pointers
+                  names, Studio IDs, invite codes, timestamps, and pointers
                   to where your files live on your storage server. The audio and
                   video themselves never reach us.
                 </p>

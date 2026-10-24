@@ -137,11 +137,11 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
       );
       if (requestIdRef.current !== myId) return;
       setArchive(result);
-      toast({ description: "Session archived — share away!" });
+      toast({ description: "Share link ready." });
     } catch (err: any) {
       if (requestIdRef.current !== myId) return;
       console.error("Failed to archive session", err);
-      setError("We couldn't archive this session. Try again in a moment.");
+      setError("We couldn't create the share link. Try again in a moment.");
     } finally {
       if (requestIdRef.current === myId) setIsArchiving(false);
     }
@@ -184,9 +184,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
       setRevoked(true);
       setRevokeRequested(false);
       if (result.publish.successCount < result.publish.totalCount) {
-        toast({
-          description: `Link revoked on ${result.publish.successCount} of ${result.publish.totalCount} sharing servers.`,
-        });
+        toast({ description: "Link taken down." });
       } else {
         toast({ description: "Share link revoked." });
       }
@@ -220,7 +218,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
         {isArchiving ? (
           <div className="flex flex-col items-center gap-3 py-12">
             <Loader2 className="w-7 h-7 text-vessel-accent animate-spin" />
-            <p className="text-sm text-vessel-text-secondary">Archiving your session…</p>
+            <p className="text-sm text-vessel-text-secondary">Preparing your share link…</p>
           </div>
         ) : error ? (
           <div className="py-8 text-center">
@@ -242,7 +240,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
               revoked" message instead of the tracks.
             </p>
             <p className="text-xs text-vessel-text-muted mt-3">
-              Archive {archive.archiveId}
+              Share {archive.archiveId}
             </p>
           </div>
         ) : archive ? (
@@ -255,21 +253,21 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 data-testid="tab-share-editor"
                 className="px-2 py-1.5 text-xs sm:text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary data-[state=active]:bg-vessel-bg-elevated data-[state=active]:text-vessel-accent data-[state=active]:shadow-none transition-colors"
               >
-                <Share2 className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Editor
+                <Share2 className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Everyone
               </TabsTrigger>
               <TabsTrigger
                 value="tracks"
                 data-testid="tab-share-tracks"
                 className="px-2 py-1.5 text-xs sm:text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary data-[state=active]:bg-vessel-bg-elevated data-[state=active]:text-vessel-accent data-[state=active]:shadow-none transition-colors"
               >
-                <Users className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Per Track
+                <Users className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> One track each
               </TabsTrigger>
               <TabsTrigger
                 value="info"
                 data-testid="tab-share-info"
                 className="px-2 py-1.5 text-xs sm:text-sm font-medium text-vessel-text-secondary hover:text-vessel-text-primary data-[state=active]:bg-vessel-bg-elevated data-[state=active]:text-vessel-accent data-[state=active]:shadow-none transition-colors"
               >
-                <Info className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Archive Info
+                <Info className="w-3.5 h-3.5 mr-1.5 hidden sm:inline-block" /> Details
               </TabsTrigger>
             </TabsList>
 
@@ -293,23 +291,22 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 <CopyButton value={archive.shareUrl} label="Copy Link" />
               </div>
               <p className="text-xs text-vessel-text-muted leading-relaxed">
-                Only people with this link can open it. The reading code lives
-                in the link itself — never on a server.
+                Only people with this link can open it. The link itself holds
+                the key; no server does.
               </p>
               {archive.publish.successCount === 0 ? (
                 <p
                   className="text-xs text-vessel-red leading-relaxed"
                   data-testid="text-publish-failed"
                 >
-                  We couldn't reach any sharing servers. The link won't work yet — try again in a moment.
+                  We couldn't publish the link yet. Try again in a moment.
                 </p>
               ) : archive.publish.successCount < archive.publish.totalCount ? (
                 <p
                   className="text-xs text-vessel-text-muted leading-relaxed"
                   data-testid="text-publish-partial"
                 >
-                  Saved to {archive.publish.successCount} of {archive.publish.totalCount} sharing servers.
-                  Recipients can still open the link.
+                  Published. Recipients can open the link.
                 </p>
               ) : null}
             </TabsContent>
@@ -317,7 +314,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
             {/* Tab 2: Per-track */}
             <TabsContent value="tracks" className="pt-4 space-y-3 mt-0">
               <p className="text-sm text-vessel-text-secondary">
-                Send each contributor a link to just their own track.
+                Send each guest a link to just their own track.
               </p>
               <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
                 {archive.perTrackUrls.map((t, i) => {
@@ -352,11 +349,11 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
               </div>
             </TabsContent>
 
-            {/* Tab 3: Archive info */}
+            {/* Tab 3: Details */}
             <TabsContent value="info" className="pt-4 space-y-4 mt-0">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-vessel-text-muted mb-1.5 font-mono-vessel">
-                  Archive ID
+                  Share ID
                 </label>
                 <div className="flex items-center gap-2 p-2 rounded-lg bg-vessel-bg-base border border-vessel-border">
                   <input
@@ -365,19 +362,21 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                     className="flex-1 bg-transparent text-xs font-mono-vessel text-vessel-text-primary outline-none px-2 py-1.5"
                     data-testid="input-archive-id"
                     onFocus={(e) => e.currentTarget.select()}
-                    aria-label="Archive ID"
+                    aria-label="Share ID"
                   />
                   <CopyButton value={archive.archiveId} label="Copy" />
                 </div>
               </div>
               <p className="text-xs text-vessel-text-secondary leading-relaxed">
-                A short fingerprint that uniquely identifies this archive. Anyone
-                with the share link can confirm they're opening the same archive
-                by checking this matches.
+                A short code that identifies this share. Anyone with the link can
+                check it matches.
               </p>
               <div className="pt-2 text-xs text-vessel-text-muted">
-                <div>Archived: {new Date(archive.archivedAt).toLocaleString()}</div>
+                <div>Created: {new Date(archive.archivedAt).toLocaleString()}</div>
                 <div>Tracks: {archive.perTrackUrls.length}</div>
+                <div data-testid="text-publish-counts">
+                  Published to {archive.publish.successCount} of {archive.publish.totalCount} servers
+                </div>
               </div>
             </TabsContent>
 
@@ -389,9 +388,8 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                 <div className="space-y-3" data-testid="revoke-confirm">
                   <p className="text-xs text-vessel-text-secondary leading-relaxed">
                     Take this link down? Anyone who opens it from now on will see
-                    a "share has been revoked" message instead of the tracks.
-                    This can't be undone — you'd need to share again to make a
-                    new link.
+                    that it was taken down. This can't be undone; you can share
+                    again to make a new link.
                   </p>
                   {revokeError && (
                     <p

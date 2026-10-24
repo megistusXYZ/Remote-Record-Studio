@@ -103,8 +103,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
       onSuccess();
       onOpenChange(false);
     } catch (err) {
-      console.error(err);
-      setError((err instanceof Error && err.message) || "Couldn't sign in with your browser extension.");
+      console.warn("Key app sign-in failed:", err);
+      setError("Couldn't sign in with your key app.");
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +116,7 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
       return;
     }
     if (!isSupportedRemoteSignerUri(bunkerUri)) {
-      setError("Paste a connection URL that starts with 'bunker://'.");
+      setError("That doesn't look like a connection link. Copy it again from your key app.");
       return;
     }
     setIsLoading(true);
@@ -126,8 +126,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
       onSuccess();
       onOpenChange(false);
     } catch (err) {
-      console.error(err);
-      setError((err instanceof Error && err.message) || "Couldn't connect to your remote signer.");
+      console.warn("Key app connection failed:", err);
+      setError("Couldn't reach your key app.");
     } finally {
       setIsLoading(false);
     }
@@ -163,8 +163,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
       onOpenChange(false);
     } catch (err) {
       if (abort.signal.aborted) return;
-      console.error(err);
-      setError((err instanceof Error && err.message) || "Couldn't complete the connection.");
+      console.warn("Key app connection failed:", err);
+      setError("Couldn't complete the connection.");
       await cancelInvite();
     } finally {
       if (abortRef.current === abort) abortRef.current = null;
@@ -197,11 +197,11 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
       <DialogContent className="bg-vessel-bg-surface border-vessel-border text-vessel-text-primary max-w-md">
         <DialogHeader className="mb-2">
           <DialogTitle className="font-display text-xl text-center sm:text-left w-full">
-            Sign in with Nostr
+            Sign in with a key app
           </DialogTitle>
           <DialogDescription className="text-vessel-text-secondary mt-2">
             {mode === "choose"
-              ? "Use the same identity you already use elsewhere on Nostr. Your key never touches Vessel."
+              ? "Already keep a key in an app like Alby, nos2x or Amber? Use it here. Your key never touches Vessel."
               : "Choose a name guests will see during your studio sessions."}
           </DialogDescription>
         </DialogHeader>
@@ -223,11 +223,11 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
             >
               <Chrome className="w-5 h-5 text-vessel-accent shrink-0 mt-0.5" />
               <div>
-                <div className="font-medium text-vessel-text-primary">Browser extension</div>
+                <div className="font-medium text-vessel-text-primary">Key app in your browser</div>
                 <div className="text-xs text-vessel-text-secondary mt-1">
                   {extensionPresent
-                    ? "Sign with the extension you already have installed (Alby, nos2x, etc.)."
-                    : "Install Alby, nos2x, or another Nostr extension to use this option."}
+                    ? "Approve the sign-in in Alby, nos2x or a similar extension."
+                    : "Install Alby or nos2x to use this option."}
                 </div>
               </div>
             </button>
@@ -240,10 +240,9 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
             >
               <KeyRound className="w-5 h-5 text-vessel-accent shrink-0 mt-0.5" />
               <div>
-                <div className="font-medium text-vessel-text-primary">Paste a connection URL</div>
+                <div className="font-medium text-vessel-text-primary">Paste a connection link</div>
                 <div className="text-xs text-vessel-text-secondary mt-1">
-                  Use a <code className="font-mono-vessel">bunker://</code> URL from your signer app
-                  (Amber and similar apps).
+                  Copy it from your key app, for example Amber.
                 </div>
               </div>
             </button>
@@ -256,9 +255,9 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
             >
               <QrCode className="w-5 h-5 text-vessel-accent shrink-0 mt-0.5" />
               <div>
-                <div className="font-medium text-vessel-text-primary">Scan from your signer</div>
+                <div className="font-medium text-vessel-text-primary">Scan with your key app</div>
                 <div className="text-xs text-vessel-text-secondary mt-1">
-                  Show a QR code Vessel generates and approve the connection inside your signer.
+                  Scan a code and approve the connection in your key app.
                 </div>
               </div>
             </button>
@@ -275,9 +274,9 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
               >
                 <FileKey2 className="w-5 h-5 text-vessel-accent shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-medium text-vessel-text-primary">Use your backup key</div>
+                  <div className="font-medium text-vessel-text-primary">Use your recovery key</div>
                   <div className="text-xs text-vessel-text-secondary mt-1">
-                    Paste the backup key Vessel gave you when you first set up your studio.
+                    Paste the recovery key you saved when you set up your studio.
                   </div>
                 </div>
               </button>
@@ -302,7 +301,7 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
               />
             </div>
             <p className="text-xs text-vessel-text-muted">
-              You'll see a permission prompt from your extension to share your public key with Vessel.
+              Your key app will ask you to approve Vessel.
             </p>
           </div>
         )}
@@ -325,19 +324,19 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
             </div>
             <div className="space-y-2">
               <label htmlFor="bunker-uri" className="text-sm font-medium text-vessel-text-primary">
-                Connection URL
+                Connection link
               </label>
               <Textarea
                 id="bunker-uri"
                 value={bunkerUri}
                 onChange={(e) => setBunkerUri(e.target.value)}
-                placeholder="bunker://…"
+                placeholder="Paste the link from your key app"
                 className="font-mono-vessel resize-none bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
                 rows={3}
                 data-testid="input-bunker-uri"
               />
               <p className="text-xs text-vessel-text-muted">
-                Find this in your signer app under "Connect to client" or similar.
+                Find it in your key app under Connect, or similar.
               </p>
             </div>
           </div>
@@ -363,8 +362,8 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
 
             {!invite && (
               <p className="text-xs text-vessel-text-muted">
-                Vessel will generate a one-time connection URL. Open it (or scan the QR) in your
-                signer app, approve the request, and you'll be signed in.
+                Vessel will create a one-time connection link. Open it or scan the code in your
+                key app, approve the request, and you're signed in.
               </p>
             )}
 
@@ -392,7 +391,7 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
                     type="button"
                     variant="ghost"
                     onClick={handleCopyInvite}
-                    aria-label="Copy invite URL"
+                    aria-label="Copy connection link"
                     data-testid="button-copy-invite"
                   >
                     <Copy className="w-4 h-4" />
@@ -401,7 +400,7 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
                 {waitingForSigner && (
                   <div className="flex items-center gap-2 text-xs text-vessel-text-secondary">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    Waiting for your signer to approve…
+                    Waiting for your key app to approve…
                   </div>
                 )}
               </div>
@@ -441,7 +440,7 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
               disabled={!displayName.trim()}
               data-testid="button-submit-extension"
             >
-              Continue with extension
+              Continue
             </VesselButton>
           )}
           {mode === "remote-paste" && (
@@ -468,7 +467,7 @@ export function NostrSignInModal({ open, onOpenChange, onSuccess, onUseBackupKey
               disabled={!displayName.trim()}
               data-testid="button-start-invite"
             >
-              Generate connection URL
+              Create connection link
             </VesselButton>
           )}
         </DialogFooter>

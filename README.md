@@ -26,9 +26,10 @@ behind a paywall, route it through their cloud, and decide when (and whether)
 you get to keep your own work. Vessel takes the opposite stance.
 
 - **You own the recording.** Files are captured on each participant's device
-  and delivered directly to the host. We don't keep copies.
-- **You own the identity.** Sign in is a private key on your device. No
-  email, no password, nothing for us to leak.
+  and handed to the host. We don't keep copies.
+- **You own the identity.** Sign in is a key that lives on your device. In
+  the app it is simply your recovery key. No email, no password, nothing for
+  us to leak.
 - **You own the platform.** It's open source. Run it on our servers, run it
   on yours, run it in your basement on a raspberry pi if that's your thing.
 - **No subscription tax.** Vessel is free, and free of the recurring kind too.
@@ -37,17 +38,19 @@ you get to keep your own work. Vessel takes the opposite stance.
 
 - 🎙 **Studio-quality multi-track recording** — every participant captured
   locally, no compression artifacts from sketchy connections.
-- 🎥 **Up to 4K video per guest** when their camera and bandwidth can handle it.
+- 🎥 **Full-quality video and audio from every guest**, recorded on their
+  own device rather than pulled from the call.
 - 🖥 **Screen sharing** — present slides, demos, or a second camera feed
   without leaving the studio.
 - 🔗 **One-link invites** — share by URL or QR code. Guests join from any
   modern browser. No app install, no account.
 - 📱 **Installable PWA** — pin Vessel to your dock or home screen and launch
   it like a native app. Works on desktop and mobile.
-- 📁 **Direct delivery** — finished tracks land with the host as soon as the
-  session ends.
-- 🔐 **Federated identity** — participants own their own credentials and can
-  carry them between Vessel instances.
+- 📁 **Tracks delivered to the host** — each guest's track uploads as soon as
+  they stop, and the host collects them from the session screen. Automatic
+  delivery into the host's Vault is in progress.
+- 🔐 **Portable identity** — your recovery key works on any Vessel instance.
+  Guests need nothing at all.
 - 🎚 **Persistent device preferences** — Vessel remembers your mic, camera,
   and join-muted choices between sessions.
 - 🌗 **Broadcast Dark UI** — built for late-night editing sessions and people
@@ -64,8 +67,9 @@ The short version:
    and video at full local quality.
 3. While the session runs, low-bitrate previews stream between participants
    so everyone can see and hear each other in real time.
-4. The full-quality tracks are encrypted on the participant's device, then
-   uploaded directly to the host's destination of choice.
+4. The full-quality tracks are uploaded from each participant's device to a
+   storage server the host can read from. Encrypting them on the device
+   before upload is in progress.
 5. When the session ends, the host gets clean per-participant tracks ready
    to drop into their editor.
 
@@ -133,18 +137,18 @@ package and can be developed in isolation.
 | Database    | PostgreSQL · Drizzle ORM                     |
 | Routing     | wouter (client) · Express (server)           |
 | State       | TanStack Query                               |
-| Identity    | Open identity protocol — your key, your call |
+| Identity    | A key on your device, shown to people as a recovery key |
 
 ## Roadmap
 
 Vessel is actively in development. Some big rocks on the horizon:
 
 - [x] Multi-track local recording
-- [x] Federated identity & sign-in
+- [x] Portable key-based sign-in
 - [x] One-link guest invites (with QR code)
 - [x] Screen sharing
 - [x] Installable PWA — guests can join from mobile or desktop browsers
-- [x] Live transcript with speaker diarization
+- [ ] Per-speaker transcript after each session
 - [ ] Native desktop apps (Windows / macOS / Linux)
 - [ ] Native mobile apps (iOS / Android)
 - [ ] Plugin SDK for custom export pipelines
