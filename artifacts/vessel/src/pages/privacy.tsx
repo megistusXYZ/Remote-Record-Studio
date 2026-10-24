@@ -7,7 +7,7 @@ export default function Privacy() {
   return (
     <ContentPageShell
       title="Privacy Notice"
-      eyebrow="Last updated · April 25, 2026"
+      eyebrow="Last updated · October 23, 2026"
     >
       <p>
         Vessel is open-source software for studio-quality remote recording. We
@@ -31,15 +31,17 @@ export default function Privacy() {
             <strong className="text-vessel-text-primary">Per session:</strong>{" "}
             the title you gave it, the host&rsquo;s display name and public
             identity, the invite code, the current status (waiting / live /
-            ended), the participant count, and the timestamps for created /
-            started / ended.
+            ended), the participant count, the maximum number of participants
+            allowed in the room, and the timestamps for created / started /
+            ended.
           </li>
           <li>
             <strong className="text-vessel-text-primary">
               Per participant:
             </strong>{" "}
             their display name, their public identity, their role (host or
-            guest), and the time they joined.
+            guest), the time they joined, and the time they left (set only when
+            they leave the room; cleared again if they rejoin).
           </li>
           <li>
             <strong className="text-vessel-text-primary">
@@ -47,9 +49,13 @@ export default function Privacy() {
             </strong>{" "}
             the owner&rsquo;s public identity, the participant&rsquo;s display
             name, the session it belongs to, the duration, the file size, the
-            format, and a pointer to where the file lives on the storage server{" "}
-            <em>you</em> chose. The file itself is on your storage server, not
-            ours.
+            format, and a pointer (a content hash and a URL) to where the file
+            lives on the storage server <em>you</em> chose. If the
+            participant&rsquo;s device also recorded separate audio-only,
+            video-only, or screen-share tracks, the same file size, format, and
+            pointer are stored for each of those tracks, plus the duration of
+            the screen-share track. The files themselves are on your storage
+            server, not ours.
           </li>
         </ul>
 
