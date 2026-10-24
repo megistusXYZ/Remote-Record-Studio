@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ParticipantCard } from "./ParticipantCard";
 import { InviteModal } from "./InviteModal";
+import { HostMicCheck } from "./HostMicCheck";
 import wheelhouseAvif from "@/assets/illustrations/wheelhouse.avif";
 import wheelhouseWebp from "@/assets/illustrations/wheelhouse.webp";
 
@@ -431,7 +432,7 @@ export function LobbyScreen({
                     data-testid="button-invite-more"
                   >
                     <Users className="w-4 h-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Invite More</span>
+                    <span className="hidden sm:inline">Invite more</span>
                   </VesselButton>
                 )}
               </div>
@@ -467,6 +468,11 @@ export function LobbyScreen({
               <p className="mt-3 text-xs text-vessel-text-muted text-center">
                 Tap your mic or camera to choose how you'll join. We'll remember it for next time.
               </p>
+              {isHost && (
+                <div className="flex flex-col items-center">
+                  <HostMicCheck />
+                </div>
+              )}
             </div>
 
             {/* Host-only cue: the empty state tells the host to share the
