@@ -12,6 +12,8 @@
 #            VESSEL_STORAGE_SERVER default storage server for the client,
 #                                 default https://<files domain>
 #            VESSEL_MOQ_RELAY_URL optional live preview relay
+#            VESSEL_CONTACT_URL   mailto: or https: link for "Contact" in the
+#                                 footer, default the project's issue tracker
 #            VESSEL_CSP_ENFORCE   "true" sends an enforcing CSP; anything else
 #                                 keeps Report-Only
 set -eu
@@ -35,6 +37,7 @@ fi
 : "${VESSEL_RELAYS:=${ws_scheme}://${VESSEL_RELAY_DOMAIN#*://}}"
 : "${VESSEL_STORAGE_SERVER:=${http_scheme}://${VESSEL_FILES_DOMAIN#*://}}"
 : "${VESSEL_MOQ_RELAY_URL:=}"
+: "${VESSEL_CONTACT_URL:=}"
 : "${VESSEL_CSP_ENFORCE:=false}"
 : "${ACME_EMAIL:=}"
 # Address ranges allowed to set X-Forwarded-For. Default: Cloudflare's egress
@@ -68,7 +71,7 @@ relays_json="${relays_json}]"
 
 cat > /srv/config.js <<CONFIG
 // Written at container start from the deployment environment. Nothing here is secret.
-window.__VESSEL_CONFIG__ = {"relays":${relays_json},"storageServer":"$(json_str "$VESSEL_STORAGE_SERVER")","moqRelayUrl":"$(json_str "$VESSEL_MOQ_RELAY_URL")"};
+window.__VESSEL_CONFIG__ = {"relays":${relays_json},"storageServer":"$(json_str "$VESSEL_STORAGE_SERVER")","moqRelayUrl":"$(json_str "$VESSEL_MOQ_RELAY_URL")","contactUrl":"$(json_str "$VESSEL_CONTACT_URL")"};
 CONFIG
 
 echo "vessel-web: site=${VESSEL_DOMAIN} relay=${VESSEL_RELAY_DOMAIN} files=${VESSEL_FILES_DOMAIN} csp=${VESSEL_CSP_HEADER}"

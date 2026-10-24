@@ -1250,10 +1250,10 @@ export function SessionComplete({
 
                     <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mt-2">
                       <VesselButton variant="primary" className="w-full sm:w-auto" onClick={onViewVault} data-testid="button-view-vault">
-                        View in My Vault &rarr;
+                        View in my vault &rarr;
                       </VesselButton>
                       <VesselButton variant="ghost" className="w-full sm:w-auto" onClick={onStartNew} data-testid="button-start-new">
-                        Start New Session
+                        Start a new session
                       </VesselButton>
                     </div>
                   </>

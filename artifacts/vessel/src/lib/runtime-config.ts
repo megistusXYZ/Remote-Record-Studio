@@ -15,6 +15,7 @@ type RawConfig = {
   relays?: unknown;
   storageServer?: unknown;
   moqRelayUrl?: unknown;
+  contactUrl?: unknown;
 };
 
 function rawConfig(): RawConfig {
@@ -61,6 +62,18 @@ export function deploymentStorageServer(): string | null {
   const fromEnv = asString(import.meta.env.VITE_BLOSSOM_SERVER);
   if (isHttpsUrl(fromEnv)) return stripTrailingSlash(fromEnv);
   return null;
+}
+
+const DEFAULT_CONTACT_URL = "https://github.com/megistusXYZ/Remote-Record-Studio/issues";
+
+/** Where "Contact" in the footer points: a mailto: or https: link the
+ *  operator set, else the project's issue tracker. */
+export function deploymentContactUrl(): string {
+  const fromRuntime = asString(rawConfig().contactUrl);
+  if (/^(https:\/\/|mailto:)/i.test(fromRuntime)) return fromRuntime;
+  const fromEnv = asString(import.meta.env.VITE_CONTACT_URL);
+  if (/^(https:\/\/|mailto:)/i.test(fromEnv)) return fromEnv;
+  return DEFAULT_CONTACT_URL;
 }
 
 /** Optional higher-capacity live preview server; "" when none is configured. */
