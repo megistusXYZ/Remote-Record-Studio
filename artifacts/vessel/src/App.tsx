@@ -21,6 +21,7 @@ import Terms from "./pages/terms";
 import HowItWorks from "./pages/how-it-works";
 import RecordPage from "./pages/record";
 import { MobileNavLayout } from "./components/MobileNavLayout";
+import { AppUpdatePrompt } from "./components/AppUpdatePrompt";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ function App() {
           <ScrollToTop />
           <Router />
         </WouterRouter>
+        <AppUpdatePrompt />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

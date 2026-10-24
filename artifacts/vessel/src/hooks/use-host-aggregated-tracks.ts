@@ -240,6 +240,9 @@ export function buildExportSource(track: RecipientTrack): TrackExportSource {
     videoOnlyMimeType: track.video?.mimeType ?? null,
     screenRemoteUrl: track.screen?.url ?? null,
     screenMimeType: track.screen?.mimeType ?? null,
+    durationSeconds: track.durationSeconds,
+    startedAtMs: track.startedAtMs,
+    serverOffsetMs: track.serverOffsetMs,
   };
 }
 

@@ -109,6 +109,11 @@ export type UseLocalStreamResult = {
   error: string | null;
   isLoading: boolean;
   hasPermission: boolean;
+  /**
+   * Set when the camera could not be opened but the microphone could, so the
+   * stream is audio only. Null when video is available or nothing opened.
+   */
+  videoUnavailableReason: string | null;
 };
 
 export function useLocalStream({
@@ -121,6 +126,7 @@ export function useLocalStream({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
+  const [videoUnavailableReason, setVideoUnavailableReason] = useState<string | null>(null);
   const currentStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
@@ -134,13 +140,38 @@ export function useLocalStream({
       return;
     }
 
+    const audioConstraint: MediaStreamConstraints["audio"] = micId
+      ? { deviceId: { exact: micId } }
+      : true;
     const constraints: MediaStreamConstraints = {
-      audio: micId ? { deviceId: { exact: micId } } : true,
+      audio: audioConstraint,
       video: cameraId ? { deviceId: { exact: cameraId }, width: 1280, height: 720 } : { width: 1280, height: 720 },
     };
 
+    // A missing, blocked or busy camera must not stop the recording: retry
+    // with the microphone alone and say why there is no video.
+    const describeNoVideo = (name: string): string => {
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        return "Camera access is blocked, so this will record audio only.";
+      }
+      if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError") {
+        return "No camera was found, so this will record audio only.";
+      }
+      if (name === "NotReadableError" || name === "TrackStartError") {
+        return "Your camera is being used by another app, so this will record audio only.";
+      }
+      return "The camera couldn't be opened, so this will record audio only.";
+    };
+
+    setVideoUnavailableReason(null);
     navigator.mediaDevices
       .getUserMedia(constraints)
+      .catch(async (err: unknown) => {
+        const name = (err as { name?: string } | null)?.name || "";
+        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint, video: false });
+        if (!cancelled) setVideoUnavailableReason(describeNoVideo(name));
+        return audioOnly;
+      })
       .then((s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop());
@@ -200,5 +231,5 @@ export function useLocalStream({
     };
   }, []);
 
-  return { stream, error, isLoading, hasPermission };
+  return { stream, error, isLoading, hasPermission, videoUnavailableReason };
 }

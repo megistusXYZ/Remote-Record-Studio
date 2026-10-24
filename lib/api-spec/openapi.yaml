@@ -320,6 +320,9 @@ components:
       properties:
         status:
           type: string
+        nowMs:
+          type: integer
+          description: Server clock, milliseconds since the Unix epoch. Clients use it to express recording start times on one clock.
       required:
         - status
 
