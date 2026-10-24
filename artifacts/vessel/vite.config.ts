@@ -71,8 +71,8 @@ const cspDirectives = [
   "object-src 'none'",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob:",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
   // 'unsafe-inline' on script-src is a temporary concession for the small
   // JSON-LD <script> in index.html. The CSP is Report-Only today so this
   // does not weaken anything in production yet — we'll either move that
