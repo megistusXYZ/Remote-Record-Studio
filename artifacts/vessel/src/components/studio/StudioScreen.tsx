@@ -42,7 +42,8 @@ import { publishPersonalArchive } from "../../lib/session-archive";
 import { rememberPersonalReceipt } from "../../lib/personal-receipts";
 import {
   deriveHostRowStorageState,
-  publishPersonalArchivePointer,
+  deliverPersonalArchive,
+  DeliveryUnsupportedError,
   shouldPublishPersonalArchive,
   useHostAggregatedTracks,
 } from "../../hooks/use-host-aggregated-tracks";
@@ -957,20 +958,26 @@ export function StudioScreen({
           totalCount: result.publish.totalCount,
         });
 
-        // Broadcast pointer (retried with backoff inside the helper).
-        try {
-          await publishPersonalArchivePointer({
-            signer: identity._signer,
-            sessionId: session.id,
-            shareUrl: result.shareUrl,
-          });
-        } catch (pointerErr) {
-          console.warn("personal-archive pointer publish failed", pointerErr);
-          toast({
-            variant: "destructive",
-            description:
-              "Couldn't send your receipt link to the host automatically. Share the link manually if needed; your recording is safe on this device.",
-          });
+        // Deliver to the host: the link is sealed to the host's key here and
+        // recorded by the API, so the host gets it even after a reload.
+        if (!isHost && hostPubkey) {
+          try {
+            await deliverPersonalArchive({
+              signer: identity._signer,
+              hostPubkey,
+              sessionId: session.id,
+              shareUrl: result.shareUrl,
+            });
+          } catch (deliveryErr) {
+            console.warn("delivery to host failed", deliveryErr);
+            toast({
+              variant: "destructive",
+              description:
+                deliveryErr instanceof DeliveryUnsupportedError
+                  ? "Your key app can't send your track to the host automatically. Send them your receipt link; your recording is safe on this device."
+                  : "Couldn't send your track to the host yet. Your recording is safe on this device; send them your receipt link if this keeps happening.",
+            });
+          }
         }
       } catch (err) {
         // Raw error text (relay/storage/crypto failures) stays in the console;

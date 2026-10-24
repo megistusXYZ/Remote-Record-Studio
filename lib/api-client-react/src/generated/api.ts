@@ -19,6 +19,8 @@ import type {
 import type {
   CreateRecordingBody,
   CreateSessionBody,
+  Delivery,
+  DeliveryInput,
   GetRecentActivityParams,
   GetVaultSummaryParams,
   HealthStatus,
@@ -817,6 +819,186 @@ export const useLeaveSession = <
 > => {
   return useMutation(getLeaveSessionMutationOptions(options));
 };
+
+/**
+ * Stores a note sealed to the host's key on the sender's device (the
+share link to the sender's archive). The server cannot read it. Must
+be signed by a participant of the session; latest delivery per sender
+wins.
+
+ * @summary Record this participant's track delivery to the host
+ */
+export const getRecordDeliveryUrl = (sessionId: string) => {
+  return `/api/sessions/${sessionId}/deliveries`;
+};
+
+export const recordDelivery = async (
+  sessionId: string,
+  deliveryInput: DeliveryInput,
+  options?: RequestInit,
+): Promise<Delivery> => {
+  return customFetch<Delivery>(getRecordDeliveryUrl(sessionId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(deliveryInput),
+  });
+};
+
+export const getRecordDeliveryMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordDelivery>>,
+    TError,
+    { sessionId: string; data: BodyType<DeliveryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordDelivery>>,
+  TError,
+  { sessionId: string; data: BodyType<DeliveryInput> },
+  TContext
+> => {
+  const mutationKey = ["recordDelivery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordDelivery>>,
+    { sessionId: string; data: BodyType<DeliveryInput> }
+  > = (props) => {
+    const { sessionId, data } = props ?? {};
+
+    return recordDelivery(sessionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordDeliveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordDelivery>>
+>;
+export type RecordDeliveryMutationBody = BodyType<DeliveryInput>;
+export type RecordDeliveryMutationError = ErrorType<void>;
+
+/**
+ * @summary Record this participant's track delivery to the host
+ */
+export const useRecordDelivery = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordDelivery>>,
+    TError,
+    { sessionId: string; data: BodyType<DeliveryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordDelivery>>,
+  TError,
+  { sessionId: string; data: BodyType<DeliveryInput> },
+  TContext
+> => {
+  return useMutation(getRecordDeliveryMutationOptions(options));
+};
+
+/**
+ * @summary List track deliveries for a session (host only)
+ */
+export const getListDeliveriesUrl = (sessionId: string) => {
+  return `/api/sessions/${sessionId}/deliveries`;
+};
+
+export const listDeliveries = async (
+  sessionId: string,
+  options?: RequestInit,
+): Promise<Delivery[]> => {
+  return customFetch<Delivery[]>(getListDeliveriesUrl(sessionId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDeliveriesQueryKey = (sessionId: string) => {
+  return [`/api/sessions/${sessionId}/deliveries`] as const;
+};
+
+export const getListDeliveriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDeliveries>>,
+  TError = ErrorType<void>,
+>(
+  sessionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDeliveries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDeliveriesQueryKey(sessionId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDeliveries>>> = ({
+    signal,
+  }) => listDeliveries(sessionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!sessionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDeliveries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDeliveriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDeliveries>>
+>;
+export type ListDeliveriesQueryError = ErrorType<void>;
+
+/**
+ * @summary List track deliveries for a session (host only)
+ */
+
+export function useListDeliveries<
+  TData = Awaited<ReturnType<typeof listDeliveries>>,
+  TError = ErrorType<void>,
+>(
+  sessionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDeliveries>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDeliveriesQueryOptions(sessionId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all recordings in the vault

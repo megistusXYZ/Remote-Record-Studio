@@ -10,7 +10,9 @@ export default defineConfig({
   // Generated SQL migrations. Production applies these (`pnpm db:migrate`,
   // or the `migrate` service in deploy/compose.yaml); `db:push` stays a
   // development shortcut.
-  out: path.join(__dirname, "./drizzle"),
+  // Relative on purpose: drizzle-kit mangles absolute paths ("./" + abs).
+  // Scripts run with lib/db as the working directory.
+  out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,

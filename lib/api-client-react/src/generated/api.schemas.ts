@@ -23,6 +23,23 @@ export interface IceServersResponse {
   turnConfigured: boolean;
 }
 
+export interface DeliveryInput {
+  /**
+   * NIP-44 ciphertext addressed to the host. Opaque to the server.
+   * @minLength 1
+   * @maxLength 16384
+   */
+  sealed: string;
+}
+
+export interface Delivery {
+  id: string;
+  senderPubkey: string;
+  sealed: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface HealthStatus {
   status: string;
   /** Server clock, milliseconds since the Unix epoch. Clients use it to express recording start times on one clock. */
