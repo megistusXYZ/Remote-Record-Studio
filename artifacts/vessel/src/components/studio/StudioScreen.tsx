@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRecordingMarkers } from "../../hooks/use-recording-markers";
+import { getCachedServerOffsetMs } from "../../lib/server-time";
 import { AlertTriangle, X, MonitorPlay, Copy, Check } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
@@ -245,6 +247,20 @@ export function StudioScreen({
       });
     },
   });
+
+  // Markers the host drops during a take (M key or the flag button). They
+  // live on this device and land in the editor download.
+  const sessionMarkers = useRecordingMarkers({
+    sessionId: session.id,
+    isRecording: isHost && recording.isRecording,
+    serverOffsetMs: getCachedServerOffsetMs(),
+  });
+  const markerCountRef = useRef(sessionMarkers.markers.length);
+  useEffect(() => {
+    const n = sessionMarkers.markers.length;
+    if (n > markerCountRef.current) toast({ description: `Marker ${n} added.` });
+    markerCountRef.current = n;
+  }, [sessionMarkers.markers.length, toast]);
 
   const acceptedLivePeers = useMemo(
     () => session.participants.map((p) => p.pubkey).filter(Boolean),
@@ -1452,6 +1468,8 @@ export function StudioScreen({
           raisedHandsCount={raisedHandsCount}
           handRaised={callSignal.handRaised}
           onToggleHand={callSignal.toggleHand}
+          onAddMarker={() => sessionMarkers.addMarker()}
+          markerCount={sessionMarkers.markers.length}
           screenShareSupported={screenShare.isSupported}
           isScreenSharing={screenShare.isSharing}
           onToggleScreenShare={handleToggleScreenShare}
@@ -1585,6 +1603,7 @@ export function StudioScreen({
           isHost={isHost}
           hostName={session.hostName}
           sessionTitle={session.title}
+          sessionId={session.id}
           sessionDate={sessionEndedAtMs ? new Date(sessionEndedAtMs) : new Date()}
           syncStatus={recording.syncStatus}
           syncProgress={recording.syncProgress}
