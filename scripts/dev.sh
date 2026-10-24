@@ -7,7 +7,9 @@
 #
 #   sh scripts/dev.sh api       build + start the API server     (pnpm dev:api)
 #   sh scripts/dev.sh web       start the Vite dev server        (pnpm dev:web)
-#   sh scripts/dev.sh db:push   apply the Drizzle schema         (pnpm db:push)
+#   sh scripts/dev.sh db:push      push the schema straight to the dev database (pnpm db:push)
+#   sh scripts/dev.sh db:generate  write a SQL migration from schema changes     (pnpm db:generate)
+#   sh scripts/dev.sh db:migrate   apply pending SQL migrations                  (pnpm db:migrate)
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,8 +38,15 @@ case "${1:-}" in
   db:push)
     exec pnpm --filter @workspace/db run push
     ;;
+  db:generate)
+    shift
+    exec pnpm --filter @workspace/db run generate "$@"
+    ;;
+  db:migrate)
+    exec pnpm --filter @workspace/db run migrate
+    ;;
   *)
-    echo "usage: $0 api|web|db:push" >&2
+    echo "usage: $0 api|web|db:push|db:generate|db:migrate" >&2
     exit 2
     ;;
 esac
