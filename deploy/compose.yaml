@@ -103,7 +103,7 @@ services:
       VESSEL_STORAGE_SERVER: ${VESSEL_STORAGE_SERVER:-}
       VESSEL_MOQ_RELAY_URL: ${VESSEL_MOQ_RELAY_URL:-}
       VESSEL_CONTACT_URL: ${VESSEL_CONTACT_URL:-}
-      VESSEL_CSP_ENFORCE: ${VESSEL_CSP_ENFORCE:-false}
+      VESSEL_CSP_ENFORCE: ${VESSEL_CSP_ENFORCE:-true}
       ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
       TRUSTED_PROXY_RANGES: ${TRUSTED_PROXY_RANGES:-}
     volumes:
@@ -115,7 +115,10 @@ services:
       - files
 
   relay:
-    image: ghcr.io/hoytech/strfry:latest
+    # strfry with Node.js for its write policy; see strfry.Dockerfile.
+    build:
+      context: .
+      dockerfile: strfry.Dockerfile
     restart: unless-stopped
     command: ["relay"]
     volumes:

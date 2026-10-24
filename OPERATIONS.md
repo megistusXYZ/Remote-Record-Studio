@@ -104,7 +104,7 @@ a redeploy. Set the variable in `deploy/.env`, run `up -d api`, done.
 | Sessions join / hour           | `VESSEL_QUOTA_SESSIONS_JOIN_PER_WINDOW`          | `60`    | —                                              |
 | Recordings write / hour        | `VESSEL_QUOTA_RECORDINGS_WRITE_PER_WINDOW`       | `500`   | —                                              |
 | Helmet security headers (API)  | `VESSEL_HELMET_ENABLED`                          | `true`  | `VESSEL_HELMET_ENABLED=false`                  |
-| Web client CSP                 | `VESSEL_CSP_ENFORCE`                             | `false` (Report-Only) | leave at `false` for Report-Only |
+| Web client CSP                 | `VESSEL_CSP_ENFORCE`                             | `true` (enforced) | `false` sends it Report-Only |
 
 Signed requests are bound to their body and each auth event is accepted once; the
 "already used" memory is per process (two minutes). Behind a load balancer with
@@ -174,7 +174,8 @@ curl -sSI https://your-domain.example/api/healthz
 #    framework branding.
 curl -sS  https://your-domain.example/api/__nope
 
-# 3. Web client should set Referrer-Policy: no-referrer and CSP-Report-Only.
+# 3. Web client should set Referrer-Policy: no-referrer and an enforced
+#    Content-Security-Policy.
 curl -sSI https://your-domain.example/ | grep -iE '^(referrer-policy|content-security-policy|permissions-policy|x-content-type-options)'
 
 # 4. Oversized body should be rejected with a 413 before parsing.
@@ -360,6 +361,23 @@ which proves TURN.
   for the host's own architecture.
 - **Name your servers**: `relay.info` in `deploy/strfry.conf` and the rules
   in `deploy/blossom.yml` are yours to edit; `up -d relay files` applies them.
+
+### What the sync and storage servers accept
+
+Both are reachable from the internet, and anyone can make a key, so each is
+limited to what Vessel itself sends:
+
+- **Sync server** (strfry): a write policy, `deploy/strfry-write-policy.mjs`,
+  accepts only Vessel's message kinds and rejects the rest with
+  `blocked:`. The relay image adds Node.js to run it; after changing the
+  policy, run `docker compose build relay && docker compose up -d relay`.
+- **Storage server** (`deploy/blossom.yml`): accepts only encrypted
+  recordings (`application/octet-stream`) up to 4 GiB, never fetches from
+  other servers, and prunes files unaccessed for a year. It has no per-key
+  quota; watch disk use, and if one key uploads abusively, remove its blobs
+  and block its address at the CDN.
+
+`scripts/src/deploy-*.test.ts` check these settings in CI.
 
 ### Settings the browser receives
 
