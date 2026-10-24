@@ -31,6 +31,7 @@ const DISCLOSED_DB_COLUMNS = {
     "status",
     "invite_code",
     "participant_count",
+    "max_participants",
     "created_at",
     "started_at",
     "ended_at",
@@ -42,6 +43,7 @@ const DISCLOSED_DB_COLUMNS = {
     "display_name",
     "role",
     "joined_at",
+    "left_at",
   ]),
   recordings: new Set([
     "id",
@@ -54,6 +56,22 @@ const DISCLOSED_DB_COLUMNS = {
     "mime_type",
     "blob_hash",
     "blob_url",
+    // Optional sibling tracks recorded alongside the main file: audio-only,
+    // video-only, and screen-share. Each stores the same hash / URL / size /
+    // format set as the main file; screen-share also has its own duration.
+    "audio_blob_hash",
+    "audio_blob_url",
+    "audio_size_bytes",
+    "audio_mime_type",
+    "video_blob_hash",
+    "video_blob_url",
+    "video_size_bytes",
+    "video_mime_type",
+    "screen_blob_hash",
+    "screen_blob_url",
+    "screen_size_bytes",
+    "screen_mime_type",
+    "screen_duration_seconds",
     "status",
     "created_at",
   ]),
@@ -66,7 +84,9 @@ const DISCLOSED_LOG_FIELDS = {
 
 function actualColumnNames(table: Parameters<typeof getTableColumns>[0]) {
   return new Set(
-    Object.values(getTableColumns(table)).map((c) => (c as { name: string }).name),
+    Object.values(getTableColumns(table)).map(
+      (c) => (c as { name: string }).name,
+    ),
   );
 }
 
