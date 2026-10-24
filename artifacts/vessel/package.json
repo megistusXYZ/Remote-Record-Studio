@@ -93,8 +93,8 @@
     "applesauce-react": "^5.1.0",
     "applesauce-relay": "^5.2.0",
     "applesauce-signers": "^5.2.0",
+    "fflate": "^0.8.3",
     "idb": "^8.0.3",
-    "jszip": "^3.10.1",
     "nostr-tools": "^2.23.3",
     "qrcode.react": "^4.2.0",
     "zustand": "^5.0.12"

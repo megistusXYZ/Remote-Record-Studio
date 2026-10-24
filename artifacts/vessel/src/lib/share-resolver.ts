@@ -1,4 +1,5 @@
 import type { Event } from "nostr-tools/pure";
+import { sha256HexOfBlob as streamingSha256HexOfBlob } from "./streaming-hash";
 import { getRelayPool } from "./relay-pool";
 import {
   decryptManifestContent,
@@ -401,14 +402,7 @@ export { decodeShareKey };
  * swapped the file between upload and download.
  */
 export async function sha256HexOfBlob(blob: Blob): Promise<string> {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("This browser can't verify downloads.");
-  }
-  const buf = await blob.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return streamingSha256HexOfBlob(blob);
 }
 
 export type TrackHashVerification =

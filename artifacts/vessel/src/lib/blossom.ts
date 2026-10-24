@@ -1,4 +1,5 @@
 import type { ISigner } from "applesauce-signers";
+import { sha256HexOfBlob } from "./streaming-hash";
 import { normalizeStorageUrl } from "./storage-config";
 
 /**
@@ -70,15 +71,10 @@ type BlobDescriptor = {
   uploaded?: number;
 };
 
+/** Lowercase hex SHA-256 of a blob, streamed so large recordings never sit
+ *  in memory as one buffer. See `streaming-hash.ts`. */
 export async function sha256Hex(blob: Blob): Promise<string> {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("Web Crypto is not available in this environment");
-  }
-  const buf = await blob.arrayBuffer();
-  const hash = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return sha256HexOfBlob(blob);
 }
 
 async function buildAuthEvent(
