@@ -28,7 +28,7 @@ export default defineConfig({
       mode: "split",
       baseUrl: "/api",
       clean: true,
-      prettier: true,
+      formatter: "prettier",
       override: {
         fetch: {
           includeHttpResponseReturnType: false,
@@ -54,9 +54,12 @@ export default defineConfig({
       mode: "split",
       indexFiles: false,
       clean: true,
-      prettier: true,
+      formatter: "prettier",
       override: {
         zod: {
+          // The workspace is on zod 3. Without this, orval guesses zod 4
+          // when it cannot read the installed version.
+          version: 3,
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],
