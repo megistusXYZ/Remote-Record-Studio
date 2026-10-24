@@ -1,0 +1,17 @@
+# Keep the Docker build context small and free of local state.
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+**/.env.local
+deploy/.env
+attached_assets
+.DS_Store
+**/.DS_Store
+.cache
+.local
