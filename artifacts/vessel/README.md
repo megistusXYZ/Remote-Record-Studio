@@ -47,8 +47,10 @@ Content-Security-Policy that ships in report-only mode until
 
 ## Copy rules
 
-User-facing text never names the underlying protocols. `src/copy-guard.test.ts`
-fails the build if it does; the glossary lives in the test.
+User-facing text never names the underlying protocols, and never repeats a
+promise the product no longer makes. `src/copy-guard.test.ts` fails the build
+on either; the glossary and the list of retired claims live in the test. When
+a feature changes what Vessel can promise, add the old claim to that list.
 
 ## License
 

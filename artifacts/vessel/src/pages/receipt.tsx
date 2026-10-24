@@ -280,7 +280,7 @@ export default function ReceiptPage() {
                   <span>
                     Your recording is stored on{" "}
                     <span className="text-vessel-text-primary font-medium">a storage server</span>
-                    , not on Vessel's server. Vessel never sees the file.
+                    , encrypted on your device before upload. The server holds scrambled bytes it can't play.
                   </span>
                 </li>
                 <li className="flex items-start gap-3">

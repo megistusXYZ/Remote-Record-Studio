@@ -101,8 +101,8 @@ describe("SessionComplete — 2-participant smoke", () => {
       />,
     );
 
-    expect(screen.getByText(/Ada'?s Track/)).toBeTruthy();
-    expect(screen.getByText(/Grace'?s Track/)).toBeTruthy();
+    expect(screen.getByText(/Ada'?s track/)).toBeTruthy();
+    expect(screen.getByText(/Grace'?s track/)).toBeTruthy();
 
     expect(screen.getByTestId("chip-hash-va-ada")).toBeTruthy();
     expect(screen.getByTestId("chip-hash-a-ada")).toBeTruthy();

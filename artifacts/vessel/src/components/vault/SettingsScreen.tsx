@@ -589,9 +589,10 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
               <div className="space-y-2 text-xs text-vessel-text-secondary leading-relaxed pl-11">
                 <p>
                   Vessel&rsquo;s server keeps a short list of plain things: studio
-                  names, Studio IDs, invite codes, timestamps, and pointers
-                  to where your files live on your storage server. The audio and
-                  video themselves never reach us.
+                  names, Studio IDs, invite codes, timestamps, pointers to where
+                  your files are stored, and guests&rsquo; sealed delivery notes.
+                  Your audio and video are encrypted on your device, so nothing
+                  we hold can be played.
                 </p>
                 <p>
                   Our request logs are equally short: a request id, the method, and

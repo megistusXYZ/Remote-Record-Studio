@@ -636,7 +636,7 @@ function WaitingForRow({
       />
       <div className="min-w-0 flex-1">
         <div className="font-medium text-vessel-text-secondary truncate">
-          {displayName}'s Track
+          {displayName}'s track
         </div>
         {resolveError ? (
           <div
@@ -955,7 +955,7 @@ export function SessionComplete({
                     />
                   ))}
                 </div>
-                <h2 className="font-display text-2xl font-bold text-vessel-text-primary mb-2">Saving your session...</h2>
+                <h2 className="font-display text-2xl font-bold text-vessel-text-primary mb-2">Saving your session…</h2>
                 <p className="text-sm text-vessel-text-secondary mb-8">We're packaging your tracks. This usually takes under a minute.</p>
 
                 <div className="w-full space-y-0">
@@ -1059,7 +1059,7 @@ export function SessionComplete({
                                 initialsClassName="text-sm"
                               />
                               <div className="min-w-0">
-                                <div className="font-medium text-vessel-text-primary truncate">{track.participantName}'s Track</div>
+                                <div className="font-medium text-vessel-text-primary truncate">{track.participantName}'s track</div>
                                 <div className="text-xs text-vessel-text-muted font-mono-vessel mt-0.5">
                                   {track.hasVideo ? "Video + Audio" : "Audio only"} &middot;{" "}
                                   {formatDuration(track.durationSeconds)} &middot; {formatSize(track.sizeBytes)}

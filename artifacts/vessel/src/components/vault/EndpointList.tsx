@@ -294,7 +294,7 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
 
       <p className="text-xs text-vessel-text-muted">
         {showSimpleView
-          ? "Where your settings and share links are published. The default servers are public and free. Add your own any time."
+          ? "Where your settings and share links are published. Add your own any time."
           : "Your sync servers in order. The first is primary, the rest are backups. The list syncs to your other devices."}
       </p>
 

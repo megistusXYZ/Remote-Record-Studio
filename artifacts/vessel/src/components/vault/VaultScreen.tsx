@@ -499,7 +499,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
         />
 
         <header className="relative z-10 sticky top-0 bg-vessel-bg-base/80 backdrop-blur-xl border-b border-vessel-border px-4 sm:px-8 py-4 sm:py-0 sm:h-[72px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-vessel-text-primary tracking-tight leading-none">My Vault</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-vessel-text-primary tracking-tight leading-none">Your vault</h1>
           <div className="relative w-full sm:w-auto">
             <Search className="w-4 h-4 text-vessel-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -692,7 +692,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
 
                   <div className="flex items-center gap-2">
                     <VesselButton variant="ghost" size="sm" onClick={() => handleDownloadAll(session)} data-testid={`button-download-all-${session.id}`}>
-                      <Download className="w-4 h-4 mr-2" /> Download All
+                      <Download className="w-4 h-4 mr-2" /> Download all
                     </VesselButton>
                     <VesselButton
                       variant="ghost"
@@ -703,7 +703,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                       }}
                       data-testid={`button-toggle-tracks-${session.id}`}
                     >
-                      {isExpanded ? "Hide Tracks" : "View Tracks"}
+                      {isExpanded ? "Hide tracks" : "View tracks"}
                     </VesselButton>
                     <VesselButton
                       variant="ghost"

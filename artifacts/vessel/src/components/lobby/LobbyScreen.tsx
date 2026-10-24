@@ -202,7 +202,7 @@ export function LobbyScreen({
                     isLoading={isCreating}
                     data-testid="button-create-session"
                   >
-                    Create Session &rarr;
+                    Create session &rarr;
                   </VesselButton>
                 </div>
               </VesselCard>
@@ -411,7 +411,7 @@ export function LobbyScreen({
                     data-testid="button-show-qr"
                   >
                     <QrCode className="w-4 h-4 mr-2" />
-                    QR Code
+                    QR code
                   </VesselButton>
                 </div>
                 <ScheduleInvite
@@ -507,7 +507,7 @@ export function LobbyScreen({
                     isLoading={isStarting}
                     data-testid="button-start-recording"
                   >
-                    Start Recording &rarr;
+                    Start recording &rarr;
                   </VesselButton>
                 )}
                 {onCancelSession && (
@@ -522,7 +522,7 @@ export function LobbyScreen({
                     }}
                     data-testid="button-cancel-session"
                   >
-                    Cancel Session
+                    Cancel session
                   </VesselButton>
                 )}
               </div>

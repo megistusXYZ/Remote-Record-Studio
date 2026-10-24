@@ -35,7 +35,7 @@ export function SavingOverlay({
             className="max-w-md w-full p-8 rounded-2xl bg-vessel-bg-surface border border-vessel-border shadow-2xl"
           >
             <h2 className="font-display text-2xl font-bold mb-2 text-vessel-text-primary">
-              Saving your session...
+              Saving your session…
             </h2>
             <p className="text-sm text-vessel-text-secondary mb-6">
               Don't close this tab. Your high-quality local recordings are being saved.
