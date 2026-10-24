@@ -288,7 +288,7 @@ export function ShareModal({ open, onOpenChange, session }: ShareModalProps) {
                   onFocus={(e) => e.currentTarget.select()}
                   aria-label="Editor share link"
                 />
-                <CopyButton value={archive.shareUrl} label="Copy Link" />
+                <CopyButton value={archive.shareUrl} label="Copy link" />
               </div>
               <p className="text-xs text-vessel-text-muted leading-relaxed">
                 Only people with this link can open it. The link itself holds

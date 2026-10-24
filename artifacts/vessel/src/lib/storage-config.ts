@@ -33,6 +33,8 @@ export const STORAGE_URLS_KEY = "vessel_storage_urls";
 /** The deployment's own storage server when the operator set one, else a
  *  public default. */
 export const DEFAULT_STORAGE_URL = deploymentStorageServer() ?? "https://blossom.band";
+/** Whether the default is this deployment's own storage (shown in Settings). */
+export const DEFAULT_IS_DEPLOYMENT_STORAGE = deploymentStorageServer() !== null;
 const LEGACY_PLACEHOLDER = "https://storage.vessel.local";
 
 const KIND_USER_SERVER_LIST = 10063;

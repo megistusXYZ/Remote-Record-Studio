@@ -288,8 +288,8 @@ export default function HowItWorks() {
           >
             A small, lo-fi preview zips between you and your guest so you can
             have a normal conversation. The studio-quality recording stays put
-            on each person&rsquo;s own machine &mdash; then gets quietly mailed
-            to wherever you want it kept. Pull up a chair, here&rsquo;s how.
+            on each person&rsquo;s own machine &mdash; then gets locked and
+            quietly mailed to the host. Pull up a chair, here&rsquo;s how.
           </motion.p>
         </div>
 
@@ -446,21 +446,20 @@ export default function HowItWorks() {
               <li className="flex gap-3">
                 <span className="text-vessel-accent shrink-0 mt-1">·</span>
                 <span>
-                  Each person&rsquo;s finished file ships straight to the
-                  storage location{" "}
+                  Each person&rsquo;s finished file is locked on their own
+                  device before it leaves, so whatever storage holds it{" "}
                   <em className="text-vessel-text-primary not-italic font-medium">
-                    they
+                    &mdash; ours or yours &mdash;
                   </em>{" "}
-                  picked &mdash; never to us, never funnelled through one
-                  account.
+                  only ever sees scrambled bytes.
                 </span>
               </li>
               <li className="flex gap-3">
                 <span className="text-vessel-accent shrink-0 mt-1">·</span>
                 <span>
                   No monthly fee for the right to your tape. If Vessel
-                  disappeared tomorrow, your recordings still exist exactly
-                  where you put them.
+                  disappeared tomorrow, your recordings would still be on the
+                  devices that made them.
                 </span>
               </li>
             </ul>
@@ -565,11 +564,11 @@ export default function HowItWorks() {
             title="The receptionist plays matchmaker."
             body={
               <p>
-                Our server hands both browsers an address for a thin
-                conversation server &mdash; a small middleman whose only job
-                is to forward the live preview between you. It does not look
-                inside, it does not save anything, and it never sees the
-                studio-quality recording.
+                Our server checks the invite and introduces the two browsers.
+                From then on they talk to each other directly. If a strict
+                office network gets in the way, a helper server passes the
+                live preview along, still encrypted, so it can&rsquo;t look inside.
+                Neither ever handles the studio-quality recording.
               </p>
             }
           />
@@ -608,17 +607,19 @@ export default function HowItWorks() {
             body={
               <>
                 <p>
-                  Each browser packages up its own high-quality file and ships
-                  it straight to a storage server. Your tape goes to your storage.
-                  Your guest&rsquo;s tape goes to theirs. The files do{" "}
-                  <strong className="text-vessel-text-primary">not</strong>{" "}
-                  stop over on Vessel&rsquo;s servers.
+                  Each browser locks its own high-quality file with a fresh
+                  key, then uploads it to storage: this Vessel service&rsquo;s,
+                  unless that person picked their own. The storage holds{" "}
+                  <strong className="text-vessel-text-primary">only</strong>{" "}
+                  scrambled bytes it can&rsquo;t play. Your guest&rsquo;s
+                  browser then sends you a sealed note saying where their
+                  track is.
                 </p>
                 <p className="text-vessel-text-muted">
-                  As the host, you open your editor and see the session
-                  bundled together &mdash; one neat row of tracks, each one
-                  pulled from wherever its owner keeps it. Clean, separated,
-                  ready to mix.
+                  As the host, you open the session and every track is there
+                  &mdash; one neat row, lined up and ready to download for your
+                  editor, with a transcript made on your own computer if you
+                  want one.
                 </p>
               </>
             }
@@ -648,13 +649,13 @@ export default function HowItWorks() {
             icon={<SupportPersonIcon className="w-6 h-6" />}
             name="The receptionist"
             role="Tiny, polite, busy"
-            detail="Issues invites, keeps track of who is in which room, and points both browsers at a small coordination server so they can preview each other live. Never sees your audio."
+            detail="Issues invites, keeps track of who is in which room, introduces browsers so they can preview each other live, and passes each guest’s sealed delivery note to the host. Never sees your audio."
           />
           <MachineCard
             icon={<FilePersonIcon className="w-6 h-6" />}
             name="The filing cabinet"
             role="Names and dates only"
-            detail="Remembers studio names, session titles, and who joined when — the boring stuff that makes your dashboard not be empty."
+            detail="Remembers studio names, session titles, who joined when, and the sealed notes guests send the host — the boring stuff that makes your dashboard not be empty."
           />
           <MachineCard
             icon={<LaptopPersonIcon className="w-6 h-6" />}
@@ -706,18 +707,19 @@ export default function HowItWorks() {
                 <Send size={18} className="text-vessel-accent" />
               </div>
               <p className="font-mono-vessel text-[10px] uppercase tracking-[0.18em] text-vessel-accent">
-                Lives on each person&rsquo;s own storage
+                Lives on storage, locked
               </p>
             </div>
             <h3 className="font-display font-bold text-base text-vessel-text-primary mb-2">
               The studio-quality recordings
             </h3>
             <p className="text-sm text-vessel-text-secondary leading-relaxed">
-              First on the device that recorded them. Then shipped straight to
-              the storage server that <em className="not-italic font-medium text-vessel-text-primary">that participant</em>{" "}
-              chose &mdash; the host&rsquo;s tape to the host&rsquo;s storage,
-              the guest&rsquo;s tape to the guest&rsquo;s. Vessel never touches
-              the bytes.
+              First on the device that recorded them. Then locked there and
+              uploaded to the storage{" "}
+              <em className="not-italic font-medium text-vessel-text-primary">that person&rsquo;s</em>{" "}
+              studio uses &mdash; this Vessel service&rsquo;s by default, or
+              one they chose. Storage holds scrambled bytes; only a share link
+              can open them.
             </p>
           </VesselCard>
           <VesselCard className="p-6 h-full">
@@ -733,9 +735,10 @@ export default function HowItWorks() {
               Boring metadata
             </h3>
             <p className="text-sm text-vessel-text-secondary leading-relaxed">
-              Studio names, session titles, when people joined. Just enough to
-              show your dashboard. No audio, no video, no key, no password
-              (there isn&rsquo;t one), no contacts, no calendar.
+              Studio names, session titles, when people joined, and each
+              guest&rsquo;s delivery note, sealed so only the host can open
+              it. No audio, no video, no key, no password (there isn&rsquo;t
+              one), no contacts, no calendar.
             </p>
           </VesselCard>
         </div>
@@ -829,9 +832,9 @@ export default function HowItWorks() {
             <ul className="space-y-3 text-sm text-vessel-text-secondary leading-relaxed">
               {[
                 "Checks the wax-seal signature on every incoming request to confirm it is really you.",
-                "Hands out invite links and points the right browsers at the small coordination server so they can see and hear each other live.",
+                "Hands out invite links and introduces browsers so they can see and hear each other live.",
                 "Remembers the names of your studios and sessions so your dashboard isn\u2019t empty.",
-                "Routes the small \u201care you online?\u201d and \u201cyou are muted!\u201d type messages between participants.",
+                "Runs a sync server that passes small encrypted messages like \u201care you online?\u201d and \u201cyou are muted!\u201d between participants. It can\u2019t read them.",
                 "Writes a tiny log line per request \u2014 request id, method, and path. No IP, no headers, no body.",
               ].map((item) => (
                 <li key={item} className="flex gap-3">
@@ -852,11 +855,11 @@ export default function HowItWorks() {
             </div>
             <ul className="space-y-3 text-sm text-vessel-text-secondary leading-relaxed">
               {[
-                "Touches your audio. Not in transit, not at rest.",
-                "Touches your video. Same.",
+                "Hears your audio. Live video is encrypted between browsers, and recordings are encrypted before upload.",
+                "Sees your video. Same.",
                 "Stores your recovery key. We can\u2019t \u2014 we never receive it.",
                 "Holds your contacts, calendar, or address book.",
-                "Reads, transcribes, or analyses your recordings.",
+                "Reads, transcribes, or analyses your recordings. Transcripts are made on your own computer.",
               ].map((item) => (
                 <li key={item} className="flex gap-3">
                   <X size={14} className="text-vessel-red shrink-0 mt-1" />
@@ -926,18 +929,17 @@ export default function HowItWorks() {
           />
           <p className="relative font-display text-xl sm:text-2xl text-vessel-text-primary leading-snug tracking-tight pl-12">
             You sign in with a key only you have. You make a studio and invite a
-            guest. While you talk, a lightweight preview is forwarded between
-            you through a small preview server &mdash; but each of you is{" "}
+            guest. While you talk, a lightweight preview travels directly
+            between you &mdash; but each of you is{" "}
             <em className="text-vessel-accent not-italic font-bold">also</em>{" "}
             recording yourselves at studio quality, on your own machine. When
-            you stop, each browser ships its own high-quality file straight to
-            the storage that{" "}
-            <em className="text-vessel-accent not-italic font-bold">that
-            person</em>{" "}
-            chose. The host opens the editor and sees the session bundled
-            together &mdash; pulled from wherever each track lives. Vessel
-            handles invites and bookkeeping; never the audio. Each person owns
-            their own tape.{" "}
+            you stop, each browser locks its own file and uploads it, and the
+            host gets a sealed note for every guest&rsquo;s track. The host
+            opens the session and downloads{" "}
+            <em className="text-vessel-accent not-italic font-bold">every</em>{" "}
+            track, ready for their editor. Vessel handles invites and
+            bookkeeping; it never hears the audio. Each person owns their own
+            tape.{" "}
             <span className="text-vessel-accent">The end.</span>
           </p>
         </VesselCard>

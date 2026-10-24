@@ -135,8 +135,9 @@ export function ConsentScreen({
             label="Where your file goes"
             body={
               <>
-                Your track is uploaded to storage so {hostFirst} can download it, and a copy
-                stays on this device. Vessel's server never sees the file.
+                Your track is encrypted on this device, then uploaded to storage so{" "}
+                {hostFirst} can download it. A copy stays on this device. The storage
+                can't play it.
               </>
             }
           />

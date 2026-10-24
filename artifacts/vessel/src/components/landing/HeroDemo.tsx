@@ -512,7 +512,7 @@ function SavedFiles({
       </ul>
       <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-xs text-vessel-text-muted">
-          Nothing was uploaded to Vessel. The host's vault lists both tracks.
+          Both tracks were encrypted on their devices and sent to the host's vault.
         </p>
         <button
           type="button"

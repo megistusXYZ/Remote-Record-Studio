@@ -20,7 +20,7 @@ const DEFAULT_ROOM_SIZE = 8;
 type RoomPreset = { value: number; label: string; sub: string } | { value: "custom"; label: string; sub: string };
 
 const ROOM_PRESETS: RoomPreset[] = [
-  { value: 2, label: "Just us 2", sub: "Interview" },
+  { value: 2, label: "Two of us", sub: "Interview" },
   { value: 4, label: "Up to 4", sub: "Panel" },
   { value: 8, label: "Up to 8", sub: "Group" },
   { value: "custom", label: "Custom", sub: "1–25" },
@@ -206,7 +206,7 @@ export default function NewSession() {
                   className="vessel-btn vessel-btn-primary h-12 px-8 flex-1 gap-2"
                   data-testid="button-create-session"
                 >
-                  {createSessionMutation.isPending ? "Creating..." : "Enter Studio"}
+                  {createSessionMutation.isPending ? "Creating..." : "Enter studio"}
                   {!createSessionMutation.isPending && <ArrowRight className="w-4 h-4" />}
                 </button>
               </div>

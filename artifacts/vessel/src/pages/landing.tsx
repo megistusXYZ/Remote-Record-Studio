@@ -338,8 +338,8 @@ export default function LandingPage() {
                   Full-quality local recording
                 </h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
-                  Every participant records directly on their device at full
-                  quality — not a compressed video call screengrab.
+                  Every participant records a 48 kHz WAV on their own device
+                  — not a compressed screengrab of a video call.
                 </p>
               </VesselCard>
             </motion.div>
@@ -373,12 +373,12 @@ export default function LandingPage() {
               <VesselCard variant="interactive" className="p-8 h-full">
                 <LaptopPersonIcon className="w-12 h-12 text-vessel-accent mb-6" />
                 <h3 className="font-display font-bold text-xl mb-3">
-                  You pick where files live
+                  Locked, and yours to keep
                 </h3>
                 <p className="text-sm text-vessel-text-secondary leading-relaxed">
-                  Keep files on your devices, back them up to storage you
-                  choose, or both. If Vessel disappeared tomorrow, your
-                  recordings would still be yours.
+                  Every file is encrypted on the device that recorded it, then
+                  stored where you choose. A copy stays with you, so your
+                  recordings outlive any service, ours included.
                 </p>
               </VesselCard>
             </motion.div>
@@ -433,8 +433,8 @@ export default function LandingPage() {
               },
               {
                 num: "3",
-                title: "Your files, instantly",
-                desc: "Every person's track is ready in studio quality the moment you stop.",
+                title: "Download for your editor",
+                desc: "Every track lined up, with your markers and a transcript made on your computer. Opens in Reaper or Audacity.",
               },
             ].map((step, i) => (
               <motion.div
@@ -752,7 +752,7 @@ export default function LandingPage() {
 
         <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-vessel-border/30 text-center">
           <p className="text-xs text-vessel-text-muted/60">
-            Open source. Open formats. Your recordings, delivered to you.
+            Open source under AGPL-3.0. Open formats. No subscription.
           </p>
         </div>
       </footer>

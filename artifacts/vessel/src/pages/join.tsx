@@ -101,7 +101,7 @@ export default function Join() {
             className="vessel-btn vessel-btn-primary px-6 py-3"
             data-testid="button-join-go-home"
           >
-            Return Home
+            Back to home
           </button>
         </div>
       </div>

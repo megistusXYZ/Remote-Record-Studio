@@ -130,7 +130,7 @@ export function ControlBar({
                   </button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>Device Settings</TooltipContent>
+              <TooltipContent>Device settings</TooltipContent>
             </Tooltip>
             <DevicePickerPopover
               cameras={cameras}

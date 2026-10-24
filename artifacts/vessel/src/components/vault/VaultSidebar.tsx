@@ -43,7 +43,7 @@ export function VaultSidebar({ active, myVaultCount }: VaultSidebarProps) {
           data-testid="nav-vault-my-vault"
         >
           <MyVaultLaptopIcon className="w-4 h-4 shrink-0" />
-          <span className="flex-1 text-left truncate">My Vault</span>
+          <span className="flex-1 text-left truncate">Your vault</span>
           {myVaultCount !== undefined && myVaultCount > 0 && (
             <span className="text-xs font-mono-vessel text-vessel-text-muted px-1.5 py-0.5 rounded bg-vessel-bg-base">
               {myVaultCount}
@@ -73,7 +73,7 @@ export function VaultSidebar({ active, myVaultCount }: VaultSidebarProps) {
           onClick={() => setLocation("/home")}
           data-testid="button-sidebar-new-session"
         >
-          + New Session
+          + New session
         </VesselButton>
         <AccountMenu variant="sidebar" />
       </div>

@@ -14,8 +14,8 @@ delivered to the host. No subscription, and the files stay yours.
 - **Live preview.** Peer-to-peer video between participants, with TURN for
   restrictive networks.
 - **One-link invites.** Guests join from a browser. No install, no account.
-- **Encrypted delivery.** Tracks are encrypted on the device and sealed to the
-  host before they leave it.
+- **Encrypted delivery.** Tracks are encrypted on the device before upload, and
+  each guest's link to their track is sealed so only the host can open it.
 - **Editor-ready export.** Aligned tracks, a Reaper project, markers and a
   speaker-labelled transcript made on the host's machine.
 - **Self-hostable.** One Docker Compose file runs the whole stack.

@@ -13,6 +13,7 @@ import { VesselButton } from "../vessel-ui/VesselButton";
 import { Input } from "@/components/ui/input";
 import {
   DEFAULT_STORAGE_URL,
+  DEFAULT_IS_DEPLOYMENT_STORAGE,
   checkStorageReachability,
   getStorageUrls,
   isValidStorageUrl,
@@ -318,7 +319,11 @@ export function StorageServerList({
 
       <p className="text-xs text-vessel-text-muted">
         {showSimpleView
-          ? "Where your recordings are saved. The default server is provided for free and is not run by Vessel. Point to your own server any time."
+          ? `Where your recordings are saved, encrypted on your device first so the server can't play them. ${
+              DEFAULT_IS_DEPLOYMENT_STORAGE
+                ? "The default is this Vessel service's storage."
+                : "The default is a free public server, not run by Vessel."
+            } Point to your own server any time.`
           : "Your storage servers in order. New recordings upload to the primary. The list syncs to your other devices."}
       </p>
 

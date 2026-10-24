@@ -18,8 +18,9 @@ export default function Terms() {
             laws that apply to you.
           </li>
           <li>
-            You are responsible for the content you create and how you distribute it. We do
-            not store your recordings.
+            You are responsible for the content you create and how you distribute it. If you
+            use our storage, we hold your recordings only as files encrypted on your device,
+            which we cannot open.
           </li>
           <li>
             You agree not to use the Service for anything illegal, deceptive, harassing, or
@@ -48,11 +49,11 @@ export default function Terms() {
 
       <ContentSection heading="Storage servers">
         <p>
-          Vessel lets you point your recordings at any compatible storage server &mdash; the
-          community default, a server you operate yourself, or one offered by a third party.
-          Vessel does not operate that storage server unless you explicitly chose ours, and
-          we are not responsible for its uptime, pricing, retention, content moderation, or
-          terms. The contents of your recordings, the cost of storing them, and the
+          Vessel lets you choose where your recordings are stored: the storage provided with
+          the hosted Service (the default), a server you operate yourself, or one offered by
+          a third party. Recordings are encrypted on your device before upload. We are not
+          responsible for the uptime, pricing, retention, content moderation, or terms of a
+          storage server we do not operate. The contents of your recordings, the cost of storing them, and the
           consequences of sharing them are your responsibility.
         </p>
       </ContentSection>
@@ -60,9 +61,10 @@ export default function Terms() {
       <ContentSection heading="Open source and changes to the Service">
         <p>
           Vessel&rsquo;s source code is published on GitHub under an open-source license. The
-          hosted Service may change, pause, or shut down at any time. Because your recordings
-          live on storage servers you choose &mdash; not on Vessel&rsquo;s servers &mdash;
-          your media is not affected if the hosted Service becomes unavailable.
+          hosted Service may change, pause, or shut down at any time. Each recording is also
+          saved on the device that made it, and you can download your files at any time.
+          Recordings kept only on the hosted Service&rsquo;s storage may become unavailable if
+          it shuts down, so keep copies of anything you need.
         </p>
       </ContentSection>
 
