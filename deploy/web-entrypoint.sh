@@ -14,8 +14,8 @@
 #            VESSEL_MOQ_RELAY_URL optional live preview relay
 #            VESSEL_CONTACT_URL   mailto: or https: link for "Contact" in the
 #                                 footer, default the project's issue tracker
-#            VESSEL_CSP_ENFORCE   "true" sends an enforcing CSP; anything else
-#                                 keeps Report-Only
+#            VESSEL_CSP_ENFORCE   default "true" enforces the CSP; anything
+#                                 else sends it Report-Only
 set -eu
 
 : "${VESSEL_DOMAIN:?VESSEL_DOMAIN is required (e.g. vessel.example.com)}"
@@ -38,7 +38,7 @@ fi
 : "${VESSEL_STORAGE_SERVER:=${http_scheme}://${VESSEL_FILES_DOMAIN#*://}}"
 : "${VESSEL_MOQ_RELAY_URL:=}"
 : "${VESSEL_CONTACT_URL:=}"
-: "${VESSEL_CSP_ENFORCE:=false}"
+: "${VESSEL_CSP_ENFORCE:=true}"
 : "${ACME_EMAIL:=}"
 # Address ranges allowed to set X-Forwarded-For. Default: Cloudflare's egress
 # ranges (https://www.cloudflare.com/ips/). Nothing in front? Set a single

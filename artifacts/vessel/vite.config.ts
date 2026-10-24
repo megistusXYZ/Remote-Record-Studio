@@ -55,10 +55,11 @@ const crossOriginIsolationHeaders = {
 // default and to give the Vessel web client a strong posture even before a
 // CDN/WAF is in front of it.
 //
-// The Content-Security-Policy ships in REPORT-ONLY mode first (see
-// OPERATIONS.md). Flip `VESSEL_CSP_ENFORCE=true` to send the enforcing
-// header instead — only do that after a week of clean Report-Only telemetry
-// so user-supplied storage / signaling origins have time to surface.
+// The Content-Security-Policy is the same one production enforces
+// (deploy/Caddyfile; scripts/src/deploy-csp.test.ts keeps them equal). The
+// dev server sends it Report-Only because Vite's hot reload injects inline
+// scripts; set `VESSEL_CSP_ENFORCE=true` to enforce it here too, for
+// example on `vite preview` of a production build.
 //
 // `Referrer-Policy: no-referrer` is critical because share-link decryption
 // keys live in URL fragments — a referrer leak would compromise them.
@@ -72,11 +73,10 @@ const cspDirectives = [
   "media-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  // 'unsafe-inline' on script-src is a temporary concession for the small
-  // JSON-LD <script> in index.html. The CSP is Report-Only today so this
-  // does not weaken anything in production yet — we'll either move that
-  // block to an external file or add a hash before flipping enforce.
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+  // Every script loads from a file; the JSON-LD block in index.html is data,
+  // which browsers never run. 'wasm-unsafe-eval' lets the speech model's
+  // WebAssembly start.
+  "script-src 'self' 'wasm-unsafe-eval'",
   // wss: is needed for signaling channels; https: covers user-chosen storage
   // origins which we cannot enumerate at build time.
   "connect-src 'self' https: wss:",

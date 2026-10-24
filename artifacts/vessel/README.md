@@ -42,8 +42,9 @@ The dev and preview servers send the same security headers as the
 production Caddy configuration (`deploy/Caddyfile`): cross-origin isolation
 (`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy:
 credentialless`), `Referrer-Policy: no-referrer`, a Permissions-Policy, and a
-Content-Security-Policy that ships in report-only mode until
-`VESSEL_CSP_ENFORCE=true`.
+Content-Security-Policy that allows scripts only from the app's own files.
+Production enforces it; the dev server reports only, because hot reload
+injects inline scripts.
 
 ## Copy rules
 

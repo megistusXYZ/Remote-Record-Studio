@@ -1,9 +1,13 @@
 # Vessel storage server (blossom-server). Mounted read-only at /app/config.yml.
 # ${VARIABLES} are substituted from the container environment at start.
 #
-# Defaults: uploads need a signed request, nobody can list anyone else's
-# files, and files that go unaccessed for a year are pruned. Data lives in
-# the blossom-data volume; switch `storage.backend` to s3 for a bucket.
+# Locked to what Vessel uploads: recordings encrypted on the participant's
+# device, which arrive as opaque bytes. Anyone can make a key to sign an
+# upload, so the server refuses every other type (it would otherwise be free
+# public hosting), never fetches from other servers, and caps file size.
+# Nobody can list anyone else's files, and files unaccessed for a year are
+# pruned. Data lives in the blossom-data volume; switch `storage.backend` to
+# s3 for a bucket. Checked by scripts/src/deploy-storage.test.ts.
 
 publicDomain: "${BLOSSOM_PUBLIC_DOMAIN}"
 
@@ -18,21 +22,8 @@ storage:
   local:
     dir: ./data/blobs
   removeWhenNoOwners: false
-  # First match sets the expiry; the list is also the allowed-type list.
+  # The only accepted type, and its expiry.
   rules:
-    - type: audio/*
-      expiration: 1 year
-    - type: video/*
-      expiration: 1 year
-    - type: image/*
-      expiration: 1 year
-    - type: text/*
-      expiration: 1 year
-    - type: application/json
-      expiration: 1 year
-    - type: application/zip
-      expiration: 1 year
-    # Encrypted recording chunks upload as opaque bytes.
     - type: application/octet-stream
       expiration: 1 year
 
@@ -40,6 +31,15 @@ upload:
   enabled: true
   requireAuth: true
   requirePubkeyInRule: false
+  # 4 GiB: fits Vessel's largest file, a three-hour stereo WAV master (~3.1 GB).
+  maxSize: 4294967296
+
+# Vessel never asks the server to fetch a file or transcode media.
+mirror:
+  enabled: false
+
+media:
+  enabled: false
 
 list:
   enabled: true
