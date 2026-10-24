@@ -60,3 +60,5 @@ Thumbs.db
 
 # Background-blur runtime, copied from node_modules at dev/build time.
 /artifacts/vessel/public/mediapipe/wasm/
+# Transcript engine: model fetched and runtime copied at dev/build time.
+/artifacts/vessel/public/models/
