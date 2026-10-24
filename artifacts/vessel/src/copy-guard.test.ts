@@ -42,6 +42,34 @@ const FORBIDDEN: Array<{ term: RegExp; say: string }> = [
   },
 ];
 
+/**
+ * Claims that were true of an earlier design and are not any more. Each
+ * entry says what is true now. Add one whenever the product changes a
+ * promise, so old copy cannot come back.
+ */
+const RETIRED_CLAIMS: Array<{ term: RegExp; say: string }> = [
+  {
+    term: /^touches your (audio|video)|never touch(es)? (the bytes|your audio)|never to us\b|server never sees the file|never sees the file|not on Vessel'?s servers?|do not store your recordings|themselves never reach us|nothing was uploaded to vessel/i,
+    say: "files are encrypted on the device and may be stored on Vessel's storage, which can't play them",
+  },
+  {
+    term: /small preview server|coordination server|conversation server|stop over on Vessel/i,
+    say: "live video connects directly between people, relayed only when a network blocks it",
+  },
+  {
+    term: /opens the editor|host opens the editor/i,
+    say: "Vessel has no editor; the host downloads tracks for their own editor",
+  },
+  {
+    term: /provided for free and is not run by Vessel|default servers are public and free/i,
+    say: "a deployment's own servers can be the default; describe the default that applies",
+  },
+  {
+    term: /add the page to the router/i,
+    say: "write for people, not developers",
+  },
+];
+
 /** Exact user-facing strings that are allowed despite matching a term. */
 const ALLOWLIST: string[] = [];
 
@@ -109,16 +137,32 @@ function looksLikeSentence(text: string): boolean {
   return /\s/.test(text.trim()) && !/:\/\//.test(text);
 }
 
+type Rule = { term: RegExp; say: string };
+
+/** JSX text keeps HTML entities as written; read it the way people do. */
+function decodeEntities(text: string): string {
+  const named: Record<string, string> = {
+    rsquo: "\u2019", lsquo: "\u2018", rdquo: "\u201d", ldquo: "\u201c",
+    apos: "'", quot: '"', amp: "&", mdash: "\u2014", ndash: "\u2013",
+    nbsp: " ", hellip: "\u2026", rarr: "\u2192", larr: "\u2190",
+    middot: "\u00b7", bull: "\u2022",
+  };
+  return text
+    .replace(/&([a-z]+);/gi, (m, name: string) => named[name.toLowerCase()] ?? m)
+    .replace(/[\u2018\u2019]/g, "'");
+}
+
 function check(
   text: string,
   file: string,
   pos: number,
   source: ts.SourceFile,
   out: Violation[],
+  rules: Rule[],
 ): void {
-  const trimmed = text.trim();
+  const trimmed = decodeEntities(text).replace(/\s+/g, " ").trim();
   if (!trimmed || ALLOWLIST.includes(trimmed)) return;
-  for (const { term, say } of FORBIDDEN) {
+  for (const { term, say } of rules) {
     if (term.test(trimmed)) {
       const { line } = source.getLineAndCharacterOfPosition(pos);
       out.push({
@@ -131,7 +175,7 @@ function check(
   }
 }
 
-function scanFile(file: string, out: Violation[]): void {
+function scanFile(file: string, out: Violation[], rules: Rule[]): void {
   const code = readFileSync(file, "utf8");
   const source = ts.createSourceFile(
     file,
@@ -143,23 +187,34 @@ function scanFile(file: string, out: Violation[]): void {
 
   const visit = (node: ts.Node): void => {
     if (ts.isJsxText(node)) {
-      check(node.getText(source), file, node.getStart(source), source, out);
+      check(node.getText(source), file, node.getStart(source), source, out, rules);
     } else if (ts.isJsxAttribute(node)) {
       const name = node.name.getText(source);
       const init = node.initializer;
       if (init && VISIBLE_ATTRIBUTES.has(name)) {
         if (ts.isStringLiteral(init)) {
-          check(init.text, file, init.getStart(source), source, out);
+          check(init.text, file, init.getStart(source), source, out, rules);
         } else if (
           ts.isJsxExpression(init) &&
           init.expression &&
           (ts.isStringLiteral(init.expression) ||
             ts.isNoSubstitutionTemplateLiteral(init.expression))
         ) {
-          check(init.expression.text, file, init.getStart(source), source, out);
+          check(init.expression.text, file, init.getStart(source), source, out, rules);
         }
       }
-      // Attribute values are handled here; do not descend into them again.
+      // JSX passed as a prop (body={<>...</>}) or text in a handler
+      // (onClick={() => toast("...")}) still reaches people: scan inside.
+      if (
+        init &&
+        ts.isJsxExpression(init) &&
+        init.expression &&
+        !ts.isStringLiteral(init.expression) &&
+        !ts.isNoSubstitutionTemplateLiteral(init.expression) &&
+        name !== "className"
+      ) {
+        visit(init.expression);
+      }
       return;
     } else if (
       ts.isStringLiteral(node) ||
@@ -170,7 +225,7 @@ function scanFile(file: string, out: Violation[]): void {
         !isModuleSpecifier(node) &&
         !isConsoleOrLoggerCall(node)
       ) {
-        check(node.text, file, node.getStart(source), source, out);
+        check(node.text, file, node.getStart(source), source, out, rules);
       }
     } else if (ts.isTemplateExpression(node) && !isConsoleOrLoggerCall(node)) {
       const parts = [
@@ -179,7 +234,7 @@ function scanFile(file: string, out: Violation[]): void {
       ];
       for (const part of parts) {
         if (looksLikeSentence(part)) {
-          check(part, file, node.getStart(source), source, out);
+          check(part, file, node.getStart(source), source, out, rules);
         }
       }
     }
@@ -193,11 +248,24 @@ describe("copy guard", () => {
   it("keeps protocol and implementation jargon out of every screen", () => {
     const violations: Violation[] = [];
     for (const file of walkFiles(SRC_ROOT)) {
-      scanFile(file, violations);
+      scanFile(file, violations, FORBIDDEN);
     }
     const report = violations
       .map((v) => `${v.where}  "${v.text}"  (${v.say})`)
       .join("\n");
     expect(report, `Jargon reached user-facing copy:\n${report}`).toBe("");
+  });
+});
+
+describe("truth guard", () => {
+  it("keeps claims the product no longer makes off every screen", () => {
+    const violations: Violation[] = [];
+    for (const file of walkFiles(SRC_ROOT)) {
+      scanFile(file, violations, RETIRED_CLAIMS);
+    }
+    const report = violations
+      .map((v) => `${v.where}  "${v.text}"  (${v.say})`)
+      .join("\n");
+    expect(report, `Copy makes a claim that is no longer true:\n${report}`).toBe("");
   });
 });
