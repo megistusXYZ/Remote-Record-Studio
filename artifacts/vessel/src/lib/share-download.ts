@@ -57,7 +57,7 @@ export async function downloadToBlob(input: DownloadInput): Promise<Blob> {
   if (!response.ok) {
     throw new DownloadError(
       "http_error",
-      `The storage server returned ${response.status} ${response.statusText || ""}`.trim(),
+      `The storage server returned an error (${response.status}).`,
     );
   }
 

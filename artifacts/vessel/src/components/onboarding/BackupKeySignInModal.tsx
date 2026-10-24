@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { useIdentity } from "../../hooks/use-identity";
+import { INVALID_RECOVERY_KEY_MESSAGE } from "../../lib/identity";
 
 interface BackupKeySignInModalProps {
   open: boolean;
@@ -30,9 +31,15 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
       await importFromBackup(backupKey.trim(), displayName.trim());
       onSuccess();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to restore studio. Please check your backup key.");
+      // Keep the one specific hint that helps (the pasted text is not a key at
+      // all); everything else gets the generic line so no raw error leaks.
+      setError(
+        err instanceof Error && err.message === INVALID_RECOVERY_KEY_MESSAGE
+          ? err.message
+          : "That recovery key didn't work. Check it and try again.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -43,9 +50,9 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
       <DialogContent className="bg-vessel-bg-surface border-vessel-border text-vessel-text-primary max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="mb-6">
-            <DialogTitle className="font-display text-xl">Sign in with backup key</DialogTitle>
+            <DialogTitle className="font-display text-xl">Sign in with your recovery key</DialogTitle>
             <DialogDescription className="text-vessel-text-secondary mt-2">
-              Paste your backup key to restore your studio on this device.
+              Paste your recovery key to open your studio on this device.
             </DialogDescription>
           </DialogHeader>
 
@@ -58,7 +65,7 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
 
             <div className="space-y-2">
               <label htmlFor="restore-name" className="text-sm font-medium text-vessel-text-primary">
-                Display Name
+                Display name
               </label>
               <Input
                 id="restore-name"
@@ -72,18 +79,18 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
 
             <div className="space-y-2">
               <label htmlFor="backup-key" className="text-sm font-medium text-vessel-text-primary">
-                Backup Key
+                Recovery key
               </label>
               <Textarea
                 id="backup-key"
                 value={backupKey}
                 onChange={(e) => setBackupKey(e.target.value)}
-                placeholder="nsec1..."
+                placeholder="Paste your recovery key"
                 className="font-mono-vessel resize-none bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
                 rows={2}
               />
               <p className="text-xs text-vessel-text-muted">
-                Your backup key starts with 'nsec1' and is the only way to recover a studio on a new device.
+                It's the long code you saved when you set up your studio.
               </p>
             </div>
           </div>
@@ -102,27 +109,23 @@ export function BackupKeySignInModal({ open, onOpenChange, onSuccess, onUseNostr
               isLoading={isLoading}
               disabled={!displayName.trim() || !backupKey.trim()}
             >
-              Restore Studio
+              Sign in
             </VesselButton>
           </DialogFooter>
         </form>
 
         {onUseNostr && (
-          <div className="mt-4 pt-5 border-t border-vessel-border flex items-center justify-between gap-4">
-            <span className="text-xs text-vessel-text-muted">
-              Have a Nostr extension instead?
-            </span>
+          <div className="mt-4 pt-5 border-t border-vessel-border flex justify-center">
             <button
               type="button"
               onClick={() => {
                 onOpenChange(false);
                 onUseNostr();
               }}
-              className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-vessel-accent/10 border border-vessel-accent/30 text-vessel-accent hover:bg-vessel-accent/15 hover:border-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent shrink-0"
+              className="text-xs text-vessel-text-muted hover:text-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent rounded"
               data-testid="link-switch-to-nostr"
             >
-              <span>Sign in with Nostr</span>
-              <span aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">&rarr;</span>
+              Use a key app instead
             </button>
           </div>
         )}

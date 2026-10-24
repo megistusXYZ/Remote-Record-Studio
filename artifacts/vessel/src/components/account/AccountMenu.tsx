@@ -63,12 +63,12 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
       const backupKey = exportIdentityBackup(identity);
       const filename = downloadBackupFile(identity, backupKey);
       setBackupSaved(true);
-      toast({ title: "Backup saved", description: `Saved as ${filename}.` });
+      toast({ title: "Recovery key saved", description: `Saved as ${filename}.` });
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Couldn't save your backup key.";
+        err instanceof Error ? err.message : "Couldn't save your recovery key.";
       toast({
-        title: "Couldn't save backup",
+        title: "Couldn't save recovery key",
         description: message,
         variant: "destructive",
       });
@@ -112,10 +112,10 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             />
             <span className="flex-1">
               {savingBackup
-                ? "Saving backup key…"
+                ? "Saving recovery key…"
                 : backupSaved
-                  ? "Backup key saved to your downloads."
-                  : "Save a copy of your backup key first"}
+                  ? "Recovery key saved to your downloads."
+                  : "Save your recovery key first"}
             </span>
             {!savingBackup && !backupSaved && (
               <span className="text-[11px] uppercase tracking-wider text-vessel-text-muted/80 group-hover:text-vessel-accent/80">
@@ -148,7 +148,7 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             onClick={() => setLocation("/settings")}
             className="flex-1 min-w-0 flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg text-sm font-medium text-vessel-text-secondary group-hover:text-vessel-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent/40 transition-colors"
             data-testid="button-account-settings-sidebar"
-            aria-label={`Open account settings for ${displayName}`}
+            aria-label={`Open studio settings for ${displayName}`}
           >
             <AvatarMark
               pubkey={pubkey}
@@ -158,7 +158,7 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             />
             <div className="flex-1 min-w-0 text-left">
               <div className="text-vessel-text-primary truncate">{displayName}</div>
-              <div className="text-xs text-vessel-text-muted">Account settings</div>
+              <div className="text-xs text-vessel-text-muted">Studio settings</div>
             </div>
           </button>
           <button
@@ -183,7 +183,7 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
           <button
             className="flex items-center gap-2 rounded-full p-1 hover:bg-vessel-bg-surface/50 transition-colors focus:outline-none focus:ring-2 focus:ring-vessel-accent/40"
             data-testid="button-account-menu"
-            aria-label="Account menu"
+            aria-label="Studio menu"
           >
             <AvatarMark
               pubkey={pubkey}
@@ -209,7 +209,7 @@ export function AccountMenu({ variant = "header" }: AccountMenuProps) {
             data-testid="menu-item-settings"
           >
             <User className="w-4 h-4 mr-2" />
-            Account settings
+            Studio settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

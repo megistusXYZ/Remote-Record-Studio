@@ -255,8 +255,8 @@ export function StorageServerList({
       title: "Saved",
       description:
         cleaned.length === 1
-          ? "Storage location updated."
-          : `Storage list updated · 1 primary + ${cleaned.length - 1} mirror${cleaned.length - 1 === 1 ? "" : "s"}.`,
+          ? "Storage updated."
+          : `Storage updated: 1 primary and ${cleaned.length - 1} backup${cleaned.length - 1 === 1 ? "" : "s"}.`,
     });
     if (identity) {
       setIsPublishing(true);
@@ -302,7 +302,7 @@ export function StorageServerList({
     <div className="space-y-2" data-testid="storage-server-list">
       <div className="flex items-baseline justify-between gap-3">
         <label className="text-xs uppercase tracking-wider text-vessel-text-muted">
-          Storage {showSimpleView ? "location" : "servers"}
+          Storage
         </label>
         <button
           type="button"
@@ -318,8 +318,8 @@ export function StorageServerList({
 
       <p className="text-xs text-vessel-text-muted">
         {showSimpleView
-          ? "Where your recordings are saved. The default community server is provided for free and isn't operated by Vessel — point to your own server any time."
-          : "Your storage servers, in order. New recordings on this device upload to the primary. The full list is saved as your preferred server set and synced across your other devices, so the same priorities apply wherever you sign in. Use the arrows to reorder."}
+          ? "Where your recordings are saved. The default server is provided for free and is not run by Vessel. Point to your own server any time."
+          : "Your storage servers in order. New recordings upload to the primary. The list syncs to your other devices."}
       </p>
 
       {showSimpleView ? (
@@ -357,7 +357,7 @@ export function StorageServerList({
           data-testid="button-add-storage-mirror"
         >
           <Plus className="w-3.5 h-3.5" />
-          {showSimpleView ? "Add backup server" : "Add another server"}
+          {showSimpleView ? "Add a backup server" : "Add another server"}
         </button>
         <VesselButton
           variant="primary"
@@ -445,7 +445,7 @@ function ServerRow({
           }`}
           data-testid={`storage-row-label-${index}`}
         >
-          {isPrimary ? "Primary" : "Mirror"}
+          {isPrimary ? "Primary" : "Backup"}
         </span>
         <Input
           value={url}

@@ -73,6 +73,12 @@ suites report. On Node 25 and newer the web tests rely on
 `artifacts/vessel/vitest.setup.ts` to provide `localStorage` (newer Node
 pre-defines it as `undefined`); there is nothing to do unless you move it.
 
+`pnpm test` also runs the copy guard (`artifacts/vessel/src/copy-guard.test.ts`),
+which fails if protocol or implementation jargon (Nostr, nsec, relay,
+Blossom, signer and so on) reaches a user-facing string on any screen. Fix
+the wording; only add to its allowlist for strings that are genuinely
+developer-facing.
+
 Commits need a DCO sign-off: `git commit -s`. See `CONTRIBUTING.md`.
 
 ## Environment variables

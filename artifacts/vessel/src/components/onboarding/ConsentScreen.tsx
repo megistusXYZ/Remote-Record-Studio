@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
  * are recording with, what gets captured, where the file lives, who has
  * access, and how to take the access back.
  *
- * Both actions ("I'm in" / "Decline & leave") get equal visual weight so the
+ * Both actions ("I'm in" / "Decline and leave") get equal visual weight so the
  * decline path doesn't feel like a hidden corner. The screen also surfaces
  * a friendly room-full state if the join API rejects with a 409.
  */
@@ -132,11 +132,11 @@ export function ConsentScreen({
           />
           <ContractRow
             icon={<Cloud className="w-4 h-4" />}
-            label="Where your file lives"
+            label="Where your file goes"
             body={
               <>
-                Your track is saved to <span className="text-vessel-text-primary font-medium">your own storage</span>
-                . Vessel never sees the file.
+                Your track is uploaded to storage so {hostFirst} can download it, and a copy
+                stays on this device. Vessel's server never sees the file.
               </>
             }
           />
@@ -155,15 +155,15 @@ export function ConsentScreen({
             label="Taking access back"
             body={
               <>
-                When the call ends, you'll get a personal receipt link. Open it any time to
-                revoke {hostFirst}'s access — no email or account needed.
+                When the session ends you get a receipt link. Open it any time to take{" "}
+                {hostFirst}'s access back. No email or account needed.
               </>
             }
           />
 
           <div className="flex items-center gap-2 pt-1 text-[11px] text-vessel-text-muted border-t border-vessel-border pt-4">
             <Lock className="w-3 h-3 shrink-0" />
-            <span>The keys to revoke live only on this device.</span>
+            <span>Only this device can take that access back.</span>
           </div>
         </motion.section>
 
@@ -192,7 +192,7 @@ export function ConsentScreen({
             className="w-full"
             data-testid="button-consent-decline"
           >
-            Decline & leave
+            Decline and leave
           </VesselButton>
           <VesselButton
             variant="primary"
@@ -276,13 +276,13 @@ function RoomFullView({
           <Users className="w-7 h-7" />
         </div>
         <h1 className="font-display text-2xl font-bold tracking-tight mb-3">
-          {hostFirst}'s room is full
+          {hostFirst}'s session is full
         </h1>
         <p className="text-sm text-vessel-text-secondary leading-relaxed mb-2">
           {info.participantCount} of {info.maxParticipants} people are already on the call.
         </p>
         <p className="text-sm text-vessel-text-secondary leading-relaxed mb-8">
-          Try again in a moment — someone may step out — or message {hostFirst} to be let in.
+          Try again in a moment, or message {hostFirst} to be let in.
         </p>
         <VesselButton
           variant="primary"

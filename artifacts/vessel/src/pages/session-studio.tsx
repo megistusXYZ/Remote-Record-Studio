@@ -173,6 +173,7 @@ export default function SessionStudio() {
               role: p.role as "host" | "guest",
             })),
           }}
+          isHost={isHost}
           onStartRecording={isHost ? handleStartRecording : undefined}
           onCancelSession={isHost ? handleCancelSession : undefined}
           isStarting={isStartingRecording}

@@ -163,14 +163,14 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
         continue;
       }
       if (seen.has(n)) {
-        issues.push(`Row ${i + 1} duplicates another endpoint.`);
+        issues.push(`Row ${i + 1} duplicates another server.`);
         continue;
       }
       seen.add(n);
       cleaned.push(n);
     }
     if (cleaned.length === 0 && issues.length === 0) {
-      issues.push("Add at least one endpoint.");
+      issues.push("Add at least one server.");
     }
     if (cleaned.length > MAX_PUBLISH_RELAYS) {
       issues.push(`Keep the list to ${MAX_PUBLISH_RELAYS} or fewer.`);
@@ -221,7 +221,7 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
     if (cleaned.length === 0 || validation.issues.length > 0) {
       onToast({
         title: "Can't save",
-        description: validation.issues[0] ?? "Add a valid endpoint first.",
+        description: validation.issues[0] ?? "Add a valid server first.",
         variant: "destructive",
       });
       return;
@@ -233,8 +233,8 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
       title: "Saved",
       description:
         cleaned.length === 1
-          ? "Network endpoint updated."
-          : `Endpoint list updated · 1 primary + ${cleaned.length - 1} backup${cleaned.length - 1 === 1 ? "" : "s"}.`,
+          ? "Sync servers updated."
+          : `Sync servers updated: 1 primary and ${cleaned.length - 1} backup${cleaned.length - 1 === 1 ? "" : "s"}.`,
     });
     if (identity) {
       setIsPublishing(true);
@@ -242,7 +242,7 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
         const { published } = await publishRelayList(identity, cleaned);
         if (published) {
           onToast({
-            description: "Synced your endpoint list across devices.",
+            description: "Synced your sync servers to your other devices.",
           });
         } else {
           onToast({
@@ -278,7 +278,7 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
     <div className="space-y-2" data-testid="endpoint-list">
       <div className="flex items-baseline justify-between gap-3">
         <label className="text-xs uppercase tracking-wider text-vessel-text-muted">
-          Network {showSimpleView ? "endpoint" : "endpoints"}
+          Sync servers
         </label>
         <button
           type="button"
@@ -294,8 +294,8 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
 
       <p className="text-xs text-vessel-text-muted">
         {showSimpleView
-          ? "Where your settings, share links, archives, and live status get published. The default endpoints are public and free — point to your own any time."
-          : "Your network endpoints, in order. The first one is primary; the rest are backups for reach and resilience. Use the arrows to reorder. The list is saved on this device and synced across your other devices."}
+          ? "Where your settings and share links are published. The default servers are public and free. Add your own any time."
+          : "Your sync servers in order. The first is primary, the rest are backups. The list syncs to your other devices."}
       </p>
 
       {showSimpleView ? (
@@ -334,7 +334,7 @@ export function EndpointList({ pubkey, identity, onToast }: EndpointListProps) {
           data-testid="button-add-endpoint"
         >
           <Plus className="w-3.5 h-3.5" />
-          {showSimpleView ? "Add backup endpoint" : "Add another endpoint"}
+          {showSimpleView ? "Add a backup server" : "Add another server"}
         </button>
         <VesselButton
           variant="primary"
@@ -374,7 +374,7 @@ function SingleRow({
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="wss://your-endpoint.example"
+        placeholder="wss://your-server.example"
         className="bg-vessel-bg-base border-vessel-border text-vessel-text-primary mt-2"
         data-testid="input-endpoint-url"
       />
@@ -430,7 +430,7 @@ function EndpointRow({
         <Input
           value={url}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="wss://your-endpoint.example"
+          placeholder="wss://your-server.example"
           className="bg-vessel-bg-elevated border-vessel-border text-vessel-text-primary text-sm h-8 flex-1 min-w-0"
           data-testid={`input-endpoint-url-${index}`}
         />
@@ -460,7 +460,7 @@ function EndpointRow({
             onClick={onRemove}
             disabled={!canRemove}
             className="p-1.5 rounded text-vessel-text-secondary hover:text-vessel-red hover:bg-vessel-red/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            aria-label="Remove endpoint"
+            aria-label="Remove server"
             data-testid={`button-endpoint-remove-${index}`}
           >
             <Trash2 className="w-3.5 h-3.5" />

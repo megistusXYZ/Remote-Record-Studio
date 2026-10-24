@@ -809,11 +809,12 @@ export function useCallSignal({
           //
           // Capture the display name BEFORE the row is removed so the
           // toast can say "Alex left" rather than a pubkey preview.
-          // Fall back to a short pubkey string when we never received
-          // a presence beat from this peer (e.g. they fired LEAVE on
-          // page-close before their first heartbeat landed for us).
+          // Fall back to "A guest" when we never received a presence
+          // beat from this peer (e.g. they fired LEAVE on page-close
+          // before their first heartbeat landed for us). Never show a
+          // raw key fragment to people.
           const departing = peersRef.current.get(ev.pubkey);
-          const fallbackName = `${ev.pubkey.slice(0, 8)}…`;
+          const fallbackName = "A guest";
           const displayName = departing?.displayName?.trim() || fallbackName;
           setPeers((prev) => {
             if (!prev.has(ev.pubkey)) return prev;

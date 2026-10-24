@@ -414,9 +414,9 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
           variant: "destructive",
           description:
             kind === "audio-only"
-              ? "No audio-only sibling available for this track."
+              ? "No audio-only file for this track."
               : kind === "video-only"
-                ? "No video-only sibling available for this track."
+                ? "No video-only file for this track."
                 : "This track isn't available for download.",
         });
         return;
@@ -464,7 +464,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
             description: `${result.includedFilenames.length} included, ${result.skipped.length} skipped.`,
           });
         } else {
-          toast({ description: `Bundle downloaded — ${result.includedFilenames.length} tracks.` });
+          toast({ description: `Downloaded ${result.includedFilenames.length} tracks.` });
         }
       } catch (err) {
         console.error("Bundle download failed", err);
@@ -540,7 +540,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
               >
                 {([
                   { value: "all", label: "All", count: filteredSessions.length, Icon: null },
-                  { value: "studio", label: "Studio sessions", count: studioSessions.length, Icon: Mic },
+                  { value: "studio", label: "Sessions", count: studioSessions.length, Icon: Mic },
                   { value: "solo", label: "Solo recordings", count: soloSessions.length, Icon: MonitorPlay },
                 ] as const).map((tab) => {
                   const isActive = filter === tab.value;
@@ -629,7 +629,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono-vessel text-vessel-text-secondary bg-vessel-bg-base border border-vessel-border"
                             data-testid={`badge-session-type-${session.id}`}
                           >
-                            <Mic className="w-3 h-3" /> Studio
+                            <Mic className="w-3 h-3" /> Session
                           </span>
                         )}
                       </div>
@@ -720,8 +720,8 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                         })
                       }
                       className="p-1.5 rounded-lg text-vessel-text-muted hover:text-vessel-text-primary hover:bg-vessel-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-vessel-accent"
-                      aria-label="View as data"
-                      title="View as data"
+                      aria-label="Details"
+                      title="Details"
                       data-testid={`button-inspect-session-${session.id}`}
                     >
                       <Braces className="w-4 h-4" />
@@ -808,7 +808,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                     <div className="text-xs text-vessel-text-muted font-mono-vessel">
                                       {formatDuration(r.durationSeconds)} &middot; {formatSize(r.sizeBytes)} &middot; {rowHasVideo ? 'Video + Audio' : 'Audio only'}
                                       {hasAudioSibling ? (
-                                        <span className="text-vessel-text-secondary"> &middot; Audio sibling</span>
+                                        <span className="text-vessel-text-secondary"> &middot; Audio only ready</span>
                                       ) : null}
                                     </div>
                                   </div>
@@ -867,7 +867,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                       rowHasVideoOnly
                                         ? "Download a true video-only file (no audio bytes)"
                                         : rowHasVideo
-                                          ? "No video-only sibling was recorded for this track"
+                                          ? "No video-only file for this track."
                                           : "No video for this track"
                                     }
                                   >
@@ -880,7 +880,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                     disabled={!hasAudioSibling}
                                     onClick={() => void handleDownloadStream(r, "audio-only")}
                                     data-testid={`button-download-a-${r.id}`}
-                                    title={hasAudioSibling ? "Download just the audio sibling" : "No audio-only sibling for this track"}
+                                    title={hasAudioSibling ? "Download audio only" : "No audio-only file for this track."}
                                   >
                                     <Music className="w-3.5 h-3.5 mr-1.5" />
                                     Audio only
@@ -921,13 +921,13 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                                     <span className="font-medium text-vessel-text-primary">
                                       {selectedCount} track{selectedCount === 1 ? "" : "s"}
                                     </span>{" "}
-                                    selected — pick a stream to bundle as a zip.
+                                    selected. Choose what to include.
                                   </div>
                                   <div
                                     className="mt-1 text-[11px] text-vessel-text-muted"
                                     data-testid={`bundle-footer-totals-${session.id}`}
                                   >
-                                    <span data-testid={`bundle-total-va-${session.id}`}>V+A: {formatSize(selectedTotals.videoAudio)}</span>
+                                    <span data-testid={`bundle-total-va-${session.id}`}>Video and audio: {formatSize(selectedTotals.videoAudio)}</span>
                                     <span className="mx-2 opacity-50">·</span>
                                     <span data-testid={`bundle-total-v-${session.id}`}>Video only: {selectedTotals.videoOnly > 0 ? formatSize(selectedTotals.videoOnly) : "—"}</span>
                                     <span className="mx-2 opacity-50">·</span>
@@ -941,7 +941,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <label className="sr-only" htmlFor={`bundle-stream-${session.id}`}>
-                              Bundle stream
+                              What to include
                             </label>
                             <select
                               id={`bundle-stream-${session.id}`}

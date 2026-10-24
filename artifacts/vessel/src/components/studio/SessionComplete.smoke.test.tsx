@@ -122,7 +122,7 @@ describe("SessionComplete — 2-participant smoke", () => {
     expect(screen.getByTestId("button-bundle-download")).toBeTruthy();
 
     const footer = screen.getByTestId("bundle-footer-totals");
-    expect(within(footer).getByTestId("bundle-total-va").textContent).toMatch(/V\+A/);
+    expect(within(footer).getByTestId("bundle-total-va").textContent).toMatch(/Video and audio/);
     expect(within(footer).getByTestId("bundle-total-v").textContent).toMatch(/Video only/);
     expect(within(footer).getByTestId("bundle-total-a").textContent).toMatch(/Audio only/);
   });
