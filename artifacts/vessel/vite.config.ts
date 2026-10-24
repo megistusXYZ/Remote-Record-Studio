@@ -176,7 +176,7 @@ export default defineConfig({
         ],
         // The deployment writes config.js at container start; precaching it
         // would pin an old deployment's settings in every installed app.
-        globIgnores: ["**/config.js", "**/mediapipe/**"],
+        globIgnores: ["**/config.js", "**/mediapipe/**", "**/models/**", "**/ort-wasm*"],
         navigateFallback: `${basePath}index.html`,
         navigateFallbackDenylist: [/^\/api\//],
       },
@@ -202,10 +202,18 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
+      // The transcript library imports this without declaring it; pnpm keeps
+      // it out of the library's own folder, so point it at the app's copy.
+      "onnxruntime-common": path.resolve(import.meta.dirname, "node_modules/onnxruntime-common"),
     },
     dedupe: ["react", "react-dom"],
   },
   root: path.resolve(import.meta.dirname),
+  // The transcript engine's library ships ready-made ES modules and its own
+  // WebAssembly; pre-bundling it breaks its runtime imports in dev.
+  optimizeDeps: {
+    exclude: ["@huggingface/transformers"],
+  },
   // ES-module worker output. Required for vite-plugin-pwa: Workbox's
   // registration helper (workbox-window) uses dynamic imports, which Vite's
   // default IIFE worker format cannot represent. Also matches our captions
