@@ -1,205 +1,76 @@
-# Privacy & Discoverability of Vessel Session Archives
+# Privacy and discoverability
 
-This document explains exactly what an outside observer can and cannot
-learn from the events Vessel publishes to public Nostr relays when a
-session is archived. It is intended for operators, security reviewers,
-and privacy-conscious users who want to understand the threat model
-before they (or their guests) record.
+What an outside observer can and cannot learn when a Vessel session is
+archived. For operators, security reviewers and users who want the details
+before they record.
 
-If you only want the takeaway: **encrypted manifests sit on public
-relays where anyone can scrape them, but the host's identity, the
-participants, the session title, and the recordings themselves stay
-inside an AES-256-GCM ciphertext that only people holding the share
-link can decrypt.** A scraper learns "a Vessel session was archived
-around this time, with roughly N tracks." Nothing more.
+**Summary:** recordings are encrypted on each participant's device before
+upload. The session archive is published as an encrypted record signed by a
+single-use key. Without the share link, an observer learns that a Vessel
+session was archived at a certain time, with roughly how many tracks, and
+nothing else.
 
----
+## What is published
 
-## 1. What gets published per archived session
+When a session is archived, Vessel publishes these records to the configured
+sync servers. Each archive is signed by a freshly generated key, never the
+host's or a guest's key.
 
-Every time a session is archived, Vessel signs and publishes the
-following events with a **freshly generated ephemeral keypair** — not
-the host's real Nostr identity, not the guests' identities — to the
-configured relay set (default: `relay.damus.io`, `nos.lol`,
-`relay.nostr.band`; override with `VITE_NOSTR_RELAYS` at build time).
+**One record per track** with only public, non-identifying fields: a random
+identifier, the file type, size and duration, and a label saying it is an
+encrypted Vessel track. It contains no URL, hash, name, key or session
+reference, and nothing that groups tracks into a session.
 
-### 1a. Per-track file-metadata event (kind 1063)
+**One session record** with a random identifier and a label. Its content is
+encrypted with AES-256-GCM under a key made for that archive. The encrypted
+content holds the session title, host name, times, and for each track the
+participant's name and key, the storage location, the file hash and the key
+that decrypts the file.
 
-One event per recorded track. Public tags carry **only**:
+The archive key travels in the URL fragment of the share link
+(`/s/<pointer>#<key>`). Browsers never send fragments to servers, so the key
+exists only on devices that hold the link.
 
-| Tag         | Value                                       | What it leaks                          |
-| ----------- | ------------------------------------------- | -------------------------------------- |
-| `d`         | `vessel-track-<random8>`                    | A throwaway ID. No link to user/session. |
-| `m`         | MIME type, e.g. `video/webm`                | The container format.                  |
-| `size`      | bytes                                       | File size.                             |
-| `duration`  | seconds                                     | Track length.                          |
-| `alt`       | `"Encrypted Vessel session track"`          | "This came from Vessel."               |
-| `content`   | empty string                                | Nothing.                               |
+## What an observer can see
 
-**Not present in this event:** the URL of the recording, the integrity
-hash, the participant name, the participant pubkey, the session ID, or
-any cross-reference to the manifest. The per-track ID is random and
-intentionally not derived from anything that would let an outsider
-group multiple tracks back into the same session.
+- That the record comes from Vessel, from its label.
+- When it was archived, to within seconds.
+- The approximate number of tracks, from the size of the encrypted content.
+- The single-use key that signed it.
 
-### 1b. Session manifest event (kind 30563)
+## What an observer cannot see
 
-One per session. Public tags carry **only**:
+- Who hosted or took part, by name or key.
+- The session title or any other text.
+- Where the recordings are stored, or their contents. Files on the storage
+  server are encrypted, each with its own key.
+- Whether two archives came from the same host.
 
-| Tag      | Value                                       | What it leaks                    |
-| -------- | ------------------------------------------- | -------------------------------- |
-| `d`      | random 16-byte hex identifier               | A throwaway ID.                  |
-| `alt`    | `"Encrypted Vessel session archive"`        | "This came from Vessel."         |
+## Verifying the single-use key
 
-The `content` field is an **AES-256-GCM ciphertext** encrypted under a
-fresh per-archive symmetric key. The plaintext (only readable by
-holders of the share key) contains:
+A signing key used for an archive should have no other activity: no profile,
+posts, follows or messages. At most it signs that session's records and,
+if the share is revoked, a deletion. Any other activity under that key is a
+bug; please report it as described in [SECURITY.md](../SECURITY.md).
 
-- `sessionTitle`, `hostName`, `endedAt`, `archivedAt`
-- For each track: `recordingId`, `participantName`, `participantPubkey`,
-  `durationSeconds`, `sizeBytes`, `mimeType`, the storage URL, the
-  per-file hash, plus any audio-only / video-only / screen-share
-  sibling streams.
+## Operator options
 
-The decryption key is encoded in the **URL fragment** of the share
-link (`/s/<pointer>#<key>`). Browsers do not transmit fragments in
-HTTP requests, the Referer header, or server logs — the key only ever
-exists on devices that hold the link.
+- **Run your own sync server.** Set `VESSEL_RELAYS` in `deploy/.env` to
+  servers you control (see [OPERATIONS.md](../OPERATIONS.md)). Archives then
+  never reach public servers. Recipients must still be able to reach yours.
+- **Choose your storage server.** Set `VESSEL_STORAGE_SERVER`. Files are
+  encrypted either way; a server that requires signed downloads adds a second
+  layer of access control.
 
----
+## Scope
 
-## 2. What an outside observer CAN see
+- **A share link is a key.** Anyone who receives a forwarded link can open the
+  archive. Revoking a share removes the published record but cannot recall a
+  link already copied.
+- **Live sessions** are covered by in-call encryption under a per-session key
+  and are outside the scope of this document.
 
-Anyone with relay access (which is to say: anyone) can run a filter
-like `kinds: [30563]` against a public relay and pull every Vessel
-manifest ever published. From each event they see:
+## Reporting
 
-- **It is a Vessel event.** The literal `alt: "Encrypted Vessel
-  session archive"` tag fingerprints the application. A scraper can
-  count how many Vessel sessions are archived globally per hour, day,
-  week — pure traffic analysis, no identities attached.
-- **Approximate time of archive.** `created_at` (within seconds of the
-  user clicking "End session and archive").
-- **Approximate session size.** Ciphertext length is roughly
-  `~150 bytes of boilerplate + 400–600 bytes per track`. So:
-  - ~600 B–1 KB → 1 track (single participant)
-  - ~1–2 KB → 2–3 tracks (small group call)
-  - ~5+ KB → large session (podcast / panel)
-  This is a fuzzy participant-count estimate, not a number.
-- **The ephemeral signing pubkey.** A 32-byte key that signed exactly
-  this archive and (usually) the matching kind-1063 file-metadata
-  events from the same session.
-
-That is the complete public surface. Everything else is encrypted.
-
----
-
-## 3. What an outside observer CANNOT see
-
-Without the share key (which lives only in URL fragments held by
-intended recipients):
-
-- The host's real Nostr identity, name, or pubkey.
-- Any guest's name or pubkey.
-- The session title or any descriptive text.
-- The URL or hash of any recording.
-- Whether a given Nostr account has ever hosted or attended a Vessel
-  session.
-- Whether two manifest events came from the same host, the same
-  organization, or are otherwise related. (Each session uses a brand
-  new ephemeral key — they look uncorrelated on the wire.)
-
----
-
-## 4. How to verify the ephemeral-key property yourself
-
-Anyone reviewing a published manifest event can confirm the signing
-key is a single-use ephemeral, not a real identity, by querying the
-same relays for *any other activity* under that pubkey.
-
-A throwaway pubkey should have:
-
-- **No profile metadata** (no kind 0).
-- **No follows, no DMs, no posts, no reactions** (no kinds 1, 3, 4, 7,
-  …).
-- **At most**: this one kind-30563 manifest, the matching kind-1063
-  file-metadata events from the same session, and possibly a kind-5
-  deletion event if the share was later revoked.
-
-If a pubkey associated with a Vessel manifest has *any* unrelated
-activity (a profile, posts, follows, prior sessions), the
-ephemeral-key invariant has been broken and that's a bug worth filing
-under the security policy.
-
----
-
-## 5. Two known metadata leaks (and how to close them)
-
-The two items in § 2 — the application fingerprint and the fuzzy
-participant count — are unavoidable consequences of using public
-relays as a transport. They do not expose identities or content, but
-operators who care about traffic analysis can mitigate them.
-
-### 5a. Use a private relay
-
-Set `VITE_NOSTR_RELAYS` to a relay you control before building:
-
-```bash
-VITE_NOSTR_RELAYS=wss://relay.your-org.example pnpm --filter @workspace/vessel run build
-```
-
-The encrypted ciphertext never reaches the public Nostr network.
-Anyone scraping `relay.damus.io` et al. sees zero Vessel events from
-your deployment. Trade-off: recipients must be able to reach your
-private relay, so it must accept anonymous reads from the open
-internet (or you must distribute share links with relay hints baked
-in — which the share pointer already supports).
-
-### 5b. Pad the ciphertext to a fixed size
-
-Defeats the participant-count estimate. Currently not implemented;
-adding it requires padding the JSON plaintext (e.g. to the next 4 KB
-boundary) inside `buildEncryptedManifestEvent` in
-`artifacts/vessel/src/lib/session-archive.ts` before calling
-`encryptManifestContent`. Cost: a small constant amount of extra
-bandwidth per archive.
-
-### 5c. Drop or randomize the `alt` tag value
-
-Removes the "Vessel" fingerprint so scrapers can't isolate Vessel
-events specifically. Currently the `alt` tag is the literal string
-`"Encrypted Vessel session archive"`; replacing it with a generic
-value (e.g. `"Encrypted archive"`) would make the events
-indistinguishable from any other application using kind 30563.
-Trade-off: harder for honest debugging tools and dashboards to
-identify event purpose.
-
----
-
-## 6. Things that are NOT covered by this document
-
-- **Once a recipient holds the share link, they hold the share key
-  forever.** Anyone they forward the link to can decrypt the manifest
-  and download every blob. There is no per-viewer access control after
-  the share leaves the original recipient's hands. This is a property
-  of the design, not a leak.
-- **Storage server (Blossom) access controls.** Blob URLs inside the
-  decrypted manifest are content-addressed and (by default) world-
-  readable to anyone who knows the URL. Operators who need stronger
-  download gating should run a storage server that requires signed
-  authorization on `GET`, not just on `PUT`.
-- **Live call signaling and live preview transport.** This document is
-  about *archived* sessions only. The live-call signaling channel and
-  the live preview server have their own privacy properties; see the
-  source under `artifacts/vessel/src/hooks/use-call-signal.ts` and
-  `artifacts/vessel/src/lib/moq.ts` for the current behavior.
-
----
-
-## 7. Reporting an issue
-
-If you believe any of the claims above are false in the deployed code
-— e.g. you find a manifest event that leaks a real identity, content
-that is not encrypted, or a pubkey that is reused across sessions —
-please follow the process in [SECURITY.md](../SECURITY.md). Do not
-open a public issue.
+If anything here does not match the deployed code, follow
+[SECURITY.md](../SECURITY.md). Please do not open a public issue.

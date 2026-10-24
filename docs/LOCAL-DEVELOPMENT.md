@@ -12,8 +12,8 @@ this page is the longer version with the "why".
 | API (Express 5)   | `@workspace/api-server` | `3001`     | `pnpm dev:api` / `pnpm dev` |
 | PostgreSQL 17     | `compose.yaml`          | `5434`     | `pnpm dev:db`               |
 
-The web client calls the API with relative `/api/...` URLs. On Replit a path
-router sends those to the API process; locally the Vite dev server proxies
+The web client calls the API with relative `/api/...` URLs. In a deployment
+Caddy routes those to the API container; locally the Vite dev server proxies
 them to `http://localhost:3001` instead (see `VESSEL_API_PROXY_TARGET` in
 `artifacts/vessel/vite.config.ts`). Live media, identity and file storage do
 not go through the API at all — they talk to the relays and storage server
@@ -21,7 +21,7 @@ configured on the browser side (below).
 
 ## Prerequisites
 
-- Node.js 20 or newer (24 is what Replit runs)
+- Node.js 24 (what CI and the Docker images use)
 - pnpm 9 or newer (`corepack enable` or `npm i -g pnpm`)
 - Docker Desktop, or your own PostgreSQL 14+
 
@@ -31,7 +31,7 @@ configured on the browser side (below).
 pnpm install          # installs every workspace package
 cp .env.example .env  # server-side settings; git-ignored
 pnpm dev:db           # starts PostgreSQL in Docker and waits until healthy
-pnpm db:push          # creates the tables (Drizzle `push`, no migrations)
+pnpm db:migrate       # creates the tables from lib/db/drizzle
 ```
 
 If you run your own PostgreSQL, skip `pnpm dev:db` and set `DATABASE_URL`
@@ -104,7 +104,7 @@ script goes through):
 
 | Variable                  | Default                                   | Used by                    |
 | ------------------------- | ----------------------------------------- | -------------------------- |
-| `DATABASE_URL`            | the Docker PostgreSQL from `compose.yaml` | API, `pnpm db:push`        |
+| `DATABASE_URL`            | the Docker PostgreSQL from `compose.yaml` | API, `pnpm db:migrate`     |
 | `API_PORT`                | `3001`                                    | becomes `PORT` for the API |
 | `WEB_PORT`                | `5173`                                    | becomes `PORT` for Vite    |
 | `BASE_PATH`               | `/`                                       | web client base path       |
@@ -112,7 +112,7 @@ script goes through):
 | `LOG_LEVEL`               | `info`                                    | API (pino)                 |
 
 Why the indirection: both apps read `PORT` and nothing in the repo loads
-`.env` files (Replit injects variables itself). `scripts/dev.sh` sources
+`.env` files (deployments inject variables themselves). `scripts/dev.sh` sources
 `.env` and hands each app the port it needs.
 
 Browser side, in `artifacts/vessel/.env.local` (read by Vite, shipped to
@@ -151,14 +151,13 @@ Changing the API contract: edit the OpenAPI spec in `lib/api-spec`, run its
 `codegen` script to regenerate `lib/api-client-react`, then update the zod
 schemas in `lib/api-zod` and the route in `artifacts/api-server`.
 
-Changing the database schema: edit `lib/db/src/schema/*.ts`, run
-`pnpm db:push`. There are no migration files; `push` diffs the live
-database against the schema.
+Changing the database schema: edit `lib/db/src/schema/*.ts`, then
+`pnpm db:generate --name <what_changed>` and `pnpm db:migrate` (see above).
 
 ## macOS note
 
 `pnpm-workspace.yaml` removes most platform-specific native binaries from
-the lockfile because Replit only deploys on linux-x64. The macOS (`darwin-*`)
-entries for esbuild, lightningcss, Tailwind's oxide and rollup are kept so
-the workspace installs on a Mac. If you add a dependency that ships native
+the lockfile. The macOS (`darwin-*`) and Linux glibc (`linux-x64`,
+`linux-arm64`) entries for esbuild, lightningcss, Tailwind's oxide and rollup
+are kept, so the workspace installs on a Mac and in the Docker images. If you add a dependency that ships native
 binaries and it fails to load locally, check that list first.

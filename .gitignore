@@ -44,13 +44,12 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Replit
+# Tool caches
 .cache/
 .local/
 
-# Local-only dev artifacts.
+# Internal working files: never commit these (see CONTRIBUTING.md).
 /attached_assets/
-/replit.md
 
 # Local environment files (server-side config lives in /.env, browser-side in artifacts/vessel/.env.local)
 .env

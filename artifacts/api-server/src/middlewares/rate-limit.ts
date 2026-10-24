@@ -9,7 +9,7 @@ import { getAuthPubkey } from "./require-signed-request";
 /**
  * Rate-limiting & per-pubkey quota middlewares.
  *
- * Design goals (see Task #68 plan):
+ * Design goals:
  * - In-process only. No Redis, no DB, no extra network hop per request.
  * - Every limiter is feature-flagged off by default and ships in
  *   "observe" mode for the first deploy so we can watch what would have
