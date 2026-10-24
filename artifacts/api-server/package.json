@@ -17,9 +17,9 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "express-rate-limit": "^8.4.1",
-    "helmet": "^8.1.0",
-    "nostr-tools": "^2.23.3",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "nostr-tools": "^2.25.2",
     "pino": "^9",
     "pino-http": "^10"
   },
@@ -28,14 +28,14 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
-    "@types/pg": "^8.18.0",
-    "@types/supertest": "^7.2.0",
-    "esbuild": "^0.27.3",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "esbuild": "^0.28.2",
     "esbuild-plugin-pino": "^2.3.3",
-    "pg": "^8.20.0",
+    "pg": "^8.23.1",
     "pino-pretty": "^13",
-    "supertest": "^7.2.2",
-    "thread-stream": "3.1.0",
-    "vitest": "^4.1.5"
+    "supertest": "^7.3.1",
+    "thread-stream": "3.2.0",
+    "vitest": "^4.1.12"
   }
 }
