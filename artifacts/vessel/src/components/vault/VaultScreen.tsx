@@ -171,7 +171,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
     });
   }, []);
 
-  const { data: recordings, isLoading } = useListRecordings(
+  const { data: recordings, isLoading, isError, refetch } = useListRecordings(
     { pubkey },
     { query: { enabled: !!pubkey, queryKey: getListRecordingsQueryKey({ pubkey }) } }
   );
@@ -519,11 +519,20 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
               <div className="h-44 rounded-xl bg-vessel-bg-surface/50 animate-pulse" />
               <div className="h-44 rounded-xl bg-vessel-bg-surface/50 animate-pulse" />
             </>
+          ) : isError && !recordings ? (
+            <EmptyState
+              badge="Couldn't load"
+              title="Your vault didn't load"
+              subtitle="Recordings on this device are safe. Check your connection and try again."
+              ctaLabel="Try again"
+              onCta={() => void refetch()}
+              ctaTestId="button-vault-retry"
+            />
           ) : filteredSessions.length === 0 ? (
             <EmptyState 
               title="Nothing in your vault yet" 
               subtitle="Start a recording session to see your tracks here." 
-              ctaLabel="Start a Session &rarr;" 
+              ctaLabel="Start a session &rarr;" 
               onCta={() => setLocation('/home')} 
               ctaTestId="button-vault-empty-cta" 
             />
