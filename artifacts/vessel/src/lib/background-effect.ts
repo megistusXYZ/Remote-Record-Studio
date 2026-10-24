@@ -28,10 +28,22 @@ import type {
   ImageSegmenterResult,
 } from "@mediapipe/tasks-vision";
 
-const WASM_BASE_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm";
-const SEGMENTER_ASSET_URL =
-  "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite";
+/**
+ * The segmentation runtime and model are served by this site (copied into
+ * public/mediapipe by scripts/copy-mediapipe.mjs and committed), so turning
+ * on blur sends nothing to a third-party CDN and the runtime always matches
+ * the installed library version.
+ */
+export function backgroundEffectAssets(baseUrl: string = import.meta.env.BASE_URL || "/"): {
+  wasmBaseUrl: string;
+  modelUrl: string;
+} {
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  return {
+    wasmBaseUrl: `${base}mediapipe/wasm`,
+    modelUrl: `${base}mediapipe/selfie_segmenter.tflite`,
+  };
+}
 
 export type BackgroundMode =
   | { kind: "none" }
@@ -78,11 +90,11 @@ async function getSegmenter(): Promise<ImageSegmenterType> {
   if (segmenterPromise) return segmenterPromise;
   segmenterPromise = (async () => {
     const tasks = await import("@mediapipe/tasks-vision");
-    const fileset = await tasks.FilesetResolver.forVisionTasks(WASM_BASE_URL);
+    const fileset = await tasks.FilesetResolver.forVisionTasks(backgroundEffectAssets().wasmBaseUrl);
     try {
       return await tasks.ImageSegmenter.createFromOptions(fileset, {
         baseOptions: {
-          modelAssetPath: SEGMENTER_ASSET_URL,
+          modelAssetPath: backgroundEffectAssets().modelUrl,
           delegate: "GPU",
         },
         runningMode: "VIDEO",
@@ -98,7 +110,7 @@ async function getSegmenter(): Promise<ImageSegmenterType> {
       );
       return tasks.ImageSegmenter.createFromOptions(fileset, {
         baseOptions: {
-          modelAssetPath: SEGMENTER_ASSET_URL,
+          modelAssetPath: backgroundEffectAssets().modelUrl,
           delegate: "CPU",
         },
         runningMode: "VIDEO",

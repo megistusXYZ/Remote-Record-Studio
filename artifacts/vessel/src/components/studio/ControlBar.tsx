@@ -1,4 +1,4 @@
-import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff, UserPlus, Captions, CaptionsOff } from "lucide-react";
+import { Settings, Mic, MicOff, Video as VideoIcon, VideoOff, Users, Hand, MonitorUp, MonitorOff, UserPlus } from "lucide-react";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { VesselButton } from "../vessel-ui/VesselButton";
@@ -39,19 +39,6 @@ export type ControlBarProps = {
   /** Local raise-hand state (host AND guests). */
   handRaised?: boolean;
   onToggleHand?: () => void;
-  /** Live-captions toggle. When omitted the button is hidden — keeps the
-   *  control bar unchanged for callers (and tests) that haven't opted
-   *  into the feature yet. */
-  captionsActive?: boolean;
-  onToggleCaptions?: () => void;
-  /** Optional inline status string for the captions tooltip
-   *  (e.g. "Loading captions engine…"). When set, the button shows a
-   *  subtle pulsing accent ring so the user understands work is in
-   *  flight even before the first fragment arrives. */
-  captionsStatusLabel?: string | null;
-  /** True while the captions engine is still warming up — drives the
-   *  small "loading" affordance on the button. */
-  captionsLoading?: boolean;
   /** Screen-share controls. The button is hidden entirely when
    *  `screenShareSupported` is false (mobile / unsupported browsers).
    *  When omitted, the button is also hidden — keeps the control bar
@@ -98,10 +85,6 @@ export function ControlBar({
   raisedHandsCount = 0,
   handRaised = false,
   onToggleHand,
-  captionsActive = false,
-  onToggleCaptions,
-  captionsStatusLabel = null,
-  captionsLoading = false,
   screenShareSupported = false,
   isScreenSharing = false,
   onToggleScreenShare,
@@ -121,7 +104,7 @@ export function ControlBar({
         // (iPhone SE 1st gen and a handful of small Androids): the
         // three flex-1 groups can collectively demand more than the
         // viewport width once every optional control (hand,
-        // captions, screen-share substitute) is on screen. Rather
+        // screen-share substitute) is on screen. Rather
         // than clip the Leave button or fight intrinsic sizes, we
         // let the bar scroll horizontally as a graceful fallback.
         // [&::-webkit-scrollbar]:hidden hides the scroll-track so
@@ -157,7 +140,7 @@ export function ControlBar({
         </div>
 
         {/* Center Group — gap tightens on mobile so the row of primary
-            controls (mic / record / camera / hand / captions) fits a
+            controls (mic / record / camera / hand) fits a
             375px-wide phone without overflowing the side groups. */}
         <div className="flex-1 flex items-center gap-2 sm:gap-3 justify-center">
           <Tooltip>
@@ -267,49 +250,6 @@ export function ControlBar({
             </Tooltip>
           )}
 
-          {/* Live captions — accent ring while active, plus a subtle
-              loading affordance while the captions engine warms up.
-              Open to host AND guests; each device transcribes only its
-              own microphone and broadcasts the result so everyone sees
-              the same per-speaker transcript. */}
-          {onToggleCaptions && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  data-testid="button-toggle-captions"
-                  onClick={onToggleCaptions}
-                  aria-pressed={captionsActive}
-                  aria-label={captionsActive ? "Turn off live captions" : "Turn on live captions"}
-                  className={cn(
-                    "relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
-                    captionsActive
-                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
-                      : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
-                  )}
-                >
-                  {captionsActive ? (
-                    <Captions className="w-5 h-5 sm:w-6 sm:h-6" />
-                  ) : (
-                    <CaptionsOff className="w-5 h-5 sm:w-6 sm:h-6" />
-                  )}
-                  {captionsActive && captionsLoading && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute -inset-0.5 rounded-full border border-vessel-accent/50 animate-ping pointer-events-none"
-                    />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {captionsStatusLabel
-                  ? captionsStatusLabel
-                  : captionsActive
-                    ? "Turn off live captions"
-                    : "Turn on live captions"}
-              </TooltipContent>
-            </Tooltip>
-          )}
 
           {/* Share screen — desktop only. Hidden on mobile / tablet via the
               `hidden md:flex` wrapper since browser screen-share APIs aren't

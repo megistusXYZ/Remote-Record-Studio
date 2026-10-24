@@ -1,3 +1,4 @@
+import { friendlyError } from "../lib/friendly-error";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
@@ -100,7 +101,7 @@ function describeError(err: unknown): ScreenShareError {
         cancelled: false,
       };
     }
-    return { message: err.message || "Couldn't start screen sharing.", cancelled: false };
+    return { message: friendlyError(err, "Couldn't start screen sharing."), cancelled: false };
   }
   return { message: "Couldn't start screen sharing.", cancelled: false };
 }

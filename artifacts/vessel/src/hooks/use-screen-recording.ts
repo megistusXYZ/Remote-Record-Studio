@@ -1,3 +1,4 @@
+import { friendlyError } from "../lib/friendly-error";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChunkedRecorder } from "../lib/recorder";
 import { BlossomUploadQueue, type SyncStatus } from "../lib/blossom";
@@ -183,7 +184,7 @@ export function useScreenRecording(): UseScreenRecordingResult {
         // live call. We surface the error in state, clean up local refs,
         // and let the caller carry on.
         console.error("Failed to start screen recording", err);
-        setError(err instanceof Error ? err.message : "Failed to start screen recording");
+        setError(friendlyError(err, "Screen recording couldn't start."));
         teardownListeners();
         recorderRef.current = null;
         recordingIdRef.current = null;
@@ -257,7 +258,7 @@ export function useScreenRecording(): UseScreenRecordingResult {
       return r;
     } catch (err) {
       console.error("Failed to finalize screen recording", err);
-      setError(err instanceof Error ? err.message : "Failed to finalize screen recording");
+      setError(friendlyError(err, "The screen recording couldn't be finished. It is kept on this device."));
       return null;
     } finally {
       setIsFinalizing(false);

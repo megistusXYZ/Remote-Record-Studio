@@ -1,4 +1,5 @@
 import { Zip, ZipPassThrough } from "fflate";
+import { openStoredTrack } from "./track-keys";
 import {
   loadRecordingBlob,
   buildLocalBlobUrl,
@@ -155,7 +156,7 @@ export async function resolveStreamBlob(
     const idbBlob = await loadAudioFallback(source);
     if (idbBlob) return idbBlob;
     if (source.audioBlobUrl && !isLocalBlobUrl(source.audioBlobUrl)) {
-      return fetchRemoteBlob(source.audioBlobUrl);
+      return fetchRemoteBlob(source.audioBlobUrl, source.audioMimeType);
     }
     return null;
   }
@@ -167,7 +168,7 @@ export async function resolveStreamBlob(
       source.videoOnlyRemoteUrl &&
       !isLocalBlobUrl(source.videoOnlyRemoteUrl)
     ) {
-      return fetchRemoteBlob(source.videoOnlyRemoteUrl);
+      return fetchRemoteBlob(source.videoOnlyRemoteUrl, source.videoOnlyMimeType);
     }
     return null;
   }
@@ -176,7 +177,7 @@ export async function resolveStreamBlob(
     const idbScreen = await loadScreenFallback(source);
     if (idbScreen) return idbScreen;
     if (source.screenRemoteUrl && !isLocalBlobUrl(source.screenRemoteUrl)) {
-      return fetchRemoteBlob(source.screenRemoteUrl);
+      return fetchRemoteBlob(source.screenRemoteUrl, source.screenMimeType);
     }
     return null;
   }
@@ -220,7 +221,7 @@ async function resolveCombinedBlob(
       }
       return null;
     }
-    return fetchRemoteBlob(source.combinedBlobUrl);
+    return fetchRemoteBlob(source.combinedBlobUrl, source.combinedMimeType);
   }
   return null;
 }
@@ -272,12 +273,15 @@ async function loadAudioFallback(
   return null;
 }
 
-async function fetchRemoteBlob(url: string): Promise<Blob | null> {
+async function fetchRemoteBlob(url: string, type?: string | null): Promise<Blob | null> {
   try {
     const res = await fetch(url, { credentials: "omit" });
     if (!res.ok) return null;
-    return await res.blob();
-  } catch {
+    // Stored files are encrypted; this device holds the key for its own
+    // uploads and for every share link it has opened.
+    return await openStoredTrack(await res.blob(), { url, type });
+  } catch (err) {
+    console.warn("[track-export] could not fetch or open a stored file", err);
     return null;
   }
 }

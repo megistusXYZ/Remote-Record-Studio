@@ -56,6 +56,24 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Route tests (deliveries and future ones) run against a real database,
+    # created by the same SQL migrations production applies.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: vessel
+          POSTGRES_PASSWORD: vessel
+          POSTGRES_DB: vessel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vessel -d vessel_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgresql://vessel:vessel@localhost:5432/vessel_test
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -74,8 +92,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # API server and web client suites. Neither needs a database: the API
-      # tests mock the pool and the client tests run in jsdom.
+      # API server and web client suites. The API route tests use the
+      # Postgres service above; the client tests run in jsdom.
       - name: Run tests
         run: pnpm test
 

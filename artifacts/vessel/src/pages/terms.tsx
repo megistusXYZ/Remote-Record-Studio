@@ -30,7 +30,7 @@ export default function Terms() {
 
       <ContentSection heading="Account and access">
         <p>
-          There are no paid plans. Your identity is a private sign-in key that you control.
+          There are no paid plans. Your studio is a recovery key that you control.
           Every action you take in the Service &mdash; creating a studio, listing your past
           sessions, cancelling an invite &mdash; is cryptographically signed by your key on
           your device, so the Service can verify it is really you without ever holding your

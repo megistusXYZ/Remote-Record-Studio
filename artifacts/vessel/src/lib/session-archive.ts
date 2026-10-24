@@ -4,6 +4,7 @@ import type { VesselIdentity } from "./identity";
 import { getRelayPool } from "./relay-pool";
 import { getPublishRelays } from "./relay-config";
 import { deploymentRelays } from "./runtime-config";
+import { getTrackKey } from "./track-keys";
 import {
   encryptManifestContent,
   encodeShareKey,
@@ -176,10 +177,13 @@ async function buildEncryptedManifestEvent(opts: {
   // during the call) parallel to `audio` (v=2) and `video` (v=3). Older
   // recipients that only know v=1/v=2/v=3 still see all their existing
   // fields in the same place — `screen` is purely additive.
+  // v: 6 — adds `key` per stream: the stored file is encrypted on the
+  // device and this key (base64url) decrypts it. The manifest is itself
+  // encrypted, so the key never travels in the clear.
   // v: 5 — adds `startedAtMs` and `serverOffsetMs` per track so an editor
   // can line up tracks recorded on different devices. Also additive.
   const plaintext = JSON.stringify({
-    v: 5,
+    v: 6,
     sessionTitle: session.sessionTitle,
     hostName: session.hostName,
     endedAt: session.endedAt.toISOString(),
@@ -191,6 +195,7 @@ async function buildEncryptedManifestEvent(opts: {
           ? {
               url: t.audio.url,
               hash: t.audio.hash || null,
+              key: getTrackKey(t.audio.hash),
               sizeBytes: t.audio.sizeBytes,
               mimeType: t.audio.mimeType,
             }
@@ -200,6 +205,7 @@ async function buildEncryptedManifestEvent(opts: {
           ? {
               url: t.video.url,
               hash: t.video.hash || null,
+              key: getTrackKey(t.video.hash),
               sizeBytes: t.video.sizeBytes,
               mimeType: t.video.mimeType,
             }
@@ -209,6 +215,7 @@ async function buildEncryptedManifestEvent(opts: {
           ? {
               url: t.screen.url,
               hash: t.screen.hash || null,
+              key: getTrackKey(t.screen.hash),
               sizeBytes: t.screen.sizeBytes,
               mimeType: t.screen.mimeType,
               durationSeconds: t.screenDurationSeconds ?? null,
@@ -223,6 +230,7 @@ async function buildEncryptedManifestEvent(opts: {
         mimeType: t.mimeType,
         url: t.blobUrl && !t.blobUrl.startsWith("idb://") ? t.blobUrl : null,
         hash: t.blobHash || null,
+        key: getTrackKey(t.blobHash),
         audio,
         video,
         screen,

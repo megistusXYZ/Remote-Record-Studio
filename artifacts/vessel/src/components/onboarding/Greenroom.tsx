@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { friendlyError } from "../../lib/friendly-error";
 import { motion } from "framer-motion";
 import {
   Camera,
@@ -694,7 +695,7 @@ export function useLoopback(stream: MediaStream | null, micEnabled: boolean) {
     } catch (err) {
       setPhase({
         kind: "error",
-        message: err instanceof Error ? err.message : "Couldn't start the test.",
+        message: friendlyError(err, "Couldn't start the test."),
       });
     }
   };

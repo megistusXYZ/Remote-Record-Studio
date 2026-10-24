@@ -27,7 +27,7 @@
 		Permissions-Policy "accelerometer=(), ambient-light-sensor=(), autoplay=(self), battery=(), geolocation=(), gyroscope=(), magnetometer=(), midi=(), payment=(), usb=(), interest-cohort=()"
 		# Same policy the dev server sends; the header name switches to the
 		# enforcing one with VESSEL_CSP_ENFORCE=true.
-		{$VESSEL_CSP_HEADER} "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline'; connect-src 'self' https: wss:; worker-src 'self' blob:"
+		{$VESSEL_CSP_HEADER} "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' https: wss:; worker-src 'self' blob:"
 		-Server
 	}
 }

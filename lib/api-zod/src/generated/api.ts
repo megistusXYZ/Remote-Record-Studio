@@ -372,6 +372,44 @@ export const LeaveSessionResponse = zod.object({
 });
 
 /**
+ * Stores a note sealed to the host's key on the sender's device (the
+share link to the sender's archive). The server cannot read it. Must
+be signed by a participant of the session; latest delivery per sender
+wins.
+
+ * @summary Record this participant's track delivery to the host
+ */
+export const RecordDeliveryParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+export const recordDeliveryBodySealedMax = 16384;
+
+export const RecordDeliveryBody = zod.object({
+  sealed: zod
+    .string()
+    .min(1)
+    .max(recordDeliveryBodySealedMax)
+    .describe("NIP-44 ciphertext addressed to the host. Opaque to the server."),
+});
+
+/**
+ * @summary List track deliveries for a session (host only)
+ */
+export const ListDeliveriesParams = zod.object({
+  sessionId: zod.coerce.string(),
+});
+
+export const ListDeliveriesResponseItem = zod.object({
+  id: zod.string(),
+  senderPubkey: zod.string(),
+  sealed: zod.string(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListDeliveriesResponse = zod.array(ListDeliveriesResponseItem);
+
+/**
  * @summary List all recordings in the vault
  */
 export const ListRecordingsQueryParams = zod.object({
