@@ -24,6 +24,15 @@ describe("public text check", () => {
     ]);
   });
 
+  it("flags private task-tracker labels but not issue references", () => {
+    const task = "Task " + "#43";
+    const issues = checkPublicText({
+      title: `${task}: tighten raise-hand ordering`,
+      body: "Closes #12. See #7 for context.",
+    });
+    expect(issues.map((i) => [i.path, i.rule])).toEqual([["pull request title", "internal-label"]]);
+  });
+
   it("passes ordinary, well-written text", () => {
     expect(
       checkPublicText({

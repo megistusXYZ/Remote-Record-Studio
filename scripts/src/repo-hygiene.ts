@@ -31,6 +31,7 @@ const CONTENT_RULES: Array<{ rule: string; test: RegExp; message: string }> = [
   { rule: "secret", test: /\bnsec1[02-9ac-hj-np-z]{58}\b/, message: "private signing key" },
   { rule: "personal-path", test: /\/(Users|home)\/(?!runner\b|node\b)[a-z][a-z0-9._-]*\//i, message: "a path from someone's machine" },
   { rule: "internal-label", test: /\bP[0-3]-\d{1,3}\b/, message: "an internal audit label; describe the change instead" },
+  { rule: "internal-label", test: /\b[Tt]ask #\d+/, message: "a private task-tracker label; describe the change, or link a public issue" },
 ];
 
 /** Problems in a piece of public text (a file, a PR description, a commit message). */
