@@ -381,10 +381,16 @@ components:
       properties:
         title:
           type: string
+          maxLength: 200
+          minLength: 1
         hostPubkey:
           type: string
+          maxLength: 64
+          pattern: '^[0-9a-f]{64}$'
         hostName:
           type: string
+          maxLength: 80
+          minLength: 1
         maxParticipants:
           type: integer
           minimum: 1
@@ -403,6 +409,8 @@ components:
           enum: [waiting, live, ended]
         title:
           type: string
+          maxLength: 200
+          minLength: 1
         maxParticipants:
           type: integer
           minimum: 1
@@ -448,8 +456,12 @@ components:
       properties:
         guestName:
           type: string
+          maxLength: 80
+          minLength: 1
         guestPubkey:
           type: string
+          maxLength: 64
+          pattern: '^[0-9a-f]{64}$'
       required:
         - guestName
         - guestPubkey
@@ -463,6 +475,8 @@ components:
       properties:
         pubkey:
           type: string
+          maxLength: 64
+          pattern: '^[0-9a-f]{64}$'
       required:
         - pubkey
 
@@ -584,61 +598,81 @@ components:
         sessionId:
           type: string
           nullable: true
+          maxLength: 128
         sessionTitle:
           type: string
           nullable: true
+          maxLength: 200
         ownerPubkey:
           type: string
+          maxLength: 64
+          pattern: '^[0-9a-f]{64}$'
         participantName:
           type: string
+          maxLength: 80
+          minLength: 1
         durationSeconds:
           type: integer
+          minimum: 0
         sizeBytes:
           type: integer
+          minimum: 0
         mimeType:
           type: string
+          maxLength: 100
         blobHash:
           type: string
           nullable: true
+          maxLength: 64
         blobUrl:
           type: string
           nullable: true
+          maxLength: 2048
         audioBlobHash:
           type: string
           nullable: true
+          maxLength: 64
         audioBlobUrl:
           type: string
           nullable: true
+          maxLength: 2048
         audioSizeBytes:
           type: integer
           nullable: true
         audioMimeType:
           type: string
           nullable: true
+          maxLength: 100
         videoBlobHash:
           type: string
           nullable: true
+          maxLength: 64
         videoBlobUrl:
           type: string
           nullable: true
+          maxLength: 2048
         videoSizeBytes:
           type: integer
           nullable: true
         videoMimeType:
           type: string
           nullable: true
+          maxLength: 100
         screenBlobHash:
           type: string
           nullable: true
+          maxLength: 64
         screenBlobUrl:
           type: string
           nullable: true
+          maxLength: 2048
         screenSizeBytes:
           type: integer
           nullable: true
         screenMimeType:
           type: string
           nullable: true
+          maxLength: 100
         screenDurationSeconds:
           type: integer
           nullable: true

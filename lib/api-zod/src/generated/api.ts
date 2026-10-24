@@ -69,12 +69,22 @@ export const ListSessionsResponse = zod.array(ListSessionsResponseItem);
 /**
  * @summary Create a new recording session
  */
+export const createSessionBodyTitleMax = 200;
+
+export const createSessionBodyHostPubkeyMax = 64;
+
+export const createSessionBodyHostPubkeyRegExp = new RegExp("^[0-9a-f]{64}$");
+export const createSessionBodyHostNameMax = 80;
+
 export const createSessionBodyMaxParticipantsMax = 25;
 
 export const CreateSessionBody = zod.object({
-  title: zod.string(),
-  hostPubkey: zod.string(),
-  hostName: zod.string(),
+  title: zod.string().min(1).max(createSessionBodyTitleMax),
+  hostPubkey: zod
+    .string()
+    .max(createSessionBodyHostPubkeyMax)
+    .regex(createSessionBodyHostPubkeyRegExp),
+  hostName: zod.string().min(1).max(createSessionBodyHostNameMax),
   maxParticipants: zod
     .number()
     .min(1)
@@ -136,11 +146,13 @@ export const UpdateSessionParams = zod.object({
   sessionId: zod.coerce.string(),
 });
 
+export const updateSessionBodyTitleMax = 200;
+
 export const updateSessionBodyMaxParticipantsMax = 25;
 
 export const UpdateSessionBody = zod.object({
   status: zod.enum(["waiting", "live", "ended"]).optional(),
-  title: zod.string().optional(),
+  title: zod.string().min(1).max(updateSessionBodyTitleMax).optional(),
   maxParticipants: zod
     .number()
     .min(1)
@@ -202,9 +214,18 @@ export const JoinSessionParams = zod.object({
   sessionId: zod.coerce.string(),
 });
 
+export const joinSessionBodyGuestNameMax = 80;
+
+export const joinSessionBodyGuestPubkeyMax = 64;
+
+export const joinSessionBodyGuestPubkeyRegExp = new RegExp("^[0-9a-f]{64}$");
+
 export const JoinSessionBody = zod.object({
-  guestName: zod.string(),
-  guestPubkey: zod.string(),
+  guestName: zod.string().min(1).max(joinSessionBodyGuestNameMax),
+  guestPubkey: zod
+    .string()
+    .max(joinSessionBodyGuestPubkeyMax)
+    .regex(joinSessionBodyGuestPubkeyRegExp),
 });
 
 export const joinSessionResponseMaxParticipantsMax = 25;
@@ -258,9 +279,16 @@ export const LeaveSessionParams = zod.object({
   sessionId: zod.coerce.string(),
 });
 
+export const leaveSessionBodyPubkeyMax = 64;
+
+export const leaveSessionBodyPubkeyRegExp = new RegExp("^[0-9a-f]{64}$");
+
 export const LeaveSessionBody = zod
   .object({
-    pubkey: zod.string(),
+    pubkey: zod
+      .string()
+      .max(leaveSessionBodyPubkeyMax)
+      .regex(leaveSessionBodyPubkeyRegExp),
   })
   .describe(
     "Body for POST \/sessions\/{sessionId}\/leave. The pubkey must match the\nsigning pubkey of the NIP-98 Authorization header so participants\ncan only mark themselves as left.\n",
@@ -343,28 +371,94 @@ export const ListRecordingsResponse = zod.array(ListRecordingsResponseItem);
 /**
  * @summary Save a recording to the vault
  */
+export const createRecordingBodySessionIdMax = 128;
+
+export const createRecordingBodySessionTitleMax = 200;
+
+export const createRecordingBodyOwnerPubkeyMax = 64;
+
+export const createRecordingBodyOwnerPubkeyRegExp = new RegExp(
+  "^[0-9a-f]{64}$",
+);
+export const createRecordingBodyParticipantNameMax = 80;
+
+export const createRecordingBodyDurationSecondsMin = 0;
+
+export const createRecordingBodySizeBytesMin = 0;
+
+export const createRecordingBodyMimeTypeMax = 100;
+
+export const createRecordingBodyBlobHashMax = 64;
+
+export const createRecordingBodyBlobUrlMax = 2048;
+
+export const createRecordingBodyAudioBlobHashMax = 64;
+
+export const createRecordingBodyAudioBlobUrlMax = 2048;
+
+export const createRecordingBodyAudioMimeTypeMax = 100;
+
+export const createRecordingBodyVideoBlobHashMax = 64;
+
+export const createRecordingBodyVideoBlobUrlMax = 2048;
+
+export const createRecordingBodyVideoMimeTypeMax = 100;
+
+export const createRecordingBodyScreenBlobHashMax = 64;
+
+export const createRecordingBodyScreenBlobUrlMax = 2048;
+
+export const createRecordingBodyScreenMimeTypeMax = 100;
+
 export const CreateRecordingBody = zod.object({
-  sessionId: zod.string().nullish(),
-  sessionTitle: zod.string().nullish(),
-  ownerPubkey: zod.string(),
-  participantName: zod.string(),
-  durationSeconds: zod.number(),
-  sizeBytes: zod.number(),
-  mimeType: zod.string(),
-  blobHash: zod.string().nullish(),
-  blobUrl: zod.string().nullish(),
-  audioBlobHash: zod.string().nullish(),
-  audioBlobUrl: zod.string().nullish(),
+  sessionId: zod.string().max(createRecordingBodySessionIdMax).nullish(),
+  sessionTitle: zod.string().max(createRecordingBodySessionTitleMax).nullish(),
+  ownerPubkey: zod
+    .string()
+    .max(createRecordingBodyOwnerPubkeyMax)
+    .regex(createRecordingBodyOwnerPubkeyRegExp),
+  participantName: zod
+    .string()
+    .min(1)
+    .max(createRecordingBodyParticipantNameMax),
+  durationSeconds: zod.number().min(createRecordingBodyDurationSecondsMin),
+  sizeBytes: zod.number().min(createRecordingBodySizeBytesMin),
+  mimeType: zod.string().max(createRecordingBodyMimeTypeMax),
+  blobHash: zod.string().max(createRecordingBodyBlobHashMax).nullish(),
+  blobUrl: zod.string().max(createRecordingBodyBlobUrlMax).nullish(),
+  audioBlobHash: zod
+    .string()
+    .max(createRecordingBodyAudioBlobHashMax)
+    .nullish(),
+  audioBlobUrl: zod.string().max(createRecordingBodyAudioBlobUrlMax).nullish(),
   audioSizeBytes: zod.number().nullish(),
-  audioMimeType: zod.string().nullish(),
-  videoBlobHash: zod.string().nullish(),
-  videoBlobUrl: zod.string().nullish(),
+  audioMimeType: zod
+    .string()
+    .max(createRecordingBodyAudioMimeTypeMax)
+    .nullish(),
+  videoBlobHash: zod
+    .string()
+    .max(createRecordingBodyVideoBlobHashMax)
+    .nullish(),
+  videoBlobUrl: zod.string().max(createRecordingBodyVideoBlobUrlMax).nullish(),
   videoSizeBytes: zod.number().nullish(),
-  videoMimeType: zod.string().nullish(),
-  screenBlobHash: zod.string().nullish(),
-  screenBlobUrl: zod.string().nullish(),
+  videoMimeType: zod
+    .string()
+    .max(createRecordingBodyVideoMimeTypeMax)
+    .nullish(),
+  screenBlobHash: zod
+    .string()
+    .max(createRecordingBodyScreenBlobHashMax)
+    .nullish(),
+  screenBlobUrl: zod
+    .string()
+    .max(createRecordingBodyScreenBlobUrlMax)
+    .nullish(),
   screenSizeBytes: zod.number().nullish(),
-  screenMimeType: zod.string().nullish(),
+  screenMimeType: zod
+    .string()
+    .max(createRecordingBodyScreenMimeTypeMax)
+    .nullish(),
   screenDurationSeconds: zod.number().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
 });
