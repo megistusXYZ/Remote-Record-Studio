@@ -66,8 +66,14 @@ export default function SessionStudio() {
   const updateSessionMutation = useUpdateSession();
 
   useEffect(() => {
-    if (error) {
+    if (!error) return;
+    const status = (error as { status?: number } | null)?.status;
+    // Only a definitive answer sends the person away. A flaky network or a
+    // server hiccup keeps the studio open while the poll keeps retrying.
+    if (status === 404 || status === 403 || status === 401) {
       setLocation("/home");
+    } else {
+      console.warn("[session] fetch failed; keeping the studio open", error);
     }
   }, [error, setLocation]);
 
@@ -106,15 +112,21 @@ export default function SessionStudio() {
     }
   };
 
+  const endSession = async () => {
+    if (!isHost || !sessionId) return;
+    if (session?.status === "ended") return;
+    await updateSessionMutation.mutateAsync({
+      sessionId,
+      data: { status: "ended" },
+    });
+    queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+  };
+
   const handleStopRecording = async () => {
     if (!isHost || !sessionId) return;
     setIsStoppingRecording(true);
     try {
-      await updateSessionMutation.mutateAsync({
-        sessionId,
-        data: { status: "ended" },
-      });
-      queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+      await endSession();
       setLocation("/vault");
     } catch (err) {
       console.error("Failed to stop recording", err);
@@ -208,6 +220,7 @@ export default function SessionStudio() {
       onViewVault={() => setLocation("/vault")}
       onStartNewSession={() => setLocation("/home")}
       onEnterEndingFlow={() => setStudioInEndingFlow(true)}
+      onEndSession={endSession}
       isStartingRecording={isStartingRecording}
       isStoppingRecording={isStoppingRecording}
     />

@@ -270,6 +270,19 @@ router.get(
       return;
     }
 
+    // Anyone holding an invite code can look a session up before joining.
+    // They need the title, host and head count, not every participant's
+    // key. Keys are returned once the caller has joined (signed lookup).
+    if (!getAuthPubkey(req)) {
+      res.json(
+        GetSessionResponse.parse({
+          ...full,
+          participants: full.participants.map((p) => ({ ...p, pubkey: "" })),
+        }),
+      );
+      return;
+    }
+
     res.json(GetSessionResponse.parse(full));
   },
 );
@@ -396,6 +409,13 @@ router.post(
       return;
     }
     const realSessionId = targetSession.id;
+
+    // A session that has ended is over for everyone; a late join would
+    // start a recorder with no host to deliver to.
+    if (targetSession.status === "ended") {
+      res.status(410).json({ error: "This session has ended" });
+      return;
+    }
 
     // Two concurrent joiners (a fast double-click; a retried request)
     // must not be able to slip past the cap check together, nor produce
