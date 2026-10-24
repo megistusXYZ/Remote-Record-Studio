@@ -7,14 +7,13 @@ missing:
 
 | File | Shown | Spec |
 | --- | --- | --- |
-| `artifacts/vessel/public/hero/host.jpg` | Every screen | 1280×720, JPEG, about 150 KB |
-| `artifacts/vessel/public/hero/guest.jpg` | Every screen | 1280×720, JPEG, about 150 KB |
-| `artifacts/vessel/public/hero/host.webm` and `host.mp4` | Desktop only | 1280×720, 8 s seamless loop, no audio, under 1.5 MB each |
-| `artifacts/vessel/public/hero/guest.webm` and `guest.mp4` | Desktop only | Same as above |
+| `artifacts/vessel/public/hero/host.jpg`, `guest.jpg` | Every screen | 1280×720 JPEG, about 40 to 150 KB |
+| `host-talking.mp4`, `guest-talking.mp4` | Desktop, while that person holds the speaking ring | 1280×720 H.264, seamless loop, no audio, under 1 MB |
+| `host-listening.mp4`, `guest-listening.mp4` | Desktop, the rest of the time | Same |
 
 Phones, reduced-motion settings and data-saver mode get the still; the
-speaking ring, meters and clock still move. The `.jpg` must be the loop's
-first frame so the loop fades in without a jump.
+speaking ring, meters and clock still move. The `.jpg` is the first frame of the
+listening loop, so the video fades in without a jump.
 
 While these are generated stand-ins, `ILLUSTRATIVE_MEDIA` in
 `artifacts/vessel/src/components/landing/HeroDemo.tsx` stays `true` and the
@@ -59,8 +58,16 @@ so the talker matches the speaking ring (it swaps every 3.8 s).
 
 ## Exporting
 
+Generate one talking and one listening clip per person (the current ones
+are 10 s Grok clips at 1168×784). This crops to 16:9, drops the audio and
+crossfades the last second into the first so the 9 s loop has no seam:
+
 ```bash
-ffmpeg -i maya.mp4 -t 8 -vf scale=1280:720 -an -c:v libvpx-vp9 -b:v 1M host.webm
-ffmpeg -i maya.mp4 -t 8 -vf scale=1280:720 -an -c:v libx264 -crf 28 -preset slow -movflags +faststart host.mp4
-ffmpeg -i maya.mp4 -frames:v 1 -vf scale=1280:720 -q:v 4 host.jpg
+loop() { # loop <source.mp4> <name> <crop-top-px>
+  ffmpeg -y -i "$1" -filter_complex "[0:v:0]crop=1168:657:0:$3,scale=1280:720:flags=lanczos,setsar=1,fps=24,split[x][y];[x]trim=1:10,setpts=PTS-STARTPTS[a];[y]trim=0:1,setpts=PTS-STARTPTS[b];[a][b]xfade=transition=fade:duration=1:offset=8,format=yuv420p[v]" \
+    -map "[v]" -an -c:v libx264 -crf 27 -preset slow -profile:v high -movflags +faststart "$2.mp4"
+}
+loop maya-talking.mp4 host-talking 30
+loop maya-listening.mp4 host-listening 30
+ffmpeg -y -i host-listening.mp4 -frames:v 1 -q:v 5 host.jpg
 ```
