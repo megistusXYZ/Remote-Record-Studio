@@ -32,6 +32,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  /turn:
+    get:
+      operationId: getIceServers
+      tags: [live]
+      summary: ICE servers for the live preview
+      description: |
+        STUN servers plus, when the operator configured a TURN relay,
+        time-limited TURN credentials for the caller. Signed request required;
+        the credential is tied to the caller and expires after `ttlSeconds`.
+      responses:
+        "200":
+          description: ICE server list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IceServersResponse"
+        "401":
+          description: Missing or invalid signed request
+
   /sessions:
     get:
       operationId: listSessions
@@ -315,6 +334,41 @@ paths:
 
 components:
   schemas:
+    IceServer:
+      type: object
+      properties:
+        urls:
+          type: array
+          items:
+            type: string
+            maxLength: 512
+        username:
+          type: string
+          maxLength: 128
+        credential:
+          type: string
+          maxLength: 256
+      required:
+        - urls
+
+    IceServersResponse:
+      type: object
+      properties:
+        iceServers:
+          type: array
+          items:
+            $ref: "#/components/schemas/IceServer"
+        ttlSeconds:
+          type: integer
+          minimum: 0
+          description: Seconds the TURN credential stays valid; 0 when no TURN is configured.
+        turnConfigured:
+          type: boolean
+      required:
+        - iceServers
+        - ttlSeconds
+        - turnConfigured
+
     HealthStatus:
       type: object
       properties:

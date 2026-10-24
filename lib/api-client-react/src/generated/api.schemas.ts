@@ -5,6 +5,24 @@
  * Vessel API - studio-quality remote recording platform
  * OpenAPI spec version: 0.1.0
  */
+export interface IceServer {
+  urls: string[];
+  /** @maxLength 128 */
+  username?: string;
+  /** @maxLength 256 */
+  credential?: string;
+}
+
+export interface IceServersResponse {
+  iceServers: IceServer[];
+  /**
+   * Seconds the TURN credential stays valid; 0 when no TURN is configured.
+   * @minimum 0
+   */
+  ttlSeconds: number;
+  turnConfigured: boolean;
+}
+
 export interface HealthStatus {
   status: string;
   /** Server clock, milliseconds since the Unix epoch. Clients use it to express recording start times on one clock. */

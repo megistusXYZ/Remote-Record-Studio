@@ -22,6 +22,7 @@ import type {
   GetRecentActivityParams,
   GetVaultSummaryParams,
   HealthStatus,
+  IceServersResponse,
   JoinSessionBody,
   LeaveSessionBody,
   ListRecordingsParams,
@@ -111,6 +112,85 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * STUN servers plus, when the operator configured a TURN relay,
+time-limited TURN credentials for the caller. Signed request required;
+the credential is tied to the caller and expires after `ttlSeconds`.
+
+ * @summary ICE servers for the live preview
+ */
+export const getGetIceServersUrl = () => {
+  return `/api/turn`;
+};
+
+export const getIceServers = async (
+  options?: RequestInit,
+): Promise<IceServersResponse> => {
+  return customFetch<IceServersResponse>(getGetIceServersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetIceServersQueryKey = () => {
+  return [`/api/turn`] as const;
+};
+
+export const getGetIceServersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getIceServers>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getIceServers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetIceServersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getIceServers>>> = ({
+    signal,
+  }) => getIceServers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getIceServers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetIceServersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getIceServers>>
+>;
+export type GetIceServersQueryError = ErrorType<void>;
+
+/**
+ * @summary ICE servers for the live preview
+ */
+
+export function useGetIceServers<
+  TData = Awaited<ReturnType<typeof getIceServers>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getIceServers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetIceServersQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
