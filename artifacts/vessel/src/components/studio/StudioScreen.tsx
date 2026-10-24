@@ -3,6 +3,7 @@ import { AlertTriangle, X, MonitorPlay, Copy, Check } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { useMediaDevices, useLocalStream } from "../../hooks/use-media-devices";
 import { useRecording } from "../../hooks/use-recording";
+import { markRecordingRegistered } from "../../lib/recording-finalize";
 import { useScreenRecording, type ScreenRecordingResult } from "../../hooks/use-screen-recording";
 import { useKeyboardShortcuts, type Shortcut } from "../../hooks/use-keyboard-shortcuts";
 import { useLiveTransport } from "../../hooks/use-live-transport";
@@ -705,11 +706,30 @@ export function StudioScreen({
       recording.isSupported
     ) {
       recordingStartedRef.current = true;
-      void recording.start(localStream).catch(() => {
-        recordingStartedRef.current = false;
-      });
+      void recording
+        .start(localStream, {
+          kind: "camera",
+          sessionId: session.id,
+          sessionTitle: session.title,
+          role: isHost ? "host" : "guest",
+        })
+        .catch(() => {
+          recordingStartedRef.current = false;
+        });
     }
-  }, [session.status, localStream, recording]);
+  }, [session.status, localStream, recording, session.id, session.title, isHost]);
+
+  // Mid-recording local write failures (usually a full disk) are rare and
+  // serious enough to interrupt for.
+  useEffect(() => {
+    if (!recording.localPersistError) return;
+    toast({
+      title: "Storage problem",
+      description: recording.localPersistError,
+      variant: "destructive",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording.localPersistError]);
 
   useEffect(() => {
     recordingStartedRef.current = false;
@@ -793,7 +813,10 @@ export function StudioScreen({
             status: "ready",
           },
         })
+        .then(() => markRecordingRegistered(r.recordingId))
         .catch((err) => {
+          // The recording stays listed under "Recover" on the home screen
+          // until it is filed, so nothing is lost here.
           console.error("Failed to save recording metadata", err);
         });
       persistPromiseRef.current = p;
@@ -1077,9 +1100,9 @@ export function StudioScreen({
     recording.syncStatus === "complete"
       ? "remote"
       : recording.syncStatus === "partial-failure"
-      ? (recording.result && recording.result.incrementalSaved > 0)
-        ? "remote"
-        : "local-only"
+      ? recording.result?.persistedLocally
+        ? "local-only"
+        : "unknown"
       : "unknown";
 
   const localTrack: Track | null = recording.result && localParticipant
