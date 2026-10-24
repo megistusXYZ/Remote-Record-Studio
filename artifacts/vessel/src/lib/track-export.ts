@@ -426,6 +426,7 @@ function buildSidecar(entries: ResolvedEntry[]): string {
 export function createZipStream(
   entries: ResolvedEntry[],
   sidecarJson: string,
+  extras: Array<{ path: string; text: string }> = [],
 ): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
     start(controller) {
@@ -447,6 +448,11 @@ export function createZipStream(
           const sidecar = new ZipPassThrough("tracks.json");
           zip.add(sidecar);
           sidecar.push(new TextEncoder().encode(sidecarJson), true);
+          for (const extra of extras) {
+            const f = new ZipPassThrough(extra.path);
+            zip.add(f);
+            f.push(new TextEncoder().encode(extra.text), true);
+          }
 
           for (const entry of entries) {
             const file = new ZipPassThrough(entry.path);
@@ -579,3 +585,102 @@ export function deriveAudioLocalUrlFromCombined(
 /** Re-export for convenience so callers can build idb:// URLs without
  *  reaching into the recordings-storage module. */
 export { buildLocalBlobUrl };
+
+// ── Editor-ready bundle ─────────────────────────────────────────────────
+
+export type EditorBundleResult = ZipExportResult & { alignedCount: number };
+
+const EDITOR_README = (title: string, aligned: boolean) => `${title}
+${"=".repeat(Math.max(8, title.length))}
+
+Every speaker is in their own folder, recorded on their own device.
+${aligned ? "The WAV files are padded with silence at the start so they line up: drop them all at 0:00 in any editor and they are in sync." : "Some tracks had no timing information, so they start at 0:00 and may need nudging."}
+
+Reaper: open "${title}.RPP". Every speaker is a named track, placed on the timeline, with your markers.
+Audacity: import the WAVs, then File > Import > Labels > markers-audacity.txt.
+Anything else: markers.csv lists every marker with its time.
+
+tracks.json describes each file and its start time on a shared clock.
+
+Made with Vessel. Your recordings, delivered to you.
+`;
+
+/**
+ * One download an editor opens with every speaker already on a labelled,
+ * synced track: per-speaker audio (the WAV master where there is one),
+ * padded to a shared start, plus a Reaper project, Audacity labels and a
+ * marker list. Streams to disk where the browser allows, like the zip above.
+ */
+export async function downloadEditorBundle(input: {
+  sources: TrackExportSource[];
+  markers: Array<{ atServerMs: number; label: string }>;
+  title: string;
+  zipFilename: string;
+}): Promise<EditorBundleResult> {
+  const { alignTracks, timelineOriginMs, padWavStart, buildReaperProject, buildAudacityLabels, buildMarkersCsv } =
+    await import("./editor-export");
+  const selections: TrackSelection[] = input.sources.map((source) => ({
+    source,
+    stream: hasAudioOnlyExport(source) ? "audio-only" : "video+audio",
+  }));
+  const timed = input.sources.map((s, i) => ({ id: String(i), startedAtMs: s.startedAtMs, serverOffsetMs: s.serverOffsetMs }));
+  const alignment = alignTracks(timed);
+  const origin = timelineOriginMs(timed);
+
+  const { entries, skipped } = await resolveEntries(selections);
+  if (entries.length === 0) return { includedFilenames: [], skipped, alignedCount: 0 };
+
+  const projectTracks = [];
+  for (const entry of entries) {
+    const index = selections.indexOf(entry.sel);
+    const offsetMs = alignment[index]?.offsetMs ?? 0;
+    const isWav = /\.wav$/i.test(entry.path) || /wav/i.test(entry.blob.type);
+    if (isWav && offsetMs > 0) entry.blob = await padWavStart(entry.blob, offsetMs);
+    const lengthMs = ((entry.sel.source.durationSeconds ?? 0) * 1000) + (isWav ? offsetMs : 0);
+    projectTracks.push({
+      name: entry.sel.source.participantName,
+      file: entry.path,
+      positionMs: isWav ? 0 : offsetMs,
+      lengthMs: Math.max(lengthMs, 1000),
+    });
+  }
+
+  const markers = input.markers
+    .map((m) => ({ atMs: origin === null ? 0 : Math.max(0, m.atServerMs - origin), label: m.label }))
+    .sort((a, b) => a.atMs - b.atMs);
+  const safeTitle = safeFilenameSegment(input.title) || "Vessel session";
+  const alignedCount = alignment.filter((a) => a.aligned).length;
+  const extras = [
+    { path: `${safeTitle}.RPP`, text: buildReaperProject({ sampleRate: 48_000, tracks: projectTracks, markers }) },
+    { path: "markers-audacity.txt", text: buildAudacityLabels(markers) },
+    { path: "markers.csv", text: buildMarkersCsv(markers) },
+    { path: "README.txt", text: EDITOR_README(input.title || "Vessel session", alignedCount === input.sources.length) },
+  ];
+
+  const picker = getSaveFilePicker();
+  let writable: WritableStream<Uint8Array> | null = null;
+  if (picker) {
+    try {
+      const handle = await picker({
+        suggestedName: input.zipFilename,
+        types: [{ description: "Zip archive", accept: { "application/zip": [".zip"] } }],
+      });
+      writable = await handle.createWritable();
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === "AbortError") {
+        return { includedFilenames: [], skipped: [], cancelled: true, alignedCount };
+      }
+      writable = null;
+    }
+  }
+  const stream = createZipStream(entries, buildSidecar(entries), extras);
+  const includedFilenames = [...entries.map((e) => e.path), ...extras.map((e) => e.path)];
+  if (writable) {
+    await stream.pipeTo(writable);
+  } else {
+    const blob = await new Response(stream).blob();
+    downloadBlobAsFile(new Blob([blob], { type: "application/zip" }), input.zipFilename);
+  }
+  return { includedFilenames, skipped, alignedCount };
+}
+
