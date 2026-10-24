@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { pickSupportedMimeType, __test__, ChunkedRecorder, DualChunkedRecorder } from "./recorder";
+import type { WavRecorderLike } from "./wav-recorder";
 
 const realMediaRecorder = (globalThis as any).MediaRecorder;
 
@@ -135,47 +136,87 @@ function uninstallDualMock() {
   delete (globalThis as any).MediaStream;
 }
 
-describe("DualChunkedRecorder — failure isolation", () => {
+function fakeWav(opts: { startFails?: boolean; blob?: Blob | null } = {}): WavRecorderLike {
+  return {
+    start: async () => {
+      if (opts.startFails) throw new Error("no wav");
+    },
+    stop: async () => opts.blob ?? null,
+    getPersistStats: () => ({ captured: opts.blob ? 1 : 0, persisted: opts.blob ? 1 : 0, failed: 0 }),
+    getBytesWritten: () => opts.blob?.size ?? 0,
+    getFailure: () => null,
+  };
+}
+
+describe("DualChunkedRecorder — two outputs", () => {
   afterEach(() => uninstallDualMock());
 
-  it("audio-only failure does not affect combined or video-only", async () => {
-    installDualMockMediaRecorder(new Set(["audio"]));
+  it("a WAV master failure does not affect the combined recording", async () => {
+    installDualMockMediaRecorder(new Set());
     const stream = new FakeMediaStream([new FakeTrack("video"), new FakeTrack("audio")]);
     const rec = new DualChunkedRecorder();
-    rec.start({ stream: stream as unknown as MediaStream, timesliceMs: 1000 });
+    rec.start({
+      stream: stream as unknown as MediaStream,
+      timesliceMs: 1000,
+      createWavRecorder: () => fakeWav({ startFails: true }),
+    });
     const result = await rec.stop();
     expect(result.combinedBlob).toBeInstanceOf(Blob);
     expect(result.combinedBlob.size).toBeGreaterThan(0);
     expect(result.audioBlob).toBeNull();
     expect(result.audioRecordingOk).toBe(false);
-    expect(result.videoOnlyBlob).toBeInstanceOf(Blob);
-    expect(result.videoRecordingOk).toBe(true);
+    expect(result.videoOnlyBlob).toBeNull();
+    expect(result.videoRecordingOk).toBe(false);
     expect(result.hasVideo).toBe(true);
   });
 
-  it("video-only failure does not affect combined or audio-only", async () => {
-    installDualMockMediaRecorder(new Set(["video"]));
+  it("the WAV master becomes the audio sibling", async () => {
+    installDualMockMediaRecorder(new Set());
     const stream = new FakeMediaStream([new FakeTrack("video"), new FakeTrack("audio")]);
     const rec = new DualChunkedRecorder();
-    rec.start({ stream: stream as unknown as MediaStream, timesliceMs: 1000 });
+    const wav = new Blob([new Uint8Array(48)], { type: "audio/wav" });
+    rec.start({
+      stream: stream as unknown as MediaStream,
+      timesliceMs: 1000,
+      createWavRecorder: () => fakeWav({ blob: wav }),
+    });
+    expect(rec.getMimeTypes().audio).toBe("audio/wav");
     const result = await rec.stop();
-    expect(result.combinedBlob).toBeInstanceOf(Blob);
     expect(result.audioBlob).toBeInstanceOf(Blob);
+    expect(result.audioMimeType).toBe("audio/wav");
+    expect(result.audioSizeBytes).toBe(48);
     expect(result.audioRecordingOk).toBe(true);
-    expect(result.videoOnlyBlob).toBeNull();
-    expect(result.videoRecordingOk).toBe(false);
+    expect(result.persistStats.captured).toBeGreaterThanOrEqual(2);
   });
 
-  it("combined-only stream (no camera) skips the video-only path cleanly", async () => {
+  it("an audio-only stream gets an audio container for the combined file", async () => {
     installDualMockMediaRecorder(new Set());
     const stream = new FakeMediaStream([new FakeTrack("audio")]);
     const rec = new DualChunkedRecorder();
-    rec.start({ stream: stream as unknown as MediaStream, timesliceMs: 1000 });
+    rec.start({
+      stream: stream as unknown as MediaStream,
+      timesliceMs: 1000,
+      createWavRecorder: () => fakeWav({ blob: new Blob([new Uint8Array(44)]) }),
+    });
     const result = await rec.stop();
-    expect(result.combinedBlob).toBeInstanceOf(Blob);
-    expect(result.audioBlob).toBeInstanceOf(Blob);
-    expect(result.videoOnlyBlob).toBeNull();
     expect(result.hasVideo).toBe(false);
+    expect(result.combinedMimeType.startsWith("audio/")).toBe(true);
+    expect(result.audioBlob).toBeInstanceOf(Blob);
+  });
+
+  it("no microphone means no WAV master", async () => {
+    installDualMockMediaRecorder(new Set());
+    const stream = new FakeMediaStream([new FakeTrack("video")]);
+    const rec = new DualChunkedRecorder();
+    rec.start({
+      stream: stream as unknown as MediaStream,
+      timesliceMs: 1000,
+      createWavRecorder: () => fakeWav({ blob: new Blob([new Uint8Array(44)]) }),
+    });
+    expect(rec.getMimeTypes().audio).toBeUndefined();
+    const result = await rec.stop();
+    expect(result.audioBlob).toBeNull();
+    expect(result.audioRecordingOk).toBe(false);
   });
 });
 

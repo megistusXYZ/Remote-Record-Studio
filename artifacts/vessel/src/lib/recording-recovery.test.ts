@@ -138,6 +138,41 @@ describe("recording-recovery: rebuilding and registering", () => {
     expect(await outcome!.result.blob.text()).toBe("final");
   });
 
+  it("rebuilds a WAV master from positioned chunks and repairs its header", async () => {
+    // A streaming WAV writer emits a header with zero sizes followed by PCM
+    // appends; the finalize patches never arrived because the page died.
+    const header = new Uint8Array(44);
+    const ascii = (o: number, t: string) => {
+      for (let i = 0; i < t.length; i++) header[o + i] = t.charCodeAt(i);
+    };
+    ascii(0, "RIFF");
+    ascii(8, "WAVE");
+    ascii(12, "fmt ");
+    new DataView(header.buffer).setUint32(16, 16, true);
+    ascii(36, "data");
+    await putInProgressRecording(
+      row({
+        hasVideo: false,
+        mimeTypes: { combined: "audio/webm", audio: "audio/wav" },
+        chunkCounts: { combined: 1, audio: 2, video: 0 },
+      }),
+    );
+    await appendRecordingChunk("rec1", "combined", 0, new Blob(["webm"]));
+    await appendRecordingChunk("rec1", "audio", 0, new Blob([header, new Uint8Array(100)]), 0);
+    await appendRecordingChunk("rec1", "audio", 1, new Blob([new Uint8Array(50)]), 144);
+
+    const outcome = await recoverRecording(row(), null);
+    expect(outcome).not.toBeNull();
+    const audio = outcome!.result.audio;
+    expect(audio).not.toBeNull();
+    expect(audio!.mimeType).toBe("audio/wav");
+    expect(audio!.blob.size).toBe(194);
+    const bytes = new Uint8Array(await audio!.blob.arrayBuffer());
+    const view = new DataView(bytes.buffer);
+    expect(view.getUint32(4, true)).toBe(194 - 8);
+    expect(view.getUint32(40, true)).toBe(150);
+  });
+
   it("returns null when nothing usable is stored", async () => {
     await putInProgressRecording(row());
     expect(await recoverRecording(row(), null)).toBeNull();
