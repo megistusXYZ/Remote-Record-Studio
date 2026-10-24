@@ -1,26 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowLeft, HardDrive } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useIdentity } from "../../hooks/use-identity";
 import { Input } from "@/components/ui/input";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { BackupKeySignInModal } from "./BackupKeySignInModal";
 import { NostrSignInModal } from "./NostrSignInModal";
-import { BackupKeyStep } from "./BackupKeyStep";
 import { VesselBrandIcon } from "../icons/VesselBrandIcon";
-import {
-  DEFAULT_STORAGE_URL,
-  getStorageUrl,
-  isValidStorageUrl,
-  normalizeStorageUrl,
-  publishStorageServerList,
-  setStorageUrl as persistStorageUrl,
-} from "../../lib/storage-config";
-import type { VesselIdentity } from "../../lib/identity";
 
-type Step = "name" | "storage" | "backup" | "welcome";
+type Step = "name" | "welcome";
 
+/**
+ * Sign-up is one question: a display name. The key is created silently and
+ * the recovery-key prompt appears after the first finished recording (see
+ * `RecoveryKeyPrompt`), when there is something to lose. Storage defaults to
+ * the instance's server and can be changed in Settings.
+ */
 export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const { createNewIdentity, displayName: storedName } = useIdentity();
   const [, setLocation] = useLocation();
@@ -28,17 +24,9 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showBackupModal, setShowBackupModal] = useState(false);
-  const [showNostrModal, setShowNostrModal] = useState(false);
+  const [showRecoveryKeyModal, setShowRecoveryKeyModal] = useState(false);
+  const [showKeyAppModal, setShowKeyAppModal] = useState(false);
   const submitLockRef = useRef(false);
-
-  // Storage step state. Defaults to whatever the user has saved (or the
-  // community default) so first-time users can keep tapping "Continue".
-  const [storageMode, setStorageMode] = useState<"default" | "custom">(
-    () => (getStorageUrl() === DEFAULT_STORAGE_URL ? "default" : "custom"),
-  );
-  const [storageUrlInput, setStorageUrlInput] = useState<string>(() => getStorageUrl());
-  const [createdIdentity, setCreatedIdentity] = useState<VesselIdentity | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,48 +37,17 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
     setError(null);
 
     try {
-      const id = await createNewIdentity(name.trim());
-      setCreatedIdentity(id);
-      setStep("storage");
+      await createNewIdentity(name.trim());
+      setStep("welcome");
     } catch (err) {
       console.error(err);
-      const message =
-        err instanceof Error ? err.message : "Failed to create studio.";
-      setError(message);
+      setError(
+        "We couldn't create your studio. Check your connection and try again.",
+      );
     } finally {
       setIsSubmitting(false);
       submitLockRef.current = false;
     }
-  };
-
-  const handleStorageContinue = () => {
-    const chosen =
-      storageMode === "default"
-        ? DEFAULT_STORAGE_URL
-        : normalizeStorageUrl(storageUrlInput);
-
-    if (storageMode === "custom" && !isValidStorageUrl(chosen)) {
-      setError("Enter a valid https:// URL for your storage server.");
-      return;
-    }
-    setError(null);
-    // Persist scoped to this identity so two accounts on the same device
-    // never bleed each other's storage choice.
-    persistStorageUrl(chosen, createdIdentity?._pubkey);
-    if (createdIdentity) {
-      // Best-effort: mirror the choice across devices for portable signers.
-      publishStorageServerList(createdIdentity, [chosen]).catch((err) => {
-        console.warn("Server list publish failed:", err);
-      });
-    }
-    // Force the user through the backup-key step before entering the studio
-    // so they can never end up in a state where they have a studio but no
-    // way to sign in on another device.
-    setStep("backup");
-  };
-
-  const handleBackupContinue = () => {
-    setStep("welcome");
   };
 
   useEffect(() => {
@@ -138,9 +95,11 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
             </div>
 
             <div className="text-center mb-10">
-              <h1 className="font-display text-4xl font-bold mb-3">What should we call you?</h1>
+              <h1 className="font-display text-4xl font-bold mb-3">
+                What should we call you?
+              </h1>
               <p className="text-vessel-text-secondary text-base">
-                This is how you'll appear to guests in your studio.
+                Guests will see this name in your sessions.
               </p>
             </div>
 
@@ -168,162 +127,33 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
                 disabled={!name.trim()}
                 data-testid="button-create-studio"
               >
-                Create My Studio &rarr;
+                Create your studio
               </VesselButton>
 
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-vessel-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase tracking-wider">
-                  <span className="bg-vessel-bg-base px-3 text-vessel-text-muted">or</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowNostrModal(true)}
-                className="w-full h-12 rounded-xl bg-vessel-bg-surface border border-vessel-border hover:border-vessel-accent/40 transition-colors text-vessel-text-primary text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent inline-flex items-center justify-center"
-                data-testid="button-sign-in-nostr"
-              >
-                Sign in with Nostr
-              </button>
-
-              <div className="mt-6 text-center text-sm text-vessel-text-muted">
+              <div className="mt-8 text-center text-sm text-vessel-text-muted">
                 Already have a studio?{" "}
                 <button
                   type="button"
-                  onClick={() => setShowBackupModal(true)}
+                  onClick={() => setShowRecoveryKeyModal(true)}
                   className="text-vessel-accent hover:underline focus:outline-none"
+                  data-testid="button-sign-in-recovery-key"
                 >
-                  Sign in with your backup key
+                  Sign in with your recovery key
+                </button>
+              </div>
+
+              <div className="mt-3 text-center text-xs text-vessel-text-muted/80">
+                <button
+                  type="button"
+                  onClick={() => setShowKeyAppModal(true)}
+                  className="hover:text-vessel-text-primary hover:underline focus:outline-none"
+                  data-testid="button-sign-in-key-app"
+                >
+                  Use a key app instead
                 </button>
               </div>
             </form>
           </motion.div>
-        ) : step === "storage" ? (
-          <motion.div
-            key="storage"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full flex flex-col"
-          >
-            <div className="flex items-center self-center gap-2 font-display font-bold text-2xl tracking-tight mb-12">
-              <VesselBrandIcon className="w-8 h-8 text-vessel-accent" />
-              <div className="flex items-baseline gap-1">
-                <span>Vessel</span>
-                <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
-              </div>
-            </div>
-
-            <div className="text-center mb-8">
-              <div className="w-14 h-14 rounded-full bg-vessel-accent/10 border border-vessel-accent/20 flex items-center justify-center mx-auto mb-5">
-                <HardDrive className="w-6 h-6 text-vessel-accent" />
-              </div>
-              <h1 className="font-display text-3xl font-bold mb-3">Where do your recordings live?</h1>
-              <p className="text-vessel-text-secondary text-sm leading-relaxed">
-                Vessel never holds your media. Each recording streams straight to a storage server you choose &mdash;
-                you can change this any time in Settings.
-              </p>
-            </div>
-
-            {error && (
-              <div className="mb-4 p-3 rounded-xl bg-vessel-red/10 border border-vessel-red/20 text-vessel-red text-sm text-center">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setStorageMode("default")}
-                className={`w-full text-left p-4 rounded-xl border transition-colors ${
-                  storageMode === "default"
-                    ? "border-vessel-accent bg-vessel-accent/5"
-                    : "border-vessel-border bg-vessel-bg-surface hover:border-vessel-border-strong"
-                }`}
-                data-testid="option-storage-default"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-vessel-text-primary text-sm">Use the community default</div>
-                    <div className="text-xs text-vessel-text-muted mt-1">
-                      Free public server. Quick to start. Not run by Vessel.
-                    </div>
-                  </div>
-                  <div
-                    className={`w-4 h-4 rounded-full border-2 shrink-0 ${
-                      storageMode === "default"
-                        ? "border-vessel-accent bg-vessel-accent"
-                        : "border-vessel-border"
-                    }`}
-                  />
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStorageMode("custom")}
-                className={`w-full text-left p-4 rounded-xl border transition-colors ${
-                  storageMode === "custom"
-                    ? "border-vessel-accent bg-vessel-accent/5"
-                    : "border-vessel-border bg-vessel-bg-surface hover:border-vessel-border-strong"
-                }`}
-                data-testid="option-storage-custom"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-vessel-text-primary text-sm">I have my own server</div>
-                    <div className="text-xs text-vessel-text-muted mt-1">
-                      Point Vessel at any storage server you control.
-                    </div>
-                  </div>
-                  <div
-                    className={`w-4 h-4 rounded-full border-2 shrink-0 ${
-                      storageMode === "custom"
-                        ? "border-vessel-accent bg-vessel-accent"
-                        : "border-vessel-border"
-                    }`}
-                  />
-                </div>
-                {storageMode === "custom" && (
-                  <Input
-                    value={storageUrlInput}
-                    onChange={(e) => setStorageUrlInput(e.target.value)}
-                    placeholder="https://your-server.example"
-                    className="mt-3 h-11 bg-vessel-bg-base border-vessel-border focus-visible:ring-vessel-accent rounded-lg"
-                    onClick={(e) => e.stopPropagation()}
-                    data-testid="input-storage-url"
-                  />
-                )}
-              </button>
-            </div>
-
-            <VesselButton
-              type="button"
-              size="lg"
-              className="w-full mt-8"
-              onClick={handleStorageContinue}
-              data-testid="button-storage-continue"
-            >
-              Continue &rarr;
-            </VesselButton>
-          </motion.div>
-        ) : step === "backup" ? (
-          createdIdentity ? (
-            <BackupKeyStep
-              identity={createdIdentity}
-              onContinue={handleBackupContinue}
-            />
-          ) : (
-            <div
-              className="w-full p-5 rounded-xl bg-vessel-red/10 border border-vessel-red/20 text-vessel-red text-sm text-center"
-              data-testid="text-onboarding-missing-identity"
-            >
-              We lost track of your studio mid-setup. Please refresh the page
-              and try creating it again.
-            </div>
-          )
         ) : (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -369,29 +199,29 @@ export function SignUpScreen({ onComplete }: { onComplete: () => void }) {
             </p>
 
             <VesselButton variant="ghost" size="md" onClick={onComplete}>
-              Enter Studio &rarr;
+              Go to your studio &rarr;
             </VesselButton>
           </motion.div>
         )}
       </div>
 
       <BackupKeySignInModal
-        open={showBackupModal}
-        onOpenChange={setShowBackupModal}
+        open={showRecoveryKeyModal}
+        onOpenChange={setShowRecoveryKeyModal}
         onSuccess={onComplete}
         onUseNostr={() => {
-          setShowBackupModal(false);
-          setShowNostrModal(true);
+          setShowRecoveryKeyModal(false);
+          setShowKeyAppModal(true);
         }}
       />
 
       <NostrSignInModal
-        open={showNostrModal}
-        onOpenChange={setShowNostrModal}
+        open={showKeyAppModal}
+        onOpenChange={setShowKeyAppModal}
         onSuccess={onComplete}
         onUseBackupKey={() => {
-          setShowNostrModal(false);
-          setShowBackupModal(true);
+          setShowKeyAppModal(false);
+          setShowRecoveryKeyModal(true);
         }}
       />
     </div>

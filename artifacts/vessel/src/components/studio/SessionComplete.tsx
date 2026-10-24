@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { AvatarMark } from "../AvatarMark";
 import { useIdentity } from "../../hooks/use-identity";
+import { RecoveryKeyPrompt } from "../account/RecoveryKeyPrompt";
 import {
   resolveAvatarColor,
   useStoredAvatarColor,
@@ -235,6 +236,13 @@ function PersonalReceiptCard({
   onCopy: (url: string) => void;
   receiptArchiveId: string | null;
 }) {
+  // The raw failure text (relay/storage/crypto wording) is for the console,
+  // never for the card: people only see the friendly line below.
+  const rawError = personalArchive?.status === "error" ? personalArchive.message : null;
+  useEffect(() => {
+    if (rawError) console.warn("[session-complete] receipt publish failed:", rawError);
+  }, [rawError]);
+
   if (!personalArchive || personalArchive.status === "idle") {
     return null;
   }
@@ -247,7 +255,7 @@ function PersonalReceiptCard({
       >
         <Loader2 className="w-4 h-4 animate-spin text-vessel-accent shrink-0" />
         <div className="text-sm text-vessel-text-secondary">
-          Publishing your personal receipt link…
+          Publishing your receipt…
         </div>
       </div>
     );
@@ -261,9 +269,7 @@ function PersonalReceiptCard({
       >
         <ShieldOff className="w-4 h-4 text-vessel-amber mt-0.5 shrink-0" />
         <div className="text-sm text-vessel-text-secondary leading-relaxed">
-          We couldn't publish your personal receipt link.{" "}
-          <span className="text-vessel-text-muted">{personalArchive.message}</span>{" "}
-          Your local copy is unaffected.
+          We couldn't publish your receipt yet. Your recording is safe on this device.
         </div>
       </div>
     );
@@ -279,14 +285,14 @@ function PersonalReceiptCard({
       <div className="flex items-center gap-2 mb-2">
         <ShieldCheck className="w-4 h-4 text-vessel-accent shrink-0" />
         <span className="text-xs font-mono-vessel text-vessel-accent uppercase tracking-wider font-semibold">
-          {isHost ? "Your archive receipt" : "Your personal receipt"}
+          Your receipt
         </span>
       </div>
       <p className="text-sm text-vessel-text-secondary leading-relaxed mb-3">
         {isHost ? (
-          <>Save this link — it's your archive's receipt and the only way to take this share down later.</>
+          <>Save this link. It's the only way to take this share down later.</>
         ) : (
-          <>This is your proof you owned this recording. {hostName} has access to your track until you take it down — open this link any time to revoke.</>
+          <>This is your proof of this recording. {hostName} can download your track until you take that back; open this link any time to do that.</>
         )}
       </p>
 
@@ -328,7 +334,7 @@ function PersonalReceiptCard({
 
       {partial && (
         <p className="text-[11px] text-vessel-text-muted mt-3 leading-relaxed">
-          Published to {personalArchive.successCount} of {personalArchive.totalCount} sharing servers. The rest will catch up shortly.
+          Published.
         </p>
       )}
     </div>
@@ -408,7 +414,7 @@ function TrackStreamButtons({
           hasVideoOnly
             ? "Download a true video-only file (no audio bytes)"
             : hasVideo
-              ? "No video-only sibling was recorded for this participant"
+              ? "No video-only file for this track."
               : "No video for this participant"
         }
         onClick={() => onDownload(track, "video-only")}
@@ -421,7 +427,7 @@ function TrackStreamButtons({
         variant="ghost"
         size="sm"
         disabled={!hasAudioSibling || isWorking}
-        title={hasAudioSibling ? "Download just the audio sibling track" : "No audio-only sibling was recorded"}
+        title={hasAudioSibling ? "Download audio only" : "No audio-only file for this track."}
         onClick={() => onDownload(track, "audio-only")}
         data-testid={`button-download-a-${track.participantId}`}
       >
@@ -485,13 +491,13 @@ function TrackMetaRow({
     <div className="mt-3 pt-3 border-t border-vessel-border/50 flex flex-col gap-2">
       {(showCombinedHash || combinedShareable) && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-12 shrink-0">
-            V+A
+          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-32 shrink-0">
+            Video and audio
           </span>
           {showCombinedHash && (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-vessel-bg-surface border border-vessel-border text-vessel-text-secondary font-mono-vessel"
-              title={`SHA-256: ${track.combinedBlobHash}`}
+              title={`Checksum (SHA-256): ${track.combinedBlobHash}`}
               data-testid={`chip-hash-va-${track.participantId}`}
             >
               <Hash className="w-3 h-3" />
@@ -514,13 +520,13 @@ function TrackMetaRow({
       )}
       {(showAudioHash || audioShareable) && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-12 shrink-0">
+          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-32 shrink-0">
             Audio
           </span>
           {showAudioHash && (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-vessel-bg-surface border border-vessel-border text-vessel-text-secondary font-mono-vessel"
-              title={`SHA-256: ${track.audioBlobHash}`}
+              title={`Checksum (SHA-256): ${track.audioBlobHash}`}
               data-testid={`chip-hash-a-${track.participantId}`}
             >
               <Hash className="w-3 h-3" />
@@ -543,13 +549,13 @@ function TrackMetaRow({
       )}
       {(showVideoHash || videoShareable) && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-12 shrink-0">
+          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-32 shrink-0">
             Video
           </span>
           {showVideoHash && (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-vessel-bg-surface border border-vessel-border text-vessel-text-secondary font-mono-vessel"
-              title={`SHA-256: ${track.videoOnlyBlobHash}`}
+              title={`Checksum (SHA-256): ${track.videoOnlyBlobHash}`}
               data-testid={`chip-hash-v-${track.participantId}`}
             >
               <Hash className="w-3 h-3" />
@@ -572,13 +578,13 @@ function TrackMetaRow({
       )}
       {(showScreenHash || screenShareable) && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-12 shrink-0">
+          <span className="text-vessel-text-muted font-mono-vessel uppercase tracking-wider w-32 shrink-0">
             Screen
           </span>
           {showScreenHash && (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-vessel-bg-surface border border-vessel-border text-vessel-text-secondary font-mono-vessel"
-              title={`SHA-256: ${track.screenBlobHash}`}
+              title={`Checksum (SHA-256): ${track.screenBlobHash}`}
               data-testid={`chip-hash-s-${track.participantId}`}
             >
               <Hash className="w-3 h-3" />
@@ -726,7 +732,7 @@ function TranscriptDownloadCard({
         </VesselButton>
       </div>
       <p className="text-[11px] text-vessel-text-muted mt-3 leading-relaxed">
-        Captions are generated on-device — choose subtitles for video editors, JSON for downstream tools, or plain text for show notes.
+        Transcript: SRT or VTT for video editors, JSON for tools, text for show notes.
       </p>
     </div>
   );
@@ -851,7 +857,7 @@ export function SessionComplete({
           variant: "destructive",
           description:
             kind === "audio-only"
-              ? "Audio-only sibling isn't available for this participant."
+              ? "No audio-only file for this track."
               : "Track isn't available on this device.",
         });
         return;
@@ -900,7 +906,7 @@ export function SessionComplete({
           description: `${result.includedFilenames.length} included, ${result.skipped.length} skipped.`,
         });
       } else {
-        toast({ description: `Bundle downloaded — ${result.includedFilenames.length} tracks.` });
+        toast({ description: `Downloaded ${result.includedFilenames.length} tracks.` });
       }
     } catch (err) {
       console.error("Bundle download failed", err);
@@ -992,6 +998,10 @@ export function SessionComplete({
               isSyncing ? "max-w-md" : isHost ? "max-w-3xl" : "max-w-md"
             }`}
           >
+            {/* First finished recording: ask to save the recovery key now that
+                there is something to lose. Renders nothing for guests and key-app
+                users, and nothing once the key is saved. */}
+            {!isSyncing && <RecoveryKeyPrompt markRecorded className="mb-6" />}
             {isSyncing ? (
               <div className="flex flex-col items-center text-center">
                 <div className="w-16 h-16 mb-6 flex items-end justify-center gap-1">
@@ -1114,9 +1124,9 @@ export function SessionComplete({
                                   {track.hasVideo ? "Video + Audio" : "Audio only"} &middot;{" "}
                                   {formatDuration(track.durationSeconds)} &middot; {formatSize(track.sizeBytes)}
                                   {track.audioBlobUrl || track.audioBlob ? (
-                                    <span className="text-vessel-text-secondary"> &middot; Audio sibling ready</span>
+                                    <span className="text-vessel-text-secondary"> &middot; Audio only ready</span>
                                   ) : track.hasVideo ? (
-                                    <span className="text-vessel-text-muted"> &middot; No audio sibling</span>
+                                    <span className="text-vessel-text-muted"> &middot; No audio-only file</span>
                                   ) : null}
                                 </div>
                                 <StorageStateChip state={track.storageState} />
@@ -1158,13 +1168,13 @@ export function SessionComplete({
                             <>
                               <div>
                                 <span className="font-medium text-vessel-text-primary">{selectedCount} track{selectedCount === 1 ? "" : "s"}</span>{" "}
-                                selected — pick a stream to bundle as a zip.
+                                selected. Choose what to include.
                               </div>
                               <div
                                 className="mt-1 text-[11px] text-vessel-text-muted"
                                 data-testid="bundle-footer-totals"
                               >
-                                <span data-testid="bundle-total-va">V+A: {formatSize(selectedTotals.videoAudio)}</span>
+                                <span data-testid="bundle-total-va">Video and audio: {formatSize(selectedTotals.videoAudio)}</span>
                                 <span className="mx-2 opacity-50">·</span>
                                 <span data-testid="bundle-total-v">Video only: {selectedTotals.videoOnly > 0 ? formatSize(selectedTotals.videoOnly) : "—"}</span>
                                 <span className="mx-2 opacity-50">·</span>
@@ -1180,7 +1190,7 @@ export function SessionComplete({
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <label className="sr-only" htmlFor="bundle-stream-select">
-                          Bundle stream
+                          What to include
                         </label>
                         <select
                           id="bundle-stream-select"
@@ -1244,7 +1254,7 @@ export function SessionComplete({
                   <>
                     <h2 className="font-display text-2xl font-bold mb-2 text-vessel-text-primary">Thanks for recording with {hostName}!</h2>
                     <p className="text-sm text-vessel-text-secondary mb-6">
-                      Your track is saved on your storage and a copy went to {hostName} for the edit.
+                      Your track is uploaded to storage and saved on this device, and {hostName} has a copy for the edit.
                     </p>
 
                     <PersonalReceiptCard
