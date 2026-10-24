@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { friendlyError } from "../../lib/friendly-error";
 import { format } from "date-fns";
 import {
   Download,
@@ -172,12 +173,8 @@ function TrackRow({ track }: TrackRowProps) {
         safeSetState({ status: "idle" });
         return;
       }
-      const message =
-        err instanceof DownloadError
-          ? err.message
-          : err instanceof Error
-          ? err.message
-          : "The download failed.";
+      console.warn("download failed", err);
+      const message = friendlyError(err, "The download failed. Try again in a moment.");
       safeSetState({ status: "error", message });
     } finally {
       if (controllerRef.current === controller) {
