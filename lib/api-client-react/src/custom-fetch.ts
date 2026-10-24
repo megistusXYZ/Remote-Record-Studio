@@ -19,6 +19,8 @@ export type AuthTokenGetter = () => Promise<string | null> | string | null;
  * free to 401 it).
  */
 export type AuthHeaderProvider = (info: {
+  /** The request body as sent, when it is a string (JSON). Signed requests bind to it. */
+  body?: string;
   method: string;
   url: string;
 }) => Promise<string | null> | string | null;
@@ -420,6 +422,7 @@ export async function customFetch<T = unknown>(
       const headerValue = await _authHeaderProvider({
         method,
         url: absolutizeUrlForAuth(resolvedUrl),
+        body: typeof init.body === "string" ? init.body : undefined,
       });
       if (headerValue) {
         headers.set("authorization", headerValue);

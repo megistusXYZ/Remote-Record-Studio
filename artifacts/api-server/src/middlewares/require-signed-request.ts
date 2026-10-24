@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { createHash } from "node:crypto";
 import { verifyEvent, type Event as NostrEvent } from "nostr-tools/pure";
 
 /**
@@ -34,6 +35,46 @@ const AUTH_EVENT_KIND = 27235;
  * very short.
  */
 const FRESHNESS_WINDOW_SECONDS = 60;
+
+/**
+ * Replay protection. A valid auth event could otherwise be captured and
+ * resent for the whole freshness window, with any body if the body were not
+ * bound (it is, below) or against the same URL. Event ids seen recently are
+ * remembered until they could no longer be fresh. Per process; a multi-node
+ * deployment should back this with a shared store.
+ */
+const REPLAY_TTL_MS = FRESHNESS_WINDOW_SECONDS * 2 * 1000;
+const REPLAY_CACHE_MAX = 50_000;
+const seenEventIds = new Map<string, number>();
+let pruneCounter = 0;
+
+function pruneSeen(now: number): void {
+  for (const [id, expiresAt] of seenEventIds) {
+    if (expiresAt <= now) seenEventIds.delete(id);
+  }
+}
+
+/** True when the id was not seen before; remembers it. */
+function rememberEventId(id: string, now: number): boolean {
+  if ((++pruneCounter & 255) === 0 || seenEventIds.size > REPLAY_CACHE_MAX) pruneSeen(now);
+  if (seenEventIds.size > REPLAY_CACHE_MAX) seenEventIds.clear();
+  if (seenEventIds.has(id)) return false;
+  seenEventIds.set(id, now + REPLAY_TTL_MS);
+  return true;
+}
+
+/** Test hook. */
+export function __resetReplayCacheForTests(): void {
+  seenEventIds.clear();
+  pruneCounter = 0;
+}
+
+/** Lowercase hex SHA-256 of the raw request body, or null when there is none. */
+function bodyHash(req: Request): string | null {
+  const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!raw || raw.length === 0) return null;
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 interface AuthFailure {
   status: 401;
@@ -141,6 +182,7 @@ function verifyAuthEvent(
   event: NostrEvent,
   expectedMethod: string,
   expectedUrl: string,
+  expectedBodyHash: string | null,
 ): AuthFailure | null {
   if (event.kind !== AUTH_EVENT_KIND) {
     return fail(`auth event must be kind ${AUTH_EVENT_KIND}`);
@@ -166,9 +208,25 @@ function verifyAuthEvent(
     return fail("auth event 'u' tag does not match request URL");
   }
 
+  // Bind the signature to the body (NIP-98 `payload` tag) so a captured
+  // header cannot be reused with different content.
+  if (expectedBodyHash) {
+    const payloadTag = findTag(event, "payload");
+    if (!payloadTag) return fail("auth event is missing 'payload' tag for a request with a body");
+    if (payloadTag.toLowerCase() !== expectedBodyHash) {
+      return fail("auth event 'payload' tag does not match request body");
+    }
+  }
+
   // Most expensive check last: signature + id integrity.
   if (!verifyEvent(event)) {
     return fail("auth event signature is invalid");
+  }
+
+  // Only after the signature is known good: a forged id must not be able to
+  // poison the cache for a legitimate event.
+  if (!rememberEventId(event.id, Date.now())) {
+    return fail("auth event was already used");
   }
 
   return null;
@@ -192,7 +250,7 @@ export function requireSignedRequest(): RequestHandler {
       return;
     }
     const expectedUrl = buildRequestUrl(req);
-    const verifyFailure = verifyAuthEvent(decoded, req.method, expectedUrl);
+    const verifyFailure = verifyAuthEvent(decoded, req.method, expectedUrl, bodyHash(req));
     if (verifyFailure) {
       res
         .status(verifyFailure.status)
@@ -230,7 +288,7 @@ export function attachOptionalSignedAuth(): RequestHandler {
       return;
     }
     const expectedUrl = buildRequestUrl(req);
-    const verifyFailure = verifyAuthEvent(decoded, req.method, expectedUrl);
+    const verifyFailure = verifyAuthEvent(decoded, req.method, expectedUrl, bodyHash(req));
     if (verifyFailure) {
       next();
       return;
