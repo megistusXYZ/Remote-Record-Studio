@@ -38,10 +38,68 @@ import {
   type TransportMode,
 } from "../lib/transport-select";
 import { WebRtcMesh, type WebRtcSignaling } from "../lib/webrtc-mesh";
+import { getIceServers } from "@workspace/api-client-react";
 
-const DEFAULT_RELAY_URL =
-  (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) ||
-  "https://relay.quic.video";
+// No shipped relay: public MoQ relays do not speak Vessel's framing, so a
+// default would only ever fail. The WebRTC mesh is the default transport;
+// MoQ is opt-in through an operator-run relay.
+const DEFAULT_RELAY_URL = (import.meta.env.VITE_MOQ_RELAY_URL as string | undefined) || "";
+
+// ── Relay probe cache ─────────────────────────────────────────────────
+// A configured relay is used only after it answered a connection probe.
+// Results are remembered briefly so a room full of re-renders does not
+// hammer it.
+const PROBE_TTL_MS = 5 * 60 * 1000;
+const probeCache = new Map<string, { ok: boolean; at: number }>();
+/** Fresh cached verdict for `url`, or null when it has to be probed. */
+function cachedProbe(url: string): boolean | null {
+  const cached = probeCache.get(url);
+  if (cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.ok;
+  return null;
+}
+async function probeRelay(url: string): Promise<boolean> {
+  const cached = cachedProbe(url);
+  if (cached !== null) return cached;
+  const result = await MoqClient.probe(url).catch(() => ({ ok: false as const, reason: "probe threw" }));
+  probeCache.set(url, { ok: result.ok, at: Date.now() });
+  return result.ok;
+}
+
+// ── ICE servers ───────────────────────────────────────────────────────
+// STUN plus, when the operator runs a TURN relay, short-lived credentials
+// from the API. Cached until shortly before the credential expires. On
+// any failure the mesh falls back to its public STUN defaults.
+const ICE_FETCH_TIMEOUT_MS = 3000;
+const ICE_STUN_ONLY_TTL_MS = 10 * 60 * 1000;
+let iceCache: { servers: RTCIceServer[]; expiresAt: number } | null = null;
+async function fetchIceServers(): Promise<RTCIceServer[] | undefined> {
+  if (iceCache && Date.now() < iceCache.expiresAt) return iceCache.servers;
+  try {
+    const result = await Promise.race([
+      getIceServers(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("ICE server lookup timed out")), ICE_FETCH_TIMEOUT_MS),
+      ),
+    ]);
+    const servers = result.iceServers.map((s) => ({
+      urls: s.urls,
+      ...(s.username ? { username: s.username } : {}),
+      ...(s.credential ? { credential: s.credential } : {}),
+    })) as RTCIceServer[];
+    const ttlMs = result.ttlSeconds > 0 ? Math.max(60_000, (result.ttlSeconds - 60) * 1000) : ICE_STUN_ONLY_TTL_MS;
+    iceCache = { servers, expiresAt: Date.now() + ttlMs };
+    return servers;
+  } catch (err) {
+    console.warn("[live-transport] could not fetch ICE servers; using defaults", err);
+    return undefined;
+  }
+}
+
+/** Test hook. */
+export function __resetLiveTransportCaches(): void {
+  probeCache.clear();
+  iceCache = null;
+}
 
 const RELAY_KEY = "vessel_relay_url";
 const RELAY_CHANGED_EVENT = "vessel:relay-url-changed";
@@ -113,6 +171,10 @@ export type UseLiveTransportArgs = {
    *  caller can mirror the same value into its presence beats and the
    *  transport selection without two separate probes. */
   selfSupportsMoq?: boolean;
+  /** Pubkeys allowed to connect to us (the session roster). Signals from
+   *  anyone else are ignored, so a stranger who learned the session id
+   *  cannot push an offer and receive our camera. Null disables the gate. */
+  acceptedPeers?: string[] | null;
 };
 
 export type UseLiveTransportResult = {
@@ -337,6 +399,7 @@ export function useLiveTransport({
   peers,
   signaling = null,
   selfSupportsMoq,
+  acceptedPeers = null,
 }: UseLiveTransportArgs): UseLiveTransportResult {
   // Capability probes. Stable across the hook's lifetime (browser support
   // doesn't change between renders), so a one-shot lazy initialiser is fine.
@@ -351,14 +414,53 @@ export function useLiveTransport({
     () => (peers ?? []).some((p) => !p.supportsMoq),
     [peers],
   );
+
+  // The relay must be explicitly configured AND answer a probe before the
+  // MoQ path is even considered; a failure mid-call flips the room to the
+  // mesh for the rest of the session (or until the URL changes).
+  const relayUrl = useReactiveRelayUrl();
+  const relayConfigured = relayUrl.startsWith("https://");
+  const [moqFailed, setMoqFailed] = useState(false);
+  useEffect(() => {
+    setMoqFailed(false);
+  }, [relayUrl]);
+  const probeWanted = relayConfigured && moqCapable && !moqFailed;
+  // `ok: null` means the probe is still in flight. While it is, neither
+  // transport starts, so a room never stands up the mesh only to tear it
+  // down a second later when the relay answers.
+  const [probe, setProbe] = useState<{ url: string; ok: boolean | null }>(() => ({
+    url: relayUrl,
+    ok: probeWanted ? cachedProbe(relayUrl) : false,
+  }));
+  useEffect(() => {
+    if (!probeWanted) {
+      setProbe({ url: relayUrl, ok: false });
+      return undefined;
+    }
+    const cached = cachedProbe(relayUrl);
+    setProbe({ url: relayUrl, ok: cached });
+    if (cached !== null) return undefined;
+    let cancelled = false;
+    void probeRelay(relayUrl).then((ok) => {
+      if (!cancelled) setProbe({ url: relayUrl, ok });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relayUrl, probeWanted]);
+  const relayReady = probe.url === relayUrl && probe.ok === true;
+  const relayProbing = probeWanted && (probe.url !== relayUrl || probe.ok === null);
+
   const mode: TransportMode = useMemo(
     () =>
       selectTransport({
-        moqAvailable: moqCapable,
+        moqAvailable: moqCapable && !moqFailed,
         webRtcAvailable: webRtcCapable,
         roomNeedsWebRtc,
+        relayConfigured,
+        relayReady,
       }),
-    [moqCapable, webRtcCapable, roomNeedsWebRtc],
+    [moqCapable, moqFailed, webRtcCapable, roomNeedsWebRtc, relayConfigured, relayReady],
   );
   const isSupported = mode !== "none";
 
@@ -374,8 +476,6 @@ export function useLiveTransport({
   );
   const [remoteReady, setRemoteReady] = useState<Set<string>>(() => new Set());
   const [remoteScreenReady, setRemoteScreenReady] = useState<Set<string>>(() => new Set());
-
-  const relayUrl = useReactiveRelayUrl();
 
   const clientRef = useRef<MoqClient | null>(null);
   const publisherRef = useRef<PublisherHandle | null>(null);
@@ -485,6 +585,9 @@ export function useLiveTransport({
       const wrapped = wrapPlainTrack(track);
       if (isScreen) entry.screenAudioTrack = wrapped;
       else entry.cameraAudioTrack = wrapped;
+      // A participant without a camera (phone, no camera, camera blocked)
+      // is live the moment their audio lands; the tile shows their avatar.
+      markRemoteReady(pubkey, source);
     }
     targetStream.addTrack(track);
     if (isScreen) entry.hasScreen = true;
@@ -607,8 +710,14 @@ export function useLiveTransport({
         setError(null);
       } else if (ev.type === "disconnected") {
         setIsConnected(false);
-        if (ev.error) setError(ev.error);
         clearAllRemotes();
+        if (ev.error) {
+          // Lost the relay mid-call: carry on over the mesh rather than
+          // sitting on a broken preview.
+          console.warn("[live-transport] relay dropped; switching to direct connections", ev.error);
+          probeCache.delete(relayUrl);
+          setMoqFailed(true);
+        }
       } else if (ev.type === "quality") {
         setQuality(ev.quality);
         setRttMs(ev.rttMs);
@@ -646,9 +755,10 @@ export function useLiveTransport({
         await client.connect();
       } catch (err) {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : "Couldn't reach the live preview server.";
-        setError(msg);
+        console.warn("[live-transport] relay connect failed; switching to direct connections", err);
         setIsConnected(false);
+        probeCache.delete(relayUrl);
+        setMoqFailed(true);
       }
     })();
 
@@ -761,10 +871,26 @@ export function useLiveTransport({
   }, [peers]);
   const peerPubkeysKey = peerPubkeys.join(","); // stable string for deps
 
+  // Latest values the asynchronous mesh set-up applies once the mesh
+  // exists (ICE servers arrive from the API first).
+  const acceptedRef = useRef<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    acceptedRef.current = acceptedPeers ? new Set(acceptedPeers) : null;
+  }, [acceptedPeers]);
+  const latestPeersRef = useRef<string[]>(peerPubkeys);
+  latestPeersRef.current = peerPubkeys;
+  const latestCameraRef = useRef<MediaStream | null>(localStream);
+  latestCameraRef.current = localStream;
+  const latestScreenRef = useRef<MediaStream | null>(screenStream);
+  latestScreenRef.current = screenStream;
+
   useEffect(() => {
     if (!enabled || mode !== "webrtc" || !sessionId || !selfPubkey) return;
+    // A configured relay is still being probed: hold off rather than
+    // start the mesh and swap a second later.
+    if (relayProbing) return;
     if (!signaling) {
-      setError("Live video isn't available in this browser.");
+      setError("Live video isn't connected yet.");
       return;
     }
     setError(null);
@@ -775,10 +901,20 @@ export function useLiveTransport({
     // microtask queue), and an `attachRtcTrack` after `clearAllRemotes`
     // would resurrect a stream the rest of the hook has just dropped.
     let cancelled = false;
-    const mesh = new WebRtcMesh({ selfPubkey, signaling });
-    meshRef.current = mesh;
+    let mesh: WebRtcMesh | null = null;
+    let off: (() => void) | null = null;
+    void (async () => {
+      const iceServers = await fetchIceServers();
+      if (cancelled) return;
+      mesh = new WebRtcMesh({
+        selfPubkey,
+        signaling,
+        ...(iceServers ? { iceServers } : {}),
+        acceptedPeers: () => acceptedRef.current,
+      });
+      meshRef.current = mesh;
 
-    const off = mesh.on((ev) => {
+      off = mesh.on((ev) => {
       if (cancelled) return;
       if (ev.type === "connected") {
         setIsConnected(true);
@@ -794,13 +930,20 @@ export function useLiveTransport({
       } else if (ev.type === "track-removed") {
         detachRtcTrack(ev.pubkey, ev.source, ev.kind, ev.trackId);
       }
-    });
+      });
+
+      // Anything the roster and stream effects pushed while we were
+      // waiting for ICE servers lands now.
+      mesh.setPeers(latestPeersRef.current);
+      mesh.setLocalCameraStream(latestCameraRef.current);
+      mesh.setLocalScreenStream(latestScreenRef.current);
+    })();
 
     return () => {
       cancelled = true;
-      off();
+      off?.();
       try {
-        mesh.close();
+        mesh?.close();
       } catch {
         // ignore
       }
@@ -810,7 +953,7 @@ export function useLiveTransport({
       setQuality("unknown");
       setRttMs(null);
     };
-  }, [enabled, mode, sessionId, selfPubkey, signaling]);
+  }, [enabled, mode, sessionId, selfPubkey, signaling, relayProbing]);
 
   // Push roster updates into the live mesh (no recreate).
   useEffect(() => {

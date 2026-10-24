@@ -2,12 +2,36 @@ import { describe, it, expect } from "vitest";
 import { selectTransport } from "./transport-select";
 
 describe("selectTransport", () => {
-  it("picks moq when only moq is needed and the room is all-Chromium", () => {
+  it("defaults to webrtc even in an all-Chromium room when no relay is configured", () => {
     expect(
       selectTransport({
         moqAvailable: true,
         webRtcAvailable: true,
         roomNeedsWebRtc: false,
+      }),
+    ).toBe("webrtc");
+  });
+
+  it("stays on webrtc when a relay is configured but has not answered a probe", () => {
+    expect(
+      selectTransport({
+        moqAvailable: true,
+        webRtcAvailable: true,
+        roomNeedsWebRtc: false,
+        relayConfigured: true,
+        relayReady: false,
+      }),
+    ).toBe("webrtc");
+  });
+
+  it("picks moq only with a configured, probed relay and an all-capable room", () => {
+    expect(
+      selectTransport({
+        moqAvailable: true,
+        webRtcAvailable: true,
+        roomNeedsWebRtc: false,
+        relayConfigured: true,
+        relayReady: true,
       }),
     ).toBe("moq");
   });
@@ -18,16 +42,20 @@ describe("selectTransport", () => {
         moqAvailable: false,
         webRtcAvailable: true,
         roomNeedsWebRtc: false,
+        relayConfigured: true,
+        relayReady: true,
       }),
     ).toBe("webrtc");
   });
 
-  it("falls back to webrtc in a mixed room even when local can do moq", () => {
+  it("falls back to webrtc in a mixed room even with a working relay", () => {
     expect(
       selectTransport({
         moqAvailable: true,
         webRtcAvailable: true,
         roomNeedsWebRtc: true,
+        relayConfigured: true,
+        relayReady: true,
       }),
     ).toBe("webrtc");
   });
@@ -42,17 +70,25 @@ describe("selectTransport", () => {
     ).toBe("none");
   });
 
-  it("keeps moq if local lacks webrtc even when room signaled it (defensive)", () => {
-    // The defensive branch: every browser shipping WebTransport in
-    // practice also ships WebRTC, but if a user lands on something
-    // exotic, we'd rather keep publishing on MoQ for the Chromium peers
-    // than disconnect entirely.
+  it("keeps moq if local lacks webrtc and a relay works (defensive)", () => {
     expect(
       selectTransport({
         moqAvailable: true,
         webRtcAvailable: false,
         roomNeedsWebRtc: true,
+        relayConfigured: true,
+        relayReady: true,
       }),
     ).toBe("moq");
+  });
+
+  it("returns 'none' if local lacks webrtc and no relay is usable", () => {
+    expect(
+      selectTransport({
+        moqAvailable: true,
+        webRtcAvailable: false,
+        roomNeedsWebRtc: false,
+      }),
+    ).toBe("none");
   });
 });
