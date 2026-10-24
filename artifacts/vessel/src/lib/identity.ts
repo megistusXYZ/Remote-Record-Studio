@@ -75,13 +75,116 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-function getDeviceFingerprint(): string {
-  return [
-    navigator.userAgent,
-    `${screen.width}x${screen.height}`,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    navigator.language,
-  ].join("|");
+/**
+ * Key-at-rest material for the stored identity.
+ *
+ * Until October 2026 the wrapping passphrase mixed in a "device fingerprint"
+ * (user agent, screen size, time zone, language). Every one of those changes
+ * in ordinary life: a browser update, a window resize, rotating a phone,
+ * plugging in a monitor, travelling. Each change made the stored key
+ * undecryptable and signed the person out of their studio, and the
+ * fingerprint added no protection because everything in it is readable by
+ * the same scripts that can read the stored blob.
+ *
+ * The passphrase now mixes in a random per-browser secret kept in IndexedDB
+ * (falling back to localStorage where IndexedDB is unavailable). It never
+ * changes on its own, so the identity survives everything above. Blobs
+ * written under the old scheme carry no `kdf` marker; {@link decryptBytes}
+ * still opens them with the fingerprint, including the rotated-screen
+ * variant, and callers re-wrap them under the new scheme on first load.
+ */
+const DEVICE_SECRET_DB = "vessel-device";
+const DEVICE_SECRET_STORE = "secrets";
+const DEVICE_SECRET_ID = "wrap-v1";
+const DEVICE_SECRET_FALLBACK_KEY = "vessel_device_secret";
+const KDF_DEVICE_V1 = "device-v1";
+
+let deviceSecretPromise: Promise<string> | null = null;
+
+function openDeviceSecretDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DEVICE_SECRET_DB, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(DEVICE_SECRET_STORE)) {
+        req.result.createObjectStore(DEVICE_SECRET_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error ?? new Error("indexedDB open failed"));
+    req.onblocked = () => reject(new Error("indexedDB open blocked"));
+  });
+}
+
+function idbRequest<T>(req: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error ?? new Error("indexedDB request failed"));
+  });
+}
+
+async function readOrCreateDeviceSecretIdb(): Promise<string> {
+  const db = await openDeviceSecretDb();
+  try {
+    const existing = await idbRequest(
+      db.transaction(DEVICE_SECRET_STORE, "readonly").objectStore(DEVICE_SECRET_STORE).get(DEVICE_SECRET_ID),
+    );
+    if (typeof existing === "string" && existing.length >= 32) return existing;
+    const fresh = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+    const tx = db.transaction(DEVICE_SECRET_STORE, "readwrite");
+    const store = tx.objectStore(DEVICE_SECRET_STORE);
+    // Another tab may have written one between our read and this write;
+    // whoever wrote first wins so both tabs derive the same key.
+    const raced = await idbRequest(store.get(DEVICE_SECRET_ID));
+    if (typeof raced === "string" && raced.length >= 32) return raced;
+    await idbRequest(store.put(fresh, DEVICE_SECRET_ID));
+    return fresh;
+  } finally {
+    db.close();
+  }
+}
+
+function readOrCreateDeviceSecretLocal(): string {
+  const existing = localStorage.getItem(DEVICE_SECRET_FALLBACK_KEY);
+  if (existing && existing.length >= 32) return existing;
+  const fresh = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+  localStorage.setItem(DEVICE_SECRET_FALLBACK_KEY, fresh);
+  return fresh;
+}
+
+/** The per-browser secret, created on first use. Memoised for the page. */
+export function getDeviceSecret(): Promise<string> {
+  if (!deviceSecretPromise) {
+    deviceSecretPromise = (async () => {
+      if (typeof indexedDB !== "undefined") {
+        try {
+          return await readOrCreateDeviceSecretIdb();
+        } catch (err) {
+          console.warn("Device secret: IndexedDB unavailable, using localStorage", err);
+        }
+      }
+      return readOrCreateDeviceSecretLocal();
+    })().catch((err) => {
+      deviceSecretPromise = null;
+      throw err;
+    });
+  }
+  return deviceSecretPromise;
+}
+
+/** Test hook: forget the memoised secret so the next call re-reads storage. */
+export function __resetDeviceSecretCache(): void {
+  deviceSecretPromise = null;
+}
+
+/** The pre-October-2026 passphrase suffixes, most likely first. */
+function legacyDeviceFingerprints(): string[] {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const base = (size: string) => [navigator.userAgent, size, tz, navigator.language].join("|");
+  const w = screen.width;
+  const h = screen.height;
+  const sizes = [`${w}x${h}`];
+  if (w !== h) sizes.push(`${h}x${w}`); // the phone was rotated since the key was stored
+  return sizes.map(base);
 }
 
 function deriveAvatarColor(pubkey: string): string {
@@ -111,6 +214,15 @@ interface EncryptedBlob {
   iv: string;
   salt: string;
   ciphertext: string;
+  /** Which key-at-rest scheme wrapped this blob. Absent on blobs written
+   *  under the old device-fingerprint scheme. */
+  kdf?: typeof KDF_DEVICE_V1;
+}
+
+/** True when a stored blob still uses the fingerprint scheme and should be
+ *  re-wrapped on the next successful open. */
+function needsRewrap(blob: EncryptedBlob): boolean {
+  return blob.kdf !== KDF_DEVICE_V1;
 }
 
 async function encryptBytes(
@@ -119,7 +231,7 @@ async function encryptBytes(
 ): Promise<EncryptedBlob> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const passphrase = passphraseSeed + "::" + getDeviceFingerprint();
+  const passphrase = passphraseSeed + "::" + (await getDeviceSecret());
   const key = await deriveKey(passphrase, salt);
   const ct = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: iv as BufferSource },
@@ -127,6 +239,7 @@ async function encryptBytes(
     data as BufferSource,
   );
   return {
+    kdf: KDF_DEVICE_V1,
     iv: bytesToBase64(iv),
     salt: bytesToBase64(salt),
     ciphertext: bytesToBase64(new Uint8Array(ct)),
@@ -137,14 +250,23 @@ async function decryptBytes(blob: EncryptedBlob, passphraseSeed: string): Promis
   const iv = base64ToBytes(blob.iv);
   const salt = base64ToBytes(blob.salt);
   const ciphertext = base64ToBytes(blob.ciphertext);
-  const passphrase = passphraseSeed + "::" + getDeviceFingerprint();
-  const key = await deriveKey(passphrase, salt);
-  const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv as BufferSource },
-    key,
-    ciphertext as BufferSource,
-  );
-  return new Uint8Array(pt);
+  const suffixes =
+    blob.kdf === KDF_DEVICE_V1 ? [await getDeviceSecret()] : legacyDeviceFingerprints();
+  let lastError: unknown = null;
+  for (const suffix of suffixes) {
+    try {
+      const key = await deriveKey(passphraseSeed + "::" + suffix, salt);
+      const pt = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: iv as BufferSource },
+        key,
+        ciphertext as BufferSource,
+      );
+      return new Uint8Array(pt);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError ?? new Error("Could not open the stored key");
 }
 
 interface StoredLocalV3 {
@@ -535,6 +657,12 @@ export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
 async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIdentity | null> {
   if (stored.signerType === "local") {
     const secretKey = await decryptBytes(stored.encrypted, stored.displayName);
+    if (needsRewrap(stored.encrypted)) {
+      // Opened under the old fingerprint scheme: re-wrap now so the next
+      // resize, rotation or browser update cannot sign the person out.
+      const encrypted = await encryptBytes(secretKey, stored.displayName);
+      persist({ ...stored, encrypted }, isGuest);
+    }
     return buildLocalIdentity(stored.displayName, secretKey, isGuest);
   }
   if (stored.signerType === "extension") {
@@ -570,6 +698,10 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
   if (stored.signerType === "remote") {
     ensureNostrConnectWired();
     const clientSecretKey = await decryptBytes(stored.clientSecret, stored.displayName);
+    if (needsRewrap(stored.clientSecret)) {
+      const clientSecret = await encryptBytes(clientSecretKey, stored.displayName);
+      persist({ ...stored, clientSecret }, isGuest);
+    }
     const clientSigner = new PrivateKeySigner(clientSecretKey);
     const signer = new NostrConnectSigner({
       relays: stored.relays,
