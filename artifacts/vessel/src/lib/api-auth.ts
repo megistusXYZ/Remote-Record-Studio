@@ -22,7 +22,7 @@ interface SignedAuthEvent extends UnsignedAuthEvent {
   sig: string;
 }
 
-function bytesFromUtf8(text: string): Uint8Array {
+function bytesFromUtf8(text: string): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(text);
 }
 
@@ -42,18 +42,32 @@ function base64FromBytes(bytes: Uint8Array): string {
  * and react-query's retries will pick up the auth header on the next attempt
  * once identity is available.
  */
-const provider: AuthHeaderProvider = async ({ method, url }) => {
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytesFromUtf8(text));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+const provider: AuthHeaderProvider = async ({ method, url, body }) => {
   const identity = useIdentityStore.getState().identity;
   if (!identity) return null;
+
+  const tags: string[][] = [
+    ["u", url],
+    ["method", method.toUpperCase()],
+  ];
+  // Bind the signature to the exact bytes we send (NIP-98 `payload`), so a
+  // captured header cannot be replayed with a different body.
+  if (typeof body === "string" && body.length > 0) {
+    tags.push(["payload", await sha256Hex(body)]);
+  }
 
   const unsigned: UnsignedAuthEvent = {
     kind: AUTH_EVENT_KIND,
     created_at: Math.floor(Date.now() / 1000),
     content: "",
-    tags: [
-      ["u", url],
-      ["method", method.toUpperCase()],
-    ],
+    tags,
   };
 
   let signed: SignedAuthEvent;

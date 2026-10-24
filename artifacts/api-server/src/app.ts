@@ -68,8 +68,13 @@ app.use("/api", publicIpLimiter());
 // Tight body-size limit per parser. None of our current endpoints accept
 // anything close to 16 KB; the largest signed event today is a few KB.
 // `limit` rejects oversized bodies with a 413 before parsing.
-app.use(express.json({ limit: "16kb" }));
-app.use(express.urlencoded({ extended: true, limit: "16kb" }));
+// `verify` keeps the raw bytes so signed requests can be bound to their
+// body (see require-signed-request.ts). Both parsers share the hook.
+const keepRawBody = (req: express.Request, _res: express.Response, buf: Buffer) => {
+  (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+};
+app.use(express.json({ limit: "16kb", verify: keepRawBody }));
+app.use(express.urlencoded({ extended: true, limit: "16kb", verify: keepRawBody }));
 
 app.use("/api", router);
 

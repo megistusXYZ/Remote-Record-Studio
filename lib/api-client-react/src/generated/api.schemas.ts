@@ -61,8 +61,20 @@ export interface Session {
 }
 
 export interface CreateSessionBody {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
   title: string;
+  /**
+   * @maxLength 64
+   * @pattern ^[0-9a-f]{64}$
+   */
   hostPubkey: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
   hostName: string;
   /**
    * Optional room size cap chosen by the host. Defaults to 8 if omitted.
@@ -83,6 +95,10 @@ export const UpdateSessionBodyStatus = {
 
 export interface UpdateSessionBody {
   status?: UpdateSessionBodyStatus;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
   title?: string;
   /**
    * New room size cap. Server clamps to be no less than the current participant count.
@@ -119,7 +135,15 @@ export interface RoomFullError {
 }
 
 export interface JoinSessionBody {
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
   guestName: string;
+  /**
+   * @maxLength 64
+   * @pattern ^[0-9a-f]{64}$
+   */
   guestPubkey: string;
 }
 
@@ -130,6 +154,10 @@ can only mark themselves as left.
 
  */
 export interface LeaveSessionBody {
+  /**
+   * @maxLength 64
+   * @pattern ^[0-9a-f]{64}$
+   */
   pubkey: string;
 }
 
@@ -180,26 +208,50 @@ export const CreateRecordingBodyStatus = {
 } as const;
 
 export interface CreateRecordingBody {
+  /** @maxLength 128 */
   sessionId?: string | null;
+  /** @maxLength 200 */
   sessionTitle?: string | null;
+  /**
+   * @maxLength 64
+   * @pattern ^[0-9a-f]{64}$
+   */
   ownerPubkey: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
   participantName: string;
+  /** @minimum 0 */
   durationSeconds: number;
+  /** @minimum 0 */
   sizeBytes: number;
+  /** @maxLength 100 */
   mimeType: string;
+  /** @maxLength 64 */
   blobHash?: string | null;
+  /** @maxLength 2048 */
   blobUrl?: string | null;
+  /** @maxLength 64 */
   audioBlobHash?: string | null;
+  /** @maxLength 2048 */
   audioBlobUrl?: string | null;
   audioSizeBytes?: number | null;
+  /** @maxLength 100 */
   audioMimeType?: string | null;
+  /** @maxLength 64 */
   videoBlobHash?: string | null;
+  /** @maxLength 2048 */
   videoBlobUrl?: string | null;
   videoSizeBytes?: number | null;
+  /** @maxLength 100 */
   videoMimeType?: string | null;
+  /** @maxLength 64 */
   screenBlobHash?: string | null;
+  /** @maxLength 2048 */
   screenBlobUrl?: string | null;
   screenSizeBytes?: number | null;
+  /** @maxLength 100 */
   screenMimeType?: string | null;
   screenDurationSeconds?: number | null;
   status: CreateRecordingBodyStatus;

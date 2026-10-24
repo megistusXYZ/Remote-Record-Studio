@@ -13,7 +13,10 @@ import {
 
 /** Replaceable kind for personal-archive pointers (latest wins on
  *  `["d", sessionId]`). */
-export const KIND_PERSONAL_ARCHIVE_POINTER = 27006;
+// 27009: its own ephemeral kind. It used to share 27006 with the
+// signaling LEAVE event, so a delivery pointer read as "X left the session"
+// in every peer's roster.
+export const KIND_PERSONAL_ARCHIVE_POINTER = 27009;
 
 /** How long the host listens for pointer events after the call ends. */
 export const POINTER_LISTEN_WINDOW_MS = 60_000;

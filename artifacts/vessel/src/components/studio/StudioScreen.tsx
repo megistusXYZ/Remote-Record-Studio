@@ -68,6 +68,8 @@ export type StudioScreenProps = {
   onViewVault: () => void;
   onStartNewSession: () => void;
   onEnterEndingFlow?: () => void;
+  /** Host only: mark the session ended on the server right away, without navigating. */
+  onEndSession?: () => Promise<void>;
   isStartingRecording?: boolean;
   isStoppingRecording?: boolean;
 };
@@ -91,6 +93,7 @@ export function StudioScreen({
   onViewVault,
   onStartNewSession,
   onEnterEndingFlow,
+  onEndSession,
   isStartingRecording,
   isStoppingRecording,
 }: StudioScreenProps) {
@@ -242,6 +245,7 @@ export function StudioScreen({
 
   const callSignal = useCallSignal({
     sessionId: session.id,
+    inviteCode: session.inviteCode,
     identity,
     myDisplayName: displayName || "You",
     myMicEnabled: micEnabled,
@@ -1011,6 +1015,12 @@ export function StudioScreen({
     if (isHost) {
       onEnterEndingFlow?.();
       setShowSessionComplete(true);
+      // End the session for everyone now. Guests stop recording when they
+      // see the status change; before this, a host who closed the tab after
+      // Stop left the room "live" and guests recording indefinitely.
+      void onEndSession?.().catch((err) => {
+        console.error("Failed to end session", err);
+      });
       try {
         await recording.stop();
       } catch (err) {
