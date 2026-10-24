@@ -7,6 +7,7 @@ import {
 } from "../lib/recording-finalize";
 import {
   appendRecordingChunk,
+  loadRecordingChunkRows,
   putInProgressRecording,
   requestPersistentStorage,
   updateInProgressRecording,
@@ -171,8 +172,9 @@ export function useRecording(): UseRecordingResult {
           s: RecordingStream,
           index: number,
           blob: Blob,
+          position?: number,
         ) => {
-          await appendRecordingChunk(recordingId, s, index, blob);
+          await appendRecordingChunk(recordingId, s, index, blob, position);
           chunkCountsRef.current[s] = Math.max(
             chunkCountsRef.current[s],
             index + 1,
@@ -207,7 +209,17 @@ export function useRecording(): UseRecordingResult {
           }),
         );
 
-        rec.start({ stream, timesliceMs: TIMESLICE_MS, persistChunk });
+        rec.start({
+          stream,
+          timesliceMs: TIMESLICE_MS,
+          persistChunk,
+          loadPersistedChunks: async (s) =>
+            (await loadRecordingChunkRows(recordingId, s)).map((row) => ({
+              index: row.index,
+              position: row.position,
+              blob: row.blob,
+            })),
+        });
 
         // Record the real start and the containers in use.
         const startTime = rec.getStartTime();

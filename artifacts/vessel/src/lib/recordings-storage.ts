@@ -81,7 +81,7 @@ export type FinalOutcome = {
   video: FinalOutcomeStream | null;
 };
 
-type ChunkRow = {
+export type ChunkRow = {
   key: string;
   recordingId: string;
   stream: RecordingStream;
@@ -89,6 +89,11 @@ type ChunkRow = {
   blob: Blob;
   sizeBytes: number;
   createdAtMs: number;
+  /**
+   * Byte offset of this chunk in the finished file, for writers that patch
+   * earlier bytes (the WAV header sizes). Absent for plain appends.
+   */
+  position?: number;
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -208,6 +213,7 @@ export async function appendRecordingChunk(
   stream: RecordingStream,
   index: number,
   blob: Blob,
+  position?: number,
 ): Promise<void> {
   const row: ChunkRow = {
     key: chunkKey(recordingId, stream, index),
@@ -217,8 +223,21 @@ export async function appendRecordingChunk(
     blob,
     sizeBytes: blob.size,
     createdAtMs: Date.now(),
+    ...(position !== undefined ? { position } : {}),
   };
   await withStore(STORE_CHUNKS, "readwrite", (s) => s.put(row));
+}
+
+/** All slice rows of one stream, in index order, with their positions. */
+export async function loadRecordingChunkRows(
+  recordingId: string,
+  stream: RecordingStream,
+): Promise<ChunkRow[]> {
+  const rows = await withStore<ChunkRow[]>(STORE_CHUNKS, "readonly", (s) =>
+    s.getAll(streamKeyRange(recordingId, stream)),
+  );
+  rows.sort((a, b) => a.index - b.index);
+  return rows;
 }
 
 /** All slices of one stream, in index order. */

@@ -1,4 +1,10 @@
 import type { RecordingStream } from "./recordings-storage";
+import type { WavChunkPart } from "./wav-assemble";
+import {
+  WAV_MIME_TYPE,
+  WavMasterRecorder,
+  type WavRecorderLike,
+} from "./wav-recorder";
 
 export type RecorderEvent =
   | { type: "recording-started"; startedAt: number }
@@ -41,7 +47,11 @@ export type RecorderStartTime = {
   startedAtPerfMs: number;
 };
 
-export type PersistStats = { captured: number; persisted: number; failed: number };
+export type PersistStats = {
+  captured: number;
+  persisted: number;
+  failed: number;
+};
 
 const DEFAULT_MIME_TYPES = [
   "video/webm;codecs=vp9,opus",
@@ -51,7 +61,8 @@ const DEFAULT_MIME_TYPES = [
 ];
 
 export function pickSupportedMimeType(preferred?: string[]): string {
-  const candidates = preferred && preferred.length ? preferred : DEFAULT_MIME_TYPES;
+  const candidates =
+    preferred && preferred.length ? preferred : DEFAULT_MIME_TYPES;
   if (typeof MediaRecorder === "undefined") return "";
   for (const m of candidates) {
     if (MediaRecorder.isTypeSupported(m)) return m;
@@ -60,7 +71,10 @@ export function pickSupportedMimeType(preferred?: string[]): string {
 }
 
 function nowPerfMs(): number {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+  if (
+    typeof performance !== "undefined" &&
+    typeof performance.now === "function"
+  ) {
     return (performance.timeOrigin ?? 0) + performance.now();
   }
   return Date.now();
@@ -90,7 +104,9 @@ export class ChunkedRecorder {
   private persistStats: PersistStats = { captured: 0, persisted: 0, failed: 0 };
 
   static isSupported(): boolean {
-    return typeof window !== "undefined" && typeof MediaRecorder !== "undefined";
+    return (
+      typeof window !== "undefined" && typeof MediaRecorder !== "undefined"
+    );
   }
 
   on(listener: RecorderListener): () => void {
@@ -115,7 +131,12 @@ export class ChunkedRecorder {
     if (!ChunkedRecorder.isSupported()) {
       throw new Error("Recording is not supported in this browser.");
     }
-    const { stream, timesliceMs = 5000, preferredMimeTypes, persistChunk } = options;
+    const {
+      stream,
+      timesliceMs = 5000,
+      preferredMimeTypes,
+      persistChunk,
+    } = options;
     const mimeType = pickSupportedMimeType(preferredMimeTypes);
     this.mimeType = mimeType;
     this.chunks = [];
@@ -134,7 +155,11 @@ export class ChunkedRecorder {
         this.chunks.push(ev.data);
         const idx = this.chunkIndex++;
         this.persistStats.captured += 1;
-        this.emit({ type: "chunk-captured", index: idx, sizeBytes: ev.data.size });
+        this.emit({
+          type: "chunk-captured",
+          index: idx,
+          sizeBytes: ev.data.size,
+        });
         this.offerToStorage(idx, ev.data);
       }
     };
@@ -144,7 +169,9 @@ export class ChunkedRecorder {
     };
 
     this.mediaRecorder.onerror = (ev) => {
-      const err = (ev as unknown as { error?: Error }).error ?? new Error("Recording error");
+      const err =
+        (ev as unknown as { error?: Error }).error ??
+        new Error("Recording error");
       this.rejectStop?.(err);
     };
 
@@ -177,7 +204,10 @@ export class ChunkedRecorder {
     const finalMime = this.mimeType || (this.chunks[0]?.type ?? "video/webm");
     const blob = new Blob(this.chunks, { type: finalMime });
     this.finalBlob = blob;
-    const durationSeconds = Math.max(1, Math.round((Date.now() - this.startedAtMs) / 1000));
+    const durationSeconds = Math.max(
+      1,
+      Math.round((Date.now() - this.startedAtMs) / 1000),
+    );
     this.status = "stopped";
     this.emit({
       type: "recording-complete",
@@ -216,7 +246,8 @@ export class ChunkedRecorder {
   flush(): void {
     if (this.status !== "recording" || !this.mediaRecorder) return;
     try {
-      if (this.mediaRecorder.state === "recording") this.mediaRecorder.requestData();
+      if (this.mediaRecorder.state === "recording")
+        this.mediaRecorder.requestData();
     } catch {
       // Some browsers throw if a slice is already being delivered; harmless.
     }
@@ -244,7 +275,10 @@ export class ChunkedRecorder {
   }
 
   getStartTime(): RecorderStartTime {
-    return { startedAtMs: this.startedAtMs, startedAtPerfMs: this.startedAtPerfMs };
+    return {
+      startedAtMs: this.startedAtMs,
+      startedAtPerfMs: this.startedAtPerfMs,
+    };
   }
 
   getPersistStats(): PersistStats {
@@ -257,26 +291,24 @@ export class ChunkedRecorder {
   }
 }
 
-// Dual-stream recorder: combined V+A + audio-only sibling + video-only
-// sibling, each on its own MediaRecorder. Sibling failures never abort
-// the combined path; no post-call transcoding required.
+// Two outputs per participant: the combined video+audio file from
+// MediaRecorder, and an uncompressed WAV master of the microphone written by
+// `WavMasterRecorder`. A failure in the master never affects the combined
+// path. (Earlier versions ran a third MediaRecorder for video-only; it is
+// gone, which removes one encode and one upload per participant.)
 
 export type DualRecorderResult = {
   /** Combined video + audio blob. May be audio-only if no camera was on. */
   combinedBlob: Blob;
   combinedMimeType: string;
   combinedSizeBytes: number;
-  /** Audio-only sibling blob. Null when no mic track was on, when the
-   *  audio-only recorder failed to initialize, or when the audio recorder
-   *  errored mid-call. The combined blob is always returned regardless. */
+  /** WAV master of the microphone. Null when no mic track was on, when the
+   *  master failed to start, or when nothing could be assembled. The
+   *  combined blob is always returned regardless. */
   audioBlob: Blob | null;
   audioMimeType: string | null;
   audioSizeBytes: number;
-  /** Video-only sibling blob. A real video stream WITHOUT audio bytes —
-   *  recorded by a third MediaRecorder fed only the camera tracks. Null
-   *  when there's no camera, when the video-only recorder failed, or when
-   *  the browser doesn't support a video-only mime type. The combined
-   *  blob is unaffected either way. */
+  /** No longer produced; kept so older call sites type-check. Always null. */
   videoOnlyBlob: Blob | null;
   videoOnlyMimeType: string | null;
   videoOnlySizeBytes: number;
@@ -290,50 +322,52 @@ export type DualRecorderResult = {
   combinedChunkCount: number;
   audioChunkCount: number;
   videoOnlyChunkCount: number;
-  /** True when the audio-only recorder ran for the full duration. False
-   *  when it either never started or errored before stop(). */
+  /** True when the WAV master ran and produced a file. */
   audioRecordingOk: boolean;
-  /** True when the video-only recorder ran for the full duration. */
+  /** Always false now; see `videoOnlyBlob`. */
   videoRecordingOk: boolean;
   /** Local persistence totals across all streams. */
   persistStats: PersistStats;
 };
 
-const AUDIO_MIME_PREFERENCES = [
-  "audio/webm;codecs=opus",
-  "audio/webm",
-];
+const AUDIO_MIME_PREFERENCES = ["audio/webm;codecs=opus", "audio/webm"];
 
-// Try no-audio codec strings first so the container holds video bytes only.
+// Kept for the test helper that inspects preference lists; the video-only
+// recorder itself no longer exists.
 const VIDEO_ONLY_MIME_PREFERENCES = [
   "video/webm;codecs=vp9",
   "video/webm;codecs=vp8",
   "video/webm",
 ];
 
-/** Per-stream durable sink. */
+/** Per-stream durable sink. `position` is set for writers that patch earlier
+ *  bytes (the WAV header); plain appends leave it undefined. */
 export type PersistStreamChunk = (
   stream: RecordingStream,
   index: number,
   blob: Blob,
+  position?: number,
 ) => Promise<void>;
 
 export type DualRecorderOptions = Omit<RecorderOptions, "persistChunk"> & {
   persistChunk?: PersistStreamChunk;
+  /** Returns the chunks the sink stored for a stream, used to rebuild the WAV at stop. */
+  loadPersistedChunks?: (stream: RecordingStream) => Promise<WavChunkPart[]>;
+  /** Test seam: supply a fake WAV recorder. */
+  createWavRecorder?: () => WavRecorderLike;
 };
 
-/** Combined recorder + best-effort audio-only and video-only siblings.
- *  Top-level listeners forward only the combined stream; sibling listeners
- *  use `onAudio` / `onVideoOnly`. */
+/** Combined recorder plus a best-effort WAV master. Top-level listeners
+ *  forward only the combined stream. */
 export class DualChunkedRecorder {
   private readonly combined = new ChunkedRecorder();
-  private audioOnly: ChunkedRecorder | null = null;
-  private videoOnly: ChunkedRecorder | null = null;
-  private audioStream: MediaStream | null = null;
-  private videoStream: MediaStream | null = null;
+  private audioMaster: WavRecorderLike | null = null;
+  private audioStartPromise: Promise<void> | null = null;
+  private loadPersistedChunks:
+    | DualRecorderOptions["loadPersistedChunks"]
+    | null = null;
   private hasVideo = false;
   private audioStarted = false;
-  private videoStarted = false;
 
   static isSupported(): boolean {
     return ChunkedRecorder.isSupported();
@@ -344,39 +378,22 @@ export class DualChunkedRecorder {
     return this.combined.on(listener);
   }
 
-  /** Subscribe to the audio-only recorder's event stream. Safe to call
-   *  before start; the listener is buffered and attached when (and if) the
-   *  audio recorder initializes successfully. */
-  onAudio(listener: RecorderListener): () => void {
-    if (this.audioOnly) return this.audioOnly.on(listener);
-    this.pendingAudioListeners.push(listener);
-    return () => {
-      const i = this.pendingAudioListeners.indexOf(listener);
-      if (i >= 0) this.pendingAudioListeners.splice(i, 1);
-    };
+  /** @deprecated The WAV master has no slice events; kept for call sites. */
+  onAudio(_listener: RecorderListener): () => void {
+    return () => {};
   }
-  private pendingAudioListeners: RecorderListener[] = [];
 
-  /** Subscribe to the video-only recorder's event stream. Same buffering
-   *  semantics as `onAudio`. */
-  onVideoOnly(listener: RecorderListener): () => void {
-    if (this.videoOnly) return this.videoOnly.on(listener);
-    this.pendingVideoListeners.push(listener);
-    return () => {
-      const i = this.pendingVideoListeners.indexOf(listener);
-      if (i >= 0) this.pendingVideoListeners.splice(i, 1);
-    };
+  /** @deprecated No video-only recorder exists any more. */
+  onVideoOnly(_listener: RecorderListener): () => void {
+    return () => {};
   }
-  private pendingVideoListeners: RecorderListener[] = [];
 
   start(options: DualRecorderOptions): void {
     const { stream, persistChunk } = options;
     const videoTracks = stream.getVideoTracks();
     const audioTracks = stream.getAudioTracks();
     this.hasVideo = videoTracks.length > 0;
-
-    const sinkFor = (s: RecordingStream): PersistChunk | undefined =>
-      persistChunk ? (index, blob) => persistChunk(s, index, blob) : undefined;
+    this.loadPersistedChunks = options.loadPersistedChunks ?? null;
 
     // Combined recorder — required. An audio-only stream gets an audio
     // container so downstream code can tell the two apart by mime type.
@@ -384,95 +401,65 @@ export class DualChunkedRecorder {
       stream,
       timesliceMs: options.timesliceMs,
       preferredMimeTypes:
-        options.preferredMimeTypes ?? (this.hasVideo ? undefined : AUDIO_MIME_PREFERENCES),
-      persistChunk: sinkFor("combined"),
+        options.preferredMimeTypes ??
+        (this.hasVideo ? undefined : AUDIO_MIME_PREFERENCES),
+      persistChunk: persistChunk
+        ? (index, blob) => persistChunk("combined", index, blob)
+        : undefined,
     });
 
-    // Audio-only sibling (best-effort).
-    if (audioTracks.length > 0) {
-      try {
-        const audioStream = new MediaStream(audioTracks);
-        const rec = new ChunkedRecorder();
-        for (const l of this.pendingAudioListeners) rec.on(l);
-        this.pendingAudioListeners = [];
-        rec.start({
-          stream: audioStream,
-          timesliceMs: options.timesliceMs,
-          preferredMimeTypes: AUDIO_MIME_PREFERENCES,
-          persistChunk: sinkFor("audio"),
+    // WAV master (best-effort, starts asynchronously; never blocks combined).
+    const micTrack = audioTracks[0];
+    if (micTrack) {
+      const master = options.createWavRecorder
+        ? options.createWavRecorder()
+        : new WavMasterRecorder();
+      this.audioMaster = master;
+      const sink = persistChunk
+        ? (index: number, position: number, blob: Blob) =>
+            persistChunk("audio", index, blob, position)
+        : undefined;
+      this.audioStartPromise = master
+        .start(micTrack, sink)
+        .then(() => {
+          this.audioStarted = true;
+        })
+        .catch((err: unknown) => {
+          console.warn(
+            "WAV master failed to start; continuing with the combined file only.",
+            err,
+          );
+          this.audioMaster = null;
+          this.audioStarted = false;
         });
-        this.audioOnly = rec;
-        this.audioStream = audioStream;
-        this.audioStarted = true;
-      } catch (err) {
-        console.warn("Audio-only recorder failed to start; continuing with combined only.", err);
-        this.audioOnly = null;
-        this.audioStream = null;
-        this.audioStarted = false;
-      }
-    }
-
-    // Video-only sibling (best-effort).
-    if (videoTracks.length > 0) {
-      try {
-        const videoStream = new MediaStream(videoTracks);
-        const rec = new ChunkedRecorder();
-        for (const l of this.pendingVideoListeners) rec.on(l);
-        this.pendingVideoListeners = [];
-        rec.start({
-          stream: videoStream,
-          timesliceMs: options.timesliceMs,
-          preferredMimeTypes: VIDEO_ONLY_MIME_PREFERENCES,
-          persistChunk: sinkFor("video"),
-        });
-        this.videoOnly = rec;
-        this.videoStream = videoStream;
-        this.videoStarted = true;
-      } catch (err) {
-        console.warn("Video-only recorder failed to start; continuing without it.", err);
-        this.videoOnly = null;
-        this.videoStream = null;
-        this.videoStarted = false;
-      }
     }
   }
 
-  /** Stop all recorders and resolve with their blobs. The audio/video-only
-   *  blobs are null when their respective paths were never started or
-   *  errored mid-call. */
+  /** Stop both outputs and resolve with their blobs. */
   async stop(): Promise<DualRecorderResult> {
     const combinedPromise = this.combined.stop();
-    const audioPromise: Promise<Blob | null> = this.audioOnly
-      ? this.audioOnly.stop().catch((err) => {
-          console.warn("Audio-only recorder stop() failed", err);
-          return null;
-        })
-      : Promise.resolve(null);
-    const videoOnlyPromise: Promise<Blob | null> = this.videoOnly
-      ? this.videoOnly.stop().catch((err) => {
-          console.warn("Video-only recorder stop() failed", err);
-          return null;
-        })
+    await this.audioStartPromise;
+    const master = this.audioMaster;
+    const audioPromise: Promise<Blob | null> = master
+      ? master
+          .stop(
+            this.loadPersistedChunks
+              ? () => this.loadPersistedChunks!("audio")
+              : undefined,
+          )
+          .catch((err: unknown) => {
+            console.warn("WAV master stop() failed", err);
+            return null;
+          })
       : Promise.resolve(null);
 
-    const [combinedBlob, audioBlob, videoOnlyBlob] = await Promise.all([
+    const [combinedBlob, audioBlob] = await Promise.all([
       combinedPromise,
       audioPromise,
-      videoOnlyPromise,
     ]);
 
-    // Release the synthetic streams so the underlying tracks aren't
-    // double-held; the original local stream still owns the actual tracks.
-    this.audioStream = null;
-    this.videoStream = null;
-
-    const combinedMime = combinedBlob.type || "video/webm";
-    const audioRec = this.audioOnly;
-    const audioMime = audioBlob ? audioBlob.type || (audioRec?.getFinalBlob()?.type ?? "audio/webm") : null;
-    const videoRec = this.videoOnly;
-    const videoOnlyMime = videoOnlyBlob
-      ? videoOnlyBlob.type || (videoRec?.getFinalBlob()?.type ?? "video/webm")
-      : null;
+    const combinedMime =
+      combinedBlob.type || (this.hasVideo ? "video/webm" : "audio/webm");
     const start = this.combined.getStartTime();
 
     return {
@@ -480,29 +467,28 @@ export class DualChunkedRecorder {
       combinedMimeType: combinedMime,
       combinedSizeBytes: combinedBlob.size,
       audioBlob,
-      audioMimeType: audioMime,
+      audioMimeType: audioBlob ? WAV_MIME_TYPE : null,
       audioSizeBytes: audioBlob ? audioBlob.size : 0,
-      videoOnlyBlob,
-      videoOnlyMimeType: videoOnlyMime,
-      videoOnlySizeBytes: videoOnlyBlob ? videoOnlyBlob.size : 0,
+      videoOnlyBlob: null,
+      videoOnlyMimeType: null,
+      videoOnlySizeBytes: 0,
       hasVideo: this.hasVideo,
       durationSeconds: this.combined.getDurationSeconds(),
       startedAtMs: start.startedAtMs,
       startedAtPerfMs: start.startedAtPerfMs,
       combinedChunkCount: this.combined.getChunkCount(),
-      audioChunkCount: audioRec?.getChunkCount() ?? 0,
-      videoOnlyChunkCount: videoRec?.getChunkCount() ?? 0,
+      audioChunkCount: master?.getPersistStats().captured ?? 0,
+      videoOnlyChunkCount: 0,
       audioRecordingOk: this.audioStarted && !!audioBlob,
-      videoRecordingOk: this.videoStarted && !!videoOnlyBlob,
+      videoRecordingOk: false,
       persistStats: this.getPersistStats(),
     };
   }
 
-  /** Force every running recorder to hand over its buffered slice now. */
+  /** Force the combined recorder to hand over its buffered slice now. The
+   *  WAV master writes continuously and needs no flush. */
   flush(): void {
     this.combined.flush();
-    this.audioOnly?.flush();
-    this.videoOnly?.flush();
   }
 
   getStatus(): "idle" | "recording" | "stopped" {
@@ -517,31 +503,29 @@ export class DualChunkedRecorder {
     return this.combined.getStartTime();
   }
 
-  /** Which streams actually started, and with which container types. */
+  /** Which streams are being produced, and with which container types. */
   getMimeTypes(): Partial<Record<RecordingStream, string>> {
     const out: Partial<Record<RecordingStream, string>> = {
-      combined: this.combined.getMimeType() || "video/webm",
+      combined:
+        this.combined.getMimeType() ||
+        (this.hasVideo ? "video/webm" : "audio/webm"),
     };
-    if (this.audioOnly) out.audio = this.audioOnly.getMimeType() || "audio/webm";
-    if (this.videoOnly) out.video = this.videoOnly.getMimeType() || "video/webm";
+    if (this.audioMaster) out.audio = WAV_MIME_TYPE;
     return out;
   }
 
   getPersistStats(): PersistStats {
-    const all = [this.combined, this.audioOnly, this.videoOnly].filter(
-      (r): r is ChunkedRecorder => r !== null,
-    );
-    return all.reduce<PersistStats>(
-      (acc, r) => {
-        const s = r.getPersistStats();
-        return {
-          captured: acc.captured + s.captured,
-          persisted: acc.persisted + s.persisted,
-          failed: acc.failed + s.failed,
-        };
-      },
-      { captured: 0, persisted: 0, failed: 0 },
-    );
+    const c = this.combined.getPersistStats();
+    const a = this.audioMaster?.getPersistStats() ?? {
+      captured: 0,
+      persisted: 0,
+      failed: 0,
+    };
+    return {
+      captured: c.captured + a.captured,
+      persisted: c.persisted + a.persisted,
+      failed: c.failed + a.failed,
+    };
   }
 
   /** Underlying combined recorder. */
@@ -549,13 +533,17 @@ export class DualChunkedRecorder {
     return this.combined;
   }
 
-  /** Underlying audio-only recorder, or null when audio recording was not started. */
+  /** @deprecated The audio sibling is a WAV master now; see `getWavRecorder`. */
   getAudioRecorder(): ChunkedRecorder | null {
-    return this.audioOnly;
+    return null;
   }
 
-  /** Underlying video-only recorder, or null when no camera was attached. */
+  getWavRecorder(): WavRecorderLike | null {
+    return this.audioMaster;
+  }
+
+  /** @deprecated No video-only recorder exists any more. */
   getVideoOnlyRecorder(): ChunkedRecorder | null {
-    return this.videoOnly;
+    return null;
   }
 }

@@ -24,6 +24,7 @@ import {
   type RecordingResult,
   type SyncUpdate,
 } from "./recording-finalize";
+import { assembleWavFromChunks } from "./wav-assemble";
 import {
   assembleRecordingChunks,
   buildLocalBlobUrl,
@@ -33,6 +34,7 @@ import {
   getInProgressRecording,
   listInProgressRecordings,
   loadRecordingBlob,
+  loadRecordingChunkRows,
   type InProgressRecording,
 } from "./recordings-storage";
 
@@ -144,6 +146,32 @@ async function recoverFromSavedFiles(
   return { result, row, rebuiltFromChunks: false };
 }
 
+/**
+ * The audio sibling is a WAV master written with byte positions (header
+ * patches at finalize); older recordings stored plain WebM appends. Both
+ * rebuild here.
+ */
+async function assembleAudioStream(
+  recordingId: string,
+  mimeType: string,
+): Promise<Blob | null> {
+  const rows = await loadRecordingChunkRows(recordingId, "audio");
+  if (rows.length === 0) return null;
+  const isWav =
+    mimeType === "audio/wav" || rows.some((r) => r.position !== undefined);
+  if (isWav) {
+    const out = await assembleWavFromChunks(
+      rows.map((r) => ({ index: r.index, position: r.position, blob: r.blob })),
+      "audio/wav",
+    );
+    return out?.blob ?? null;
+  }
+  return new Blob(
+    rows.map((r) => r.blob),
+    { type: mimeType },
+  );
+}
+
 async function recoverFromChunks(
   row: InProgressRecording,
   identity: VesselIdentity | null,
@@ -161,11 +189,7 @@ async function recoverFromChunks(
     mimeTypes.combined,
   );
   if (!combined) return null;
-  const audio = await assembleRecordingChunks(
-    row.recordingId,
-    "audio",
-    mimeTypes.audio,
-  );
+  const audio = await assembleAudioStream(row.recordingId, mimeTypes.audio);
   const video = await assembleRecordingChunks(
     row.recordingId,
     "video",
