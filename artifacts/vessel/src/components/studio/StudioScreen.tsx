@@ -1153,6 +1153,8 @@ export function StudioScreen({
         screenSizeBytes: screenRecResult?.meta.sizeBytes ?? 0,
         screenBlobHash: screenRecResult?.blobHash || null,
         screenDurationSeconds: screenRecResult?.meta.durationSeconds ?? null,
+        startedAtMs: recording.result.startedAtMs,
+        serverOffsetMs: recording.result.serverOffsetMs,
       }
     : localParticipant
     ? {
@@ -1219,6 +1221,8 @@ export function StudioScreen({
           screenSizeBytes: t.screen?.sizeBytes ?? 0,
           screenBlobHash: t.screen?.hash ?? null,
           screenDurationSeconds: t.screenDurationSeconds ?? null,
+          startedAtMs: t.startedAtMs,
+          serverOffsetMs: t.serverOffsetMs,
         });
       }
     }

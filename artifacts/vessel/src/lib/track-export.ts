@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import { Zip, ZipPassThrough } from "fflate";
 import {
   loadRecordingBlob,
   buildLocalBlobUrl,
@@ -47,9 +47,19 @@ export type TrackExportSource = {
   screenLocalUrl?: string | null;
   screenRemoteUrl?: string | null;
   screenMimeType?: string | null;
+  /** Length of the combined track, when known. Written to the bundle's `tracks.json`. */
+  durationSeconds?: number | null;
+  /** When the combined track started, ms since epoch on the recording device. */
+  startedAtMs?: number | null;
+  /** Server clock minus the recording device's clock at start, ms. */
+  serverOffsetMs?: number | null;
 };
 
-export type TrackStreamKind = "video+audio" | "video-only" | "audio-only" | "screen-only";
+export type TrackStreamKind =
+  | "video+audio"
+  | "video-only"
+  | "audio-only"
+  | "screen-only";
 
 export type TrackSelection = {
   source: TrackExportSource;
@@ -66,21 +76,35 @@ export function hasAudioOnlyExport(source: TrackExportSource): boolean {
 /** True when this source can produce a true video-only download (no audio
  *  bytes). The export helpers refuse to fall back to V+A. */
 export function hasVideoOnlyExport(source: TrackExportSource): boolean {
-  return !!(source.videoOnlyBlob || source.videoOnlyLocalUrl || source.videoOnlyRemoteUrl);
+  return !!(
+    source.videoOnlyBlob ||
+    source.videoOnlyLocalUrl ||
+    source.videoOnlyRemoteUrl
+  );
 }
 
 /** True when this source can produce a screen-share download. Mirrors the
  *  audio/video helpers — the resolver refuses to fall back to camera or
  *  audio when the screen sibling isn't present. */
 export function hasScreenExport(source: TrackExportSource): boolean {
-  return !!(source.screenBlob || source.screenLocalUrl || source.screenRemoteUrl);
+  return !!(
+    source.screenBlob ||
+    source.screenLocalUrl ||
+    source.screenRemoteUrl
+  );
 }
 
 function safeFilenameSegment(input: string): string {
-  return input.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "participant";
+  return (
+    input.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") ||
+    "participant"
+  );
 }
 
-function extensionFromMime(mimeType: string | null | undefined, fallback: string): string {
+function extensionFromMime(
+  mimeType: string | null | undefined,
+  fallback: string,
+): string {
   if (!mimeType) return fallback;
   const lc = mimeType.toLowerCase();
   if (lc.includes("webm")) return "webm";
@@ -122,7 +146,9 @@ export function buildExportFilename(
 /** Resolve a single stream choice to a Blob. Returns null when the requested
  *  true sibling can't be produced — callers must surface a "skipped" entry
  *  instead of falling back to a different stream type. */
-export async function resolveStreamBlob(selection: TrackSelection): Promise<Blob | null> {
+export async function resolveStreamBlob(
+  selection: TrackSelection,
+): Promise<Blob | null> {
   const { source, stream } = selection;
   if (stream === "audio-only") {
     if (source.audioBlob) return source.audioBlob;
@@ -137,7 +163,10 @@ export async function resolveStreamBlob(selection: TrackSelection): Promise<Blob
     if (source.videoOnlyBlob) return source.videoOnlyBlob;
     const idbVideo = await loadVideoOnlyFallback(source);
     if (idbVideo) return idbVideo;
-    if (source.videoOnlyRemoteUrl && !isLocalBlobUrl(source.videoOnlyRemoteUrl)) {
+    if (
+      source.videoOnlyRemoteUrl &&
+      !isLocalBlobUrl(source.videoOnlyRemoteUrl)
+    ) {
       return fetchRemoteBlob(source.videoOnlyRemoteUrl);
     }
     return null;
@@ -154,7 +183,9 @@ export async function resolveStreamBlob(selection: TrackSelection): Promise<Blob
   return resolveCombinedBlob(source);
 }
 
-async function loadScreenFallback(source: TrackExportSource): Promise<Blob | null> {
+async function loadScreenFallback(
+  source: TrackExportSource,
+): Promise<Blob | null> {
   // Screen sibling is keyed by `<recordingId>:screen`. Same derivation as
   // the audio/video siblings — try the explicit `screenLocalUrl` first,
   // then fall back to deriving the key from the combined URL when the
@@ -176,7 +207,9 @@ async function loadScreenFallback(source: TrackExportSource): Promise<Blob | nul
   return null;
 }
 
-async function resolveCombinedBlob(source: TrackExportSource): Promise<Blob | null> {
+async function resolveCombinedBlob(
+  source: TrackExportSource,
+): Promise<Blob | null> {
   if (source.combinedBlob) return source.combinedBlob;
   if (source.combinedBlobUrl) {
     if (isLocalBlobUrl(source.combinedBlobUrl)) {
@@ -192,7 +225,9 @@ async function resolveCombinedBlob(source: TrackExportSource): Promise<Blob | nu
   return null;
 }
 
-async function loadVideoOnlyFallback(source: TrackExportSource): Promise<Blob | null> {
+async function loadVideoOnlyFallback(
+  source: TrackExportSource,
+): Promise<Blob | null> {
   // The video-only sibling is keyed by `<recordingId>:video`. Same
   // derivation pattern as the audio sibling — try the explicit
   // `videoOnlyLocalUrl` first, then fall back to deriving the key from
@@ -214,7 +249,9 @@ async function loadVideoOnlyFallback(source: TrackExportSource): Promise<Blob | 
   return null;
 }
 
-async function loadAudioFallback(source: TrackExportSource): Promise<Blob | null> {
+async function loadAudioFallback(
+  source: TrackExportSource,
+): Promise<Blob | null> {
   // The audio sibling is keyed by `<recordingId>:audio` in IndexedDB. We
   // can derive that from either the explicit audioBlobUrl (`idb://<id>:audio`)
   // or by appending `:audio` to the combined URL's local id.
@@ -265,26 +302,40 @@ export type ZipExportResult = {
   /** Selections we couldn't resolve a blob for. The UI should surface
    *  these so the user knows which participants didn't make it in. */
   skipped: Array<{ participantName: string; reason: string }>;
+  /** True when the person cancelled the save dialog; nothing was written. */
+  cancelled?: boolean;
 };
 
-/** Package one or more participant track selections into a single zip
- *  using JSZip. Each participant gets a folder named after them so the
- *  audio + video files stay grouped. The zip is dropped to the browser
- *  via a transient blob URL. */
-export async function downloadSelectionsAsZip(
-  selections: TrackSelection[],
-  zipFilename: string,
-): Promise<ZipExportResult> {
-  if (selections.length === 0) {
-    return { includedFilenames: [], skipped: [] };
-  }
-  const zip = new JSZip();
-  const includedFilenames: string[] = [];
-  const skipped: ZipExportResult["skipped"] = [];
+type ResolvedEntry = {
+  path: string;
+  blob: Blob;
+  sel: TrackSelection;
+};
 
+type SidecarTrack = {
+  file: string;
+  participant: string;
+  stream: TrackStreamKind;
+  mimeType: string;
+  sizeBytes: number;
+  durationSeconds: number | null;
+  /** ms since epoch on the recording device. */
+  startedAtMs: number | null;
+  /** Server clock minus the recording device's clock at start, ms. */
+  serverOffsetMs: number | null;
+  /** `startedAtMs + serverOffsetMs` when both are known: the start on one shared clock. */
+  startedAtServerMs: number | null;
+};
+
+/** Resolve every selection to a blob and a path inside the bundle. */
+async function resolveEntries(
+  selections: TrackSelection[],
+): Promise<{ entries: ResolvedEntry[]; skipped: ZipExportResult["skipped"] }> {
+  const entries: ResolvedEntry[] = [];
+  const skipped: ZipExportResult["skipped"] = [];
   // Track filename collisions when two participants share a normalized
   // name. We disambiguate with a numeric suffix so the second one isn't
-  // silently dropped by JSZip's last-write-wins folder semantics.
+  // silently dropped.
   const seenFolders = new Map<string, number>();
 
   for (const sel of selections) {
@@ -299,42 +350,221 @@ export async function downloadSelectionsAsZip(
               ? "Video-only file isn't available."
               : sel.stream === "screen-only"
                 ? "Screen-share file isn't available."
-                : "Track blob isn't available on this device.",
+                : "Track file isn't available on this device.",
       });
       continue;
     }
     const baseFolder = safeFilenameSegment(sel.source.participantName);
     const seenCount = seenFolders.get(baseFolder) ?? 0;
     seenFolders.set(baseFolder, seenCount + 1);
-    const folderName = seenCount === 0 ? baseFolder : `${baseFolder}_${seenCount + 1}`;
-
+    const folderName =
+      seenCount === 0 ? baseFolder : `${baseFolder}_${seenCount + 1}`;
     const mimeForExtension =
       sel.stream === "audio-only"
-        ? sel.source.audioMimeType ?? blob.type
+        ? (sel.source.audioMimeType ?? blob.type)
         : sel.stream === "video-only"
-          ? sel.source.videoOnlyMimeType ?? blob.type
-          : sel.source.combinedMimeType || blob.type;
+          ? (sel.source.videoOnlyMimeType ?? blob.type)
+          : sel.stream === "screen-only"
+            ? (sel.source.screenMimeType ?? blob.type)
+            : sel.source.combinedMimeType || blob.type;
     const filename = buildExportFilename(
       sel.source.participantName,
       sel.stream,
       mimeForExtension,
     );
-    zip.folder(folderName)!.file(filename, blob);
-    includedFilenames.push(`${folderName}/${filename}`);
+    entries.push({ path: `${folderName}/${filename}`, blob, sel });
+  }
+  return { entries, skipped };
+}
+
+function buildSidecar(entries: ResolvedEntry[]): string {
+  const tracks: SidecarTrack[] = entries.map(({ path, blob, sel }) => {
+    const startedAtMs = sel.source.startedAtMs ?? null;
+    const serverOffsetMs = sel.source.serverOffsetMs ?? null;
+    return {
+      file: path,
+      participant: sel.source.participantName,
+      stream: sel.stream,
+      mimeType: blob.type || "application/octet-stream",
+      sizeBytes: blob.size,
+      durationSeconds:
+        sel.stream === "video+audio" ||
+        sel.stream === "audio-only" ||
+        sel.stream === "video-only"
+          ? (sel.source.durationSeconds ?? null)
+          : null,
+      startedAtMs,
+      serverOffsetMs,
+      startedAtServerMs:
+        startedAtMs !== null && serverOffsetMs !== null
+          ? startedAtMs + serverOffsetMs
+          : null,
+    };
+  });
+  return JSON.stringify(
+    {
+      format: "vessel-bundle",
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      note: "Each track was recorded on its participant's own device. startedAtServerMs puts every start on one clock; subtract the smallest value to get each track's offset in ms.",
+      tracks,
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * Stream a store-mode zip of the entries. Media is already compressed, so
+ * storing it is both fastest and exact. Nothing is held in memory beyond
+ * the chunk being written: each file is piped from `Blob.stream()`.
+ */
+export function createZipStream(
+  entries: ResolvedEntry[],
+  sidecarJson: string,
+): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      const zip = new Zip();
+      let failed = false;
+      zip.ondata = (err, data, final) => {
+        if (failed) return;
+        if (err) {
+          failed = true;
+          controller.error(err);
+          return;
+        }
+        if (data.byteLength > 0) controller.enqueue(data);
+        if (final) controller.close();
+      };
+
+      void (async () => {
+        try {
+          const sidecar = new ZipPassThrough("tracks.json");
+          zip.add(sidecar);
+          sidecar.push(new TextEncoder().encode(sidecarJson), true);
+
+          for (const entry of entries) {
+            const file = new ZipPassThrough(entry.path);
+            zip.add(file);
+            const reader = entry.blob.stream().getReader();
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value && value.byteLength > 0) file.push(value);
+            }
+            file.push(new Uint8Array(0), true);
+          }
+          zip.end();
+        } catch (err) {
+          if (!failed) {
+            failed = true;
+            controller.error(err);
+          }
+        }
+      })();
+    },
+  });
+}
+
+/** Build the whole bundle as a Blob. Used by tests and by browsers without
+ *  the File System Access API; the browser's blob store may spill to disk. */
+export async function buildZipBlob(
+  selections: TrackSelection[],
+): Promise<{ blob: Blob | null } & ZipExportResult> {
+  const { entries, skipped } = await resolveEntries(selections);
+  if (entries.length === 0) {
+    return { blob: null, includedFilenames: [], skipped };
+  }
+  const stream = createZipStream(entries, buildSidecar(entries));
+  const blob = await new Response(stream).blob();
+  return {
+    blob: new Blob([blob], { type: "application/zip" }),
+    includedFilenames: entries.map((e) => e.path),
+    skipped,
+  };
+}
+
+type SaveFilePicker = (options?: {
+  suggestedName?: string;
+  types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+}) => Promise<{ createWritable: () => Promise<WritableStream<Uint8Array>> }>;
+
+function getSaveFilePicker(): SaveFilePicker | null {
+  const w = globalThis as unknown as { showSaveFilePicker?: SaveFilePicker };
+  return typeof w.showSaveFilePicker === "function"
+    ? w.showSaveFilePicker.bind(w)
+    : null;
+}
+
+/**
+ * Package one or more participant track selections into a single zip. Each
+ * participant gets a folder named after them so their files stay grouped,
+ * and `tracks.json` describes every file with its start time.
+ *
+ * Where the browser offers a save dialog with a writable file (Chrome,
+ * Edge), the zip streams straight to disk and never exists in memory.
+ * Elsewhere it is assembled as a Blob and handed to the download manager.
+ */
+export async function downloadSelectionsAsZip(
+  selections: TrackSelection[],
+  zipFilename: string,
+): Promise<ZipExportResult> {
+  if (selections.length === 0) {
+    return { includedFilenames: [], skipped: [] };
   }
 
-  if (includedFilenames.length === 0) {
+  // Ask for the destination first, while the click's user activation is
+  // still fresh; resolving blobs can take a while for long sessions.
+  const picker = getSaveFilePicker();
+  let writable: WritableStream<Uint8Array> | null = null;
+  if (picker) {
+    try {
+      const handle = await picker({
+        suggestedName: zipFilename,
+        types: [
+          {
+            description: "Zip archive",
+            accept: { "application/zip": [".zip"] },
+          },
+        ],
+      });
+      writable = await handle.createWritable();
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === "AbortError") {
+        return { includedFilenames: [], skipped: [], cancelled: true };
+      }
+      // Picker unavailable for this page (e.g. cross-origin iframe): fall back.
+      writable = null;
+    }
+  }
+
+  const { entries, skipped } = await resolveEntries(selections);
+  if (entries.length === 0) {
+    if (writable) await writable.abort().catch(() => undefined);
+    return { includedFilenames: [], skipped };
+  }
+  const stream = createZipStream(entries, buildSidecar(entries));
+  const includedFilenames = entries.map((e) => e.path);
+
+  if (writable) {
+    await stream.pipeTo(writable);
     return { includedFilenames, skipped };
   }
 
-  const zipBlob = await zip.generateAsync({ type: "blob" });
-  downloadBlobAsFile(zipBlob, zipFilename);
+  const blob = await new Response(stream).blob();
+  downloadBlobAsFile(
+    new Blob([blob], { type: "application/zip" }),
+    zipFilename,
+  );
   return { includedFilenames, skipped };
 }
 
 /** Convenience for the audio-only local URL when we know the recordingId
  *  but only have the combined URL on hand. */
-export function deriveAudioLocalUrlFromCombined(combinedUrl: string | null | undefined): string | null {
+export function deriveAudioLocalUrlFromCombined(
+  combinedUrl: string | null | undefined,
+): string | null {
   if (!combinedUrl) return null;
   if (!isLocalBlobUrl(combinedUrl)) return null;
   const id = extractRecordingIdFromLocalUrl(combinedUrl);

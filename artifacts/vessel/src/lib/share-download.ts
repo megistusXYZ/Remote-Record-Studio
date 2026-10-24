@@ -79,7 +79,19 @@ export async function downloadToBlob(input: DownloadInput): Promise<Blob> {
   }
 
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  // Chunks are folded into Blob parts every few dozen megabytes so the JS
+  // heap never holds a whole multi-gigabyte file; the browser's blob store
+  // can spill those parts to disk.
+  const FOLD_BYTES = 64 * 1024 * 1024;
+  const parts: Blob[] = [];
+  let pendingChunks: Uint8Array[] = [];
+  let pendingBytes = 0;
+  const fold = () => {
+    if (pendingChunks.length === 0) return;
+    parts.push(new Blob(pendingChunks as BlobPart[]));
+    pendingChunks = [];
+    pendingBytes = 0;
+  };
   let received = 0;
 
   const onAbort = () => {
@@ -93,7 +105,9 @@ export async function downloadToBlob(input: DownloadInput): Promise<Blob> {
       if (signal.aborted) throw new DownloadCancelled();
       if (done) break;
       if (value && value.byteLength > 0) {
-        chunks.push(value);
+        pendingChunks.push(value);
+        pendingBytes += value.byteLength;
+        if (pendingBytes >= FOLD_BYTES) fold();
         received += value.byteLength;
         onProgress({ receivedBytes: received, totalBytes });
       }
@@ -106,8 +120,9 @@ export async function downloadToBlob(input: DownloadInput): Promise<Blob> {
     signal.removeEventListener("abort", onAbort);
   }
 
+  fold();
   const type = response.headers.get("Content-Type") || "application/octet-stream";
-  return new Blob(chunks as BlobPart[], { type });
+  return new Blob(parts, { type });
 }
 
 /** Trigger the browser's "save as" flow for an in-memory blob. */

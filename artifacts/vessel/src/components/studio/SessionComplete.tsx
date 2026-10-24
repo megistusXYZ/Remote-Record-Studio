@@ -52,6 +52,10 @@ export type Track = {
   participantName: string;
   participantPubkey: string;
   recordingId: string | null;
+  /** When the combined track started, ms since epoch on the recording device. */
+  startedAtMs?: number | null;
+  /** Server clock minus the recording device's clock at start, ms. */
+  serverOffsetMs?: number | null;
   /** In-memory combined V+A blob — only set for the local participant's
    *  freshly finished recording. Other participants' tracks resolve via
    *  the URL fields below. */
@@ -184,6 +188,9 @@ function trackToExportSource(track: Track): TrackExportSource {
     screenLocalUrl: track.screenLocalUrl ?? null,
     screenRemoteUrl: track.screenRemoteUrl ?? null,
     screenMimeType: track.screenMimeType ?? null,
+    durationSeconds: track.durationSeconds,
+    startedAtMs: track.startedAtMs ?? null,
+    serverOffsetMs: track.serverOffsetMs ?? null,
   };
 }
 
