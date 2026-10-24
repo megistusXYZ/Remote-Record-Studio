@@ -287,23 +287,9 @@ function DemoTile({
     <motion.div
       className={`relative aspect-video rounded-xl overflow-hidden bg-vessel-bg-elevated border ${
         speaking ? "border-vessel-accent/70" : "border-vessel-border"
-      } transition-colors duration-300`}
-      animate={
-        reduceMotion || !speaking
-          ? { boxShadow: "0 0 0 0 rgba(0,212,170,0)" }
-          : {
-              boxShadow: [
-                "0 0 0 0 rgba(0,212,170,0)",
-                "0 0 22px 4px rgba(0,212,170,0.35)",
-                "0 0 0 0 rgba(0,212,170,0)",
-              ],
-            }
-      }
-      transition={
-        speaking && !reduceMotion
-          ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
-          : { duration: 0.4 }
-      }
+      } transition-colors duration-300 ${
+        speaking && !reduceMotion ? "speaking-glow" : ""
+      }`}
     >
       {/* Still frame: every screen. */}
       {cameraOn && !posterMissing && (

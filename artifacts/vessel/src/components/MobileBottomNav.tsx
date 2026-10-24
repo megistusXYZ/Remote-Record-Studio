@@ -87,7 +87,7 @@ function RecordFab({ active }: { active: boolean }) {
           className="absolute inset-0 rounded-full bg-vessel-accent/35 blur-md group-hover:bg-vessel-accent/45 transition-colors"
         />
         <span
-          className="relative w-12 h-12 rounded-full flex items-center justify-center bg-vessel-accent text-vessel-bg-base shadow-[0_6px_18px_rgba(0,212,170,0.45)] ring-4 ring-vessel-bg-elevated group-hover:brightness-110 group-active:scale-95 transition-all"
+          className="relative w-12 h-12 rounded-full flex items-center justify-center bg-vessel-accent text-vessel-bg-base shadow-[0_6px_18px_rgb(var(--vessel-accent-rgb)/0.45)] ring-4 ring-vessel-bg-elevated group-hover:brightness-110 group-active:scale-95 transition-all"
         >
           <Icon className="w-5 h-5" strokeWidth={2.5} />
         </span>
@@ -112,7 +112,7 @@ export function MobileBottomNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 md:hidden pointer-events-none"
     >
-      <div className="pointer-events-auto bg-vessel-bg-elevated/95 backdrop-blur-xl border-t border-vessel-border shadow-[0_-4px_24px_rgba(0,0,0,0.25)]">
+      <div className="pointer-events-auto bg-vessel-bg-elevated/95 backdrop-blur-xl border-t border-vessel-border shadow-[0_-4px_24px_rgb(var(--vessel-shadow-rgb)/0.25)]">
         <div className="max-w-md mx-auto px-2 pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-stretch justify-between gap-1 h-[68px]">
             <Tab item={NAV_ITEMS[0]} active={isActive(location, NAV_ITEMS[0].href)} />

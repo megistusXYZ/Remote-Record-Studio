@@ -87,6 +87,13 @@ const VISIBLE_ATTRIBUTES = new Set([
   "description",
 ]);
 
+/** Attributes that carry code, not copy, even when they contain spaces. */
+const NON_TEXT_ATTRIBUTES = new Set([
+  "className", "style", "href", "src", "srcSet", "sizes", "d", "viewBox",
+  "points", "transform", "id", "type", "role", "rel", "target", "name",
+  "autoComplete", "inputMode", "pattern", "accept", "media", "as", "key",
+]);
+
 interface Violation {
   where: string;
   text: string;
@@ -191,7 +198,13 @@ function scanFile(file: string, out: Violation[], rules: Rule[]): void {
     } else if (ts.isJsxAttribute(node)) {
       const name = node.name.getText(source);
       const init = node.initializer;
-      if (init && VISIBLE_ATTRIBUTES.has(name)) {
+      const sentenceProp =
+        !!init &&
+        ts.isStringLiteral(init) &&
+        !NON_TEXT_ATTRIBUTES.has(name) &&
+        !name.startsWith("data-") &&
+        looksLikeSentence(init.text);
+      if (init && (VISIBLE_ATTRIBUTES.has(name) || sentenceProp)) {
         if (ts.isStringLiteral(init)) {
           check(init.text, file, init.getStart(source), source, out, rules);
         } else if (

@@ -14,9 +14,9 @@ export const VesselButton = React.forwardRef<HTMLButtonElement, VesselButtonProp
 
     const variants = {
       primary:
-        "bg-vessel-accent text-[#080b0f] hover:bg-vessel-accent-dim shadow-[0_0_15px_rgba(0,212,170,0.15)] hover:scale-[1.02]",
+        "bg-vessel-accent text-vessel-bg-base hover:bg-vessel-accent-dim shadow-[0_0_15px_rgb(var(--vessel-accent-rgb)/0.15)] hover:scale-[1.02]",
       ghost:
-        "bg-transparent border border-vessel-accent text-vessel-accent hover:bg-vessel-accent hover:text-[#080b0f]",
+        "bg-transparent border border-vessel-accent text-vessel-accent hover:bg-vessel-accent hover:text-vessel-bg-base",
       danger: "bg-vessel-red text-white hover:brightness-110",
       muted: "bg-vessel-bg-surface text-vessel-text-secondary hover:text-vessel-text-primary hover:bg-vessel-bg-elevated",
     };

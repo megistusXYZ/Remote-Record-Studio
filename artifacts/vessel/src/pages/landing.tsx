@@ -7,6 +7,7 @@ import { VesselCard } from "../components/vessel-ui/VesselCard";
 import { Eyebrow } from "../components/vessel-ui/Eyebrow";
 import { HeroDemo } from "../components/landing/HeroDemo";
 import { Check, X } from "lucide-react";
+import { ThemeToggleButton } from "../components/vessel-ui/ThemeControls";
 import { deploymentContactUrl } from "../lib/runtime-config";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
@@ -175,6 +176,8 @@ export default function LandingPage() {
             <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
           </div>
         </div>
+        <div className="flex items-center gap-1">
+        <ThemeToggleButton />
         <button
           type="button"
           onClick={openBackupSignIn}
@@ -184,6 +187,7 @@ export default function LandingPage() {
           <AimIcon className="w-4 h-4" />
           <span>Sign in</span>
         </button>
+        </div>
       </header>
 
       {/* Hero Section */}
@@ -193,7 +197,7 @@ export default function LandingPage() {
           style={{
             backgroundImage: `image-set(url('${podcastAvif}') type('image/avif'), url('${podcastWebp}') type('image/webp'))`,
             backgroundPosition: "center top",
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at 50% 35%, black 30%, transparent 75%)",
             WebkitMaskImage:
@@ -395,7 +399,7 @@ export default function LandingPage() {
           className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-cover opacity-[0.07]"
           style={{
             backgroundImage: `image-set(url('${seascapeAvif}') type('image/avif'), url('${seascapeWebp}') type('image/webp'))`,
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at center, black 45%, transparent 80%)",
             WebkitMaskImage:
@@ -642,7 +646,7 @@ export default function LandingPage() {
           className="absolute inset-0 pointer-events-none bg-center bg-no-repeat bg-contain opacity-[0.07]"
           style={{
             backgroundImage: `image-set(url('${shipAvif}') type('image/avif'), url('${shipWebp}') type('image/webp'))`,
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at center, black 40%, transparent 78%)",
             WebkitMaskImage:

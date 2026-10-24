@@ -37,6 +37,7 @@ import { deploymentMoqRelayUrl } from "../../lib/runtime-config";
 import observationCabinAvif from "@/assets/illustrations/observation-cabin.avif";
 import observationCabinWebp from "@/assets/illustrations/observation-cabin.webp";
 import { VaultSidebar } from "./VaultSidebar";
+import { ThemeSwitcher } from "../vessel-ui/ThemeControls";
 import { VesselButton } from "../vessel-ui/VesselButton";
 import { VesselCard } from "../vessel-ui/VesselCard";
 import { Input } from "@/components/ui/input";
@@ -227,7 +228,7 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
           className="pointer-events-none fixed inset-0 z-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
             backgroundImage: `image-set(url('${observationCabinAvif}') type('image/avif'), url('${observationCabinWebp}') type('image/webp'))`,
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",
             WebkitMaskImage:
@@ -416,6 +417,12 @@ export function SettingsScreen({ pubkey }: SettingsScreenProps) {
                     Switch
                   </VesselButton>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase tracking-wider text-vessel-text-muted">Appearance</label>
+                <p className="text-xs text-vessel-text-muted">System matches your device&rsquo;s light or dark setting.</p>
+                <ThemeSwitcher className="mt-1" />
               </div>
 
               <div className="space-y-1.5">

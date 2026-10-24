@@ -498,7 +498,7 @@ export function SoloRecordScreen() {
           className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
             backgroundImage: `image-set(url('${wheelhouseAvif}') type('image/avif'), url('${wheelhouseWebp}') type('image/webp'))`,
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",
             WebkitMaskImage:
@@ -1174,7 +1174,7 @@ function DoneView({
   onRecordAnother,
 }: DoneViewProps) {
   return (
-    <VesselCard className="p-5 sm:p-6 border-vessel-accent/40 shadow-[0_0_30px_rgba(0,212,170,0.12)]">
+    <VesselCard className="p-5 sm:p-6 border-vessel-accent/40 shadow-[0_0_30px_rgb(var(--vessel-accent-rgb)/0.12)]">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-8 h-8 rounded-full bg-vessel-accent/15 flex items-center justify-center">
           <Check className="w-4 h-4 text-vessel-accent" />

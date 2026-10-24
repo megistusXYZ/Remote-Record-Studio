@@ -176,8 +176,8 @@ export function ControlBar({
                 className={cn(
                   "absolute inset-0 rounded-full flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent focus-visible:ring-offset-2 focus-visible:ring-offset-vessel-bg-base z-10 disabled:opacity-70 disabled:cursor-not-allowed",
                   isRecording
-                    ? "bg-vessel-red text-white shadow-[0_0_30px_rgba(255,71,87,0.4)] hover:brightness-110"
-                    : "bg-vessel-accent text-white shadow-[0_0_30px_rgba(0,212,170,0.4)] hover:scale-105 hover:bg-vessel-accent-dim"
+                    ? "bg-vessel-red text-white shadow-[0_0_30px_rgb(var(--vessel-red-rgb)/0.4)] hover:brightness-110"
+                    : "bg-vessel-accent text-vessel-bg-base shadow-[0_0_30px_rgb(var(--vessel-accent-rgb)/0.4)] hover:scale-105 hover:bg-vessel-accent-dim"
                 )}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               >
@@ -266,7 +266,7 @@ export function ControlBar({
                   className={cn(
                     "w-12 h-12 sm:w-14 sm:h-14 rounded-full border transition-all flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
                     handRaised
-                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
+                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgb(var(--vessel-accent-rgb)/0.25)]"
                       : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
                   )}
                 >
@@ -293,7 +293,7 @@ export function ControlBar({
                   className={cn(
                     "hidden md:flex w-14 h-14 rounded-full border transition-all items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent",
                     isScreenSharing
-                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgba(0,212,170,0.25)]"
+                      ? "bg-vessel-accent/20 border-vessel-accent/50 text-vessel-accent shadow-[0_0_20px_rgb(var(--vessel-accent-rgb)/0.25)]"
                       : "bg-vessel-bg-surface border-vessel-border hover:bg-vessel-bg-elevated text-vessel-text-primary",
                   )}
                 >

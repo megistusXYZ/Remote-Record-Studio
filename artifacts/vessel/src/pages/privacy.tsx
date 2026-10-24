@@ -214,6 +214,7 @@ export default function Privacy() {
             this browser.
           </li>
           <li>Your chosen display name.</li>
+          <li>Your light or dark mode choice, if you made one.</li>
           <li>The address of the storage server you pointed Vessel at.</li>
           <li>
             The keys that unlock recordings this device uploaded, and the

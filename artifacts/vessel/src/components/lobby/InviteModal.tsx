@@ -86,7 +86,7 @@ export function InviteModal({
         <div className="mt-5 space-y-5 w-full min-w-0">
           {/* QR — primary visual */}
           <div className="flex flex-col items-center gap-2">
-            <div className="rounded-2xl p-3 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+            <div className="rounded-2xl p-3 bg-white shadow-[0_8px_24px_rgb(var(--vessel-shadow-rgb)/0.25)]">
               <QRCodeSVG
                 value={inviteUrl}
                 size={144}

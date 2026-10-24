@@ -15,6 +15,7 @@ import {
   Stamp,
   Quote,
 } from "lucide-react";
+import { ThemeToggleButton } from "../components/vessel-ui/ThemeControls";
 import { VesselBrandIcon } from "../components/icons/VesselBrandIcon";
 import { SupportPersonIcon } from "../components/icons/SupportPersonIcon";
 import { FilePersonIcon } from "../components/icons/FilePersonIcon";
@@ -235,6 +236,8 @@ export default function HowItWorks() {
             <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
           </div>
         </Link>
+        <div className="flex items-center gap-1">
+          <ThemeToggleButton />
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-medium text-vessel-text-secondary hover:text-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent rounded-md px-2 py-1"
@@ -243,6 +246,7 @@ export default function HowItWorks() {
           <ArrowLeft size={14} />
           <span>Back to home</span>
         </Link>
+        </div>
       </header>
 
       {/* Hero */}
@@ -252,7 +256,7 @@ export default function HowItWorks() {
           style={{
             backgroundImage: `image-set(url('${seascapeAvif}') type('image/avif'), url('${seascapeWebp}') type('image/webp'))`,
             backgroundPosition: "center top",
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at 50% 30%, black 30%, transparent 75%)",
             WebkitMaskImage:
@@ -509,7 +513,7 @@ export default function HowItWorks() {
               className="absolute inset-0 bg-no-repeat bg-cover bg-center opacity-[0.18]"
               style={{
                 backgroundImage: `image-set(url('${shipAvif}') type('image/avif'), url('${shipWebp}') type('image/webp'))`,
-                filter: "invert(1) grayscale(1)",
+                filter: "var(--vessel-illustration-filter)",
                 maskImage:
                   "radial-gradient(ellipse at center, black 40%, transparent 80%)",
                 WebkitMaskImage:
@@ -535,7 +539,7 @@ export default function HowItWorks() {
             <span className="text-vessel-accent">most of them invisible.</span>
           </>
         }
-        blurb="From the moment you click your invite link to the moment the host opens the editor — here is the whole timeline."
+        blurb="From the moment you click your invite link to the moment the host downloads the tracks — here is the whole timeline."
       >
         <ol className="relative max-w-3xl">
           <FlowStep
