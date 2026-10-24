@@ -4,8 +4,9 @@
 #   - Surface security advisories automatically without burying maintainers in
 #     individual PRs.
 #   - Keep CI / GitHub Actions pinned to known-good versions.
-#   - Minor and patch updates ship in grouped PRs (one per ecosystem per week)
-#     so review effort scales with major-version churn, not dependency count.
+#   - Minor and patch updates ship in grouped PRs (one per ecosystem per week).
+#   - Major npm versions are not proposed: they need planned migration work,
+#     so we take them deliberately, not from an automated PR.
 #
 # Ecosystem: `pnpm` is supported via the `npm` package-ecosystem (Dependabot
 # reads pnpm-lock.yaml when present).
@@ -25,6 +26,9 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         applies-to: version-updates
