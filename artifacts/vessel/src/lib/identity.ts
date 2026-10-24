@@ -44,6 +44,11 @@ export interface RemoteSignerMeta {
 
 const STORAGE_KEY_V3 = "vessel_identity_v3";
 const STORAGE_KEY_LEGACY = "vessel_identity_v2";
+/** A guest's key, kept on the device (not just the tab) so their receipts
+ *  and personal archive stay theirs after the tab closes. Separate from the
+ *  studio slot so a guest join can never overwrite a studio. Older builds
+ *  kept the guest key in sessionStorage under STORAGE_KEY_V3. */
+const STORAGE_KEY_GUEST = "vessel_guest_identity_v1";
 const PBKDF2_ITERATIONS = 100_000;
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -356,13 +361,11 @@ function buildRemoteIdentity(
 }
 
 function persist(stored: StoredV3, isGuest: boolean): void {
-  // Always clear the opposite slot first so a guest→creator (or vice-versa)
-  // transition can't leave a stale identity blob in the other storage layer.
-  if (isGuest) localStorage.removeItem(STORAGE_KEY_V3);
-  else sessionStorage.removeItem(STORAGE_KEY_V3);
   const json = JSON.stringify(stored);
-  if (isGuest) sessionStorage.setItem(STORAGE_KEY_V3, json);
-  else localStorage.setItem(STORAGE_KEY_V3, json);
+  // The tab-scoped slot is legacy for both roles; clear it on any write.
+  sessionStorage.removeItem(STORAGE_KEY_V3);
+  // Never touch the studio slot when saving a guest.
+  localStorage.setItem(isGuest ? STORAGE_KEY_GUEST : STORAGE_KEY_V3, json);
 }
 
 export async function createNewIdentity(
@@ -376,6 +379,23 @@ export async function createNewIdentity(
 }
 
 export async function createGuestIdentity(displayName: string): Promise<VesselIdentity> {
+  // A returning guest keeps one key, so every receipt and archive from this
+  // device stays under the same Studio ID. Only the name is refreshed.
+  const saved = localStorage.getItem(STORAGE_KEY_GUEST);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as StoredV3;
+      if (parsed.signerType === "local") {
+        const secretKey = await decryptBytes(parsed.encrypted, parsed.displayName);
+        const identity = buildLocalIdentity(displayName, secretKey, true);
+        const encrypted = await encryptBytes(secretKey, displayName);
+        persist({ v: 3, signerType: "local", displayName, encrypted }, true);
+        return identity;
+      }
+    } catch (err) {
+      console.warn("Saved guest key could not be opened; making a new one", err);
+    }
+  }
   const secretKey = generateSecretKey();
   const identity = buildLocalIdentity(displayName, secretKey, true);
   const encrypted = await encryptBytes(secretKey, displayName);
@@ -607,15 +627,20 @@ async function finalizeRemoteSignIn(
 }
 
 export async function loadSavedIdentity(): Promise<VesselIdentity | null> {
-  const v3Local = localStorage.getItem(STORAGE_KEY_V3);
-  const v3Session = sessionStorage.getItem(STORAGE_KEY_V3);
-  const stored = v3Local ?? v3Session;
-  const isGuest = !v3Local && !!v3Session;
+  // A studio wins; then the device's guest key; then a guest key an older
+  // build left in this tab, which moves to the device on restore.
+  const studio = localStorage.getItem(STORAGE_KEY_V3);
+  const guest = localStorage.getItem(STORAGE_KEY_GUEST);
+  const legacyTabGuest = sessionStorage.getItem(STORAGE_KEY_V3);
+  const stored = studio ?? guest ?? legacyTabGuest;
+  const isGuest = !studio;
 
   if (stored) {
     try {
       const parsed = JSON.parse(stored) as StoredV3;
-      return await restoreV3(parsed, isGuest);
+      const identity = await restoreV3(parsed, isGuest);
+      if (identity && !studio && !guest && legacyTabGuest) persist(parsed, true);
+      return identity;
     } catch (err) {
       console.error("Failed to restore identity:", err);
       return null;
@@ -847,6 +872,7 @@ export function downloadBackupFile(
 
 export function clearStoredIdentity(): void {
   localStorage.removeItem(STORAGE_KEY_V3);
+  localStorage.removeItem(STORAGE_KEY_GUEST);
   sessionStorage.removeItem(STORAGE_KEY_V3);
   localStorage.removeItem(STORAGE_KEY_LEGACY);
   sessionStorage.removeItem(STORAGE_KEY_LEGACY);
@@ -882,7 +908,9 @@ export async function tearDownSigner(identity: VesselIdentity | null): Promise<v
  * next reload tries to decrypt with the new name and fails.
  */
 export async function persistDisplayNameChange(identity: VesselIdentity): Promise<void> {
-  const v3 = localStorage.getItem(STORAGE_KEY_V3) ?? sessionStorage.getItem(STORAGE_KEY_V3);
+  const v3 = identity.isGuest
+    ? localStorage.getItem(STORAGE_KEY_GUEST) ?? sessionStorage.getItem(STORAGE_KEY_V3)
+    : localStorage.getItem(STORAGE_KEY_V3);
   if (!v3) return;
   try {
     const parsed = JSON.parse(v3) as StoredV3;
