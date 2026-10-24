@@ -316,19 +316,19 @@ export function Greenroom({
               <div className="space-y-2">
                 <PreflightChip
                   icon={<Shield className="w-3.5 h-3.5" />}
-                  label="Browser support"
+                  label="Browser"
                   status={preflight.browser}
                   testId="chip-preflight-browser"
                 />
                 <PreflightChip
                   icon={<Wifi className="w-3.5 h-3.5" />}
-                  label="Network"
+                  label="Connection"
                   status={preflight.network}
                   testId="chip-preflight-network"
                 />
                 <PreflightChip
                   icon={<Cpu className="w-3.5 h-3.5" />}
-                  label="Device performance"
+                  label="This device"
                   status={preflight.cpu}
                   testId="chip-preflight-cpu"
                 />
@@ -343,7 +343,7 @@ export function Greenroom({
                 className="w-full sm:w-auto"
                 data-testid="button-greenroom-cancel"
               >
-                Not now
+                Join without checking
               </VesselButton>
               <VesselButton
                 variant="primary"
@@ -431,7 +431,7 @@ function DeviceDropdown({
   );
 }
 
-function LoopbackButton({
+export function LoopbackButton({
   phase,
   onStart,
   onStop,
@@ -566,7 +566,7 @@ function PreflightChip({
 
 /** Live RMS-based mic level (0..1). Uses the existing audio track from the
  *  preview stream — we don't open a second handle on the mic. */
-function useMicLevel(stream: MediaStream | null, enabled: boolean): number {
+export function useMicLevel(stream: MediaStream | null, enabled: boolean): number {
   const [level, setLevel] = useState(0);
   useEffect(() => {
     if (!stream || !enabled) {
@@ -613,7 +613,7 @@ function useMicLevel(stream: MediaStream | null, enabled: boolean): number {
 }
 
 /** Encapsulates the loopback record-then-play flow. */
-function useLoopback(stream: MediaStream | null, micEnabled: boolean) {
+export function useLoopback(stream: MediaStream | null, micEnabled: boolean) {
   const [phase, setPhase] = useState<LoopbackPhase>({ kind: "idle" });
   const recorderRef = useRef<MediaRecorder | null>(null);
   const tickRef = useRef<number | null>(null);
@@ -725,7 +725,7 @@ function usePreflightChecks() {
       };
     }
     if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) {
-      return { kind: "warn", note: "Safari: works, may glitch" };
+      return { kind: "warn", note: "Works; Chrome is smoother" };
     }
     return { kind: "ok", note: "Ready" };
   }, []);
@@ -733,9 +733,9 @@ function usePreflightChecks() {
   const cpu = useMemo<PreflightStatus>(() => {
     if (typeof window === "undefined") return { kind: "checking" };
     const cores = window.navigator.hardwareConcurrency || 0;
-    if (cores === 0) return { kind: "warn", note: "Unknown" };
-    if (cores < 4) return { kind: "warn", note: "May struggle with video" };
-    return { kind: "ok", note: `${cores} cores` };
+    if (cores === 0) return { kind: "ok", note: "Should be fine" };
+    if (cores < 4) return { kind: "warn", note: "Video may stutter; audio is fine" };
+    return { kind: "ok", note: "Good for video" };
   }, []);
 
   const [network, setNetwork] = useState<PreflightStatus>({ kind: "checking" });
@@ -755,27 +755,26 @@ function usePreflightChecks() {
     if (conn?.effectiveType) {
       const t = conn.effectiveType;
       if (t === "4g" || t === "5g") {
-        setNetwork({ kind: "ok", note: t.toUpperCase() });
+        setNetwork({ kind: "ok", note: "Looks good" });
         return;
       }
       if (t === "3g") {
-        setNetwork({ kind: "warn", note: "3G: may stutter" });
+        setNetwork({ kind: "warn", note: "Slow; video may stutter" });
         return;
       }
-      setNetwork({ kind: "fail", note: `${t}: too slow` });
+      setNetwork({ kind: "fail", note: "Too slow for a call" });
       return;
     }
     // Fallback: small ping to the API base path. Best-effort; we don't fail
     // hard if it errors.
     const start = performance.now();
     const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
-    fetch(`${base}/api/health`, { method: "GET", cache: "no-store" })
+    fetch(`${base}/api/healthz`, { method: "GET", cache: "no-store" })
       .then(() => {
         if (cancelled) return;
         const ms = Math.round(performance.now() - start);
-        if (ms < 250) setNetwork({ kind: "ok", note: `${ms}ms` });
-        else if (ms < 800) setNetwork({ kind: "warn", note: `${ms}ms: slow` });
-        else setNetwork({ kind: "warn", note: `${ms}ms` });
+        if (ms < 250) setNetwork({ kind: "ok", note: "Looks good" });
+        else setNetwork({ kind: "warn", note: "Slow; video may stutter" });
       })
       .catch(() => {
         if (!cancelled) setNetwork({ kind: "ok", note: "Online" });
