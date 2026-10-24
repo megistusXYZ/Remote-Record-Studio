@@ -14,7 +14,6 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
   nowMs: zod
-    .number()
     .int()
     .optional()
     .describe(
@@ -53,7 +52,6 @@ export const GetIceServersResponse = zod.object({
     }),
   ),
   ttlSeconds: zod
-    .number()
     .int()
     .min(getIceServersResponseTtlSecondsMin)
     .describe(
@@ -78,9 +76,8 @@ export const ListSessionsResponseItem = zod.object({
   hostName: zod.string(),
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
-  participantCount: zod.number().int(),
+  participantCount: zod.int(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(listSessionsResponseMaxParticipantsMax)
@@ -128,7 +125,6 @@ export const CreateSessionBody = zod.object({
     .regex(createSessionBodyHostPubkeyRegExp),
   hostName: zod.string().min(1).max(createSessionBodyHostNameMax),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(createSessionBodyMaxParticipantsMax)
@@ -147,9 +143,8 @@ export const CreateSessionResponse = zod.object({
   hostName: zod.string(),
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
-  participantCount: zod.number().int(),
+  participantCount: zod.int(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(createSessionResponseMaxParticipantsMax)
@@ -192,9 +187,8 @@ export const GetSessionResponse = zod.object({
   hostName: zod.string(),
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
-  participantCount: zod.number().int(),
+  participantCount: zod.int(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(getSessionResponseMaxParticipantsMax)
@@ -236,7 +230,6 @@ export const UpdateSessionBody = zod.object({
   status: zod.enum(["waiting", "live", "ended"]).optional(),
   title: zod.string().min(1).max(updateSessionBodyTitleMax).optional(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(updateSessionBodyMaxParticipantsMax)
@@ -255,9 +248,8 @@ export const UpdateSessionResponse = zod.object({
   hostName: zod.string(),
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
-  participantCount: zod.number().int(),
+  participantCount: zod.int(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(updateSessionResponseMaxParticipantsMax)
@@ -323,9 +315,8 @@ export const JoinSessionResponse = zod.object({
   hostName: zod.string(),
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
-  participantCount: zod.number().int(),
+  participantCount: zod.int(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(joinSessionResponseMaxParticipantsMax)
@@ -389,9 +380,8 @@ export const LeaveSessionResponse = zod.object({
   hostName: zod.string(),
   status: zod.enum(["waiting", "live", "ended"]),
   inviteCode: zod.string(),
-  participantCount: zod.number().int(),
+  participantCount: zod.int(),
   maxParticipants: zod
-    .number()
     .int()
     .min(1)
     .max(leaveSessionResponseMaxParticipantsMax)
@@ -477,24 +467,24 @@ export const ListRecordingsResponseItem = zod.object({
   sessionTitle: zod.string().nullish(),
   ownerPubkey: zod.string(),
   participantName: zod.string(),
-  durationSeconds: zod.number().int(),
-  sizeBytes: zod.number().int(),
+  durationSeconds: zod.int(),
+  sizeBytes: zod.int(),
   mimeType: zod.string(),
   blobHash: zod.string().nullish(),
   blobUrl: zod.string().nullish(),
   audioBlobHash: zod.string().nullish(),
   audioBlobUrl: zod.string().nullish(),
-  audioSizeBytes: zod.number().int().nullish(),
+  audioSizeBytes: zod.int().nullish(),
   audioMimeType: zod.string().nullish(),
   videoBlobHash: zod.string().nullish(),
   videoBlobUrl: zod.string().nullish(),
-  videoSizeBytes: zod.number().int().nullish(),
+  videoSizeBytes: zod.int().nullish(),
   videoMimeType: zod.string().nullish(),
   screenBlobHash: zod.string().nullish(),
   screenBlobUrl: zod.string().nullish(),
-  screenSizeBytes: zod.number().int().nullish(),
+  screenSizeBytes: zod.int().nullish(),
   screenMimeType: zod.string().nullish(),
-  screenDurationSeconds: zod.number().int().nullish(),
+  screenDurationSeconds: zod.int().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
   createdAt: zod.coerce.date(),
 });
@@ -553,11 +543,8 @@ export const CreateRecordingBody = zod.object({
     .string()
     .min(1)
     .max(createRecordingBodyParticipantNameMax),
-  durationSeconds: zod
-    .number()
-    .int()
-    .min(createRecordingBodyDurationSecondsMin),
-  sizeBytes: zod.number().int().min(createRecordingBodySizeBytesMin),
+  durationSeconds: zod.int().min(createRecordingBodyDurationSecondsMin),
+  sizeBytes: zod.int().min(createRecordingBodySizeBytesMin),
   mimeType: zod.string().max(createRecordingBodyMimeTypeMax),
   blobHash: zod.string().max(createRecordingBodyBlobHashMax).nullish(),
   blobUrl: zod.string().max(createRecordingBodyBlobUrlMax).nullish(),
@@ -566,7 +553,7 @@ export const CreateRecordingBody = zod.object({
     .max(createRecordingBodyAudioBlobHashMax)
     .nullish(),
   audioBlobUrl: zod.string().max(createRecordingBodyAudioBlobUrlMax).nullish(),
-  audioSizeBytes: zod.number().int().nullish(),
+  audioSizeBytes: zod.int().nullish(),
   audioMimeType: zod
     .string()
     .max(createRecordingBodyAudioMimeTypeMax)
@@ -576,7 +563,7 @@ export const CreateRecordingBody = zod.object({
     .max(createRecordingBodyVideoBlobHashMax)
     .nullish(),
   videoBlobUrl: zod.string().max(createRecordingBodyVideoBlobUrlMax).nullish(),
-  videoSizeBytes: zod.number().int().nullish(),
+  videoSizeBytes: zod.int().nullish(),
   videoMimeType: zod
     .string()
     .max(createRecordingBodyVideoMimeTypeMax)
@@ -589,12 +576,12 @@ export const CreateRecordingBody = zod.object({
     .string()
     .max(createRecordingBodyScreenBlobUrlMax)
     .nullish(),
-  screenSizeBytes: zod.number().int().nullish(),
+  screenSizeBytes: zod.int().nullish(),
   screenMimeType: zod
     .string()
     .max(createRecordingBodyScreenMimeTypeMax)
     .nullish(),
-  screenDurationSeconds: zod.number().int().nullish(),
+  screenDurationSeconds: zod.int().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
 });
 
@@ -604,24 +591,24 @@ export const CreateRecordingResponse = zod.object({
   sessionTitle: zod.string().nullish(),
   ownerPubkey: zod.string(),
   participantName: zod.string(),
-  durationSeconds: zod.number().int(),
-  sizeBytes: zod.number().int(),
+  durationSeconds: zod.int(),
+  sizeBytes: zod.int(),
   mimeType: zod.string(),
   blobHash: zod.string().nullish(),
   blobUrl: zod.string().nullish(),
   audioBlobHash: zod.string().nullish(),
   audioBlobUrl: zod.string().nullish(),
-  audioSizeBytes: zod.number().int().nullish(),
+  audioSizeBytes: zod.int().nullish(),
   audioMimeType: zod.string().nullish(),
   videoBlobHash: zod.string().nullish(),
   videoBlobUrl: zod.string().nullish(),
-  videoSizeBytes: zod.number().int().nullish(),
+  videoSizeBytes: zod.int().nullish(),
   videoMimeType: zod.string().nullish(),
   screenBlobHash: zod.string().nullish(),
   screenBlobUrl: zod.string().nullish(),
-  screenSizeBytes: zod.number().int().nullish(),
+  screenSizeBytes: zod.int().nullish(),
   screenMimeType: zod.string().nullish(),
-  screenDurationSeconds: zod.number().int().nullish(),
+  screenDurationSeconds: zod.int().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
   createdAt: zod.coerce.date(),
 });
@@ -639,24 +626,24 @@ export const GetRecordingResponse = zod.object({
   sessionTitle: zod.string().nullish(),
   ownerPubkey: zod.string(),
   participantName: zod.string(),
-  durationSeconds: zod.number().int(),
-  sizeBytes: zod.number().int(),
+  durationSeconds: zod.int(),
+  sizeBytes: zod.int(),
   mimeType: zod.string(),
   blobHash: zod.string().nullish(),
   blobUrl: zod.string().nullish(),
   audioBlobHash: zod.string().nullish(),
   audioBlobUrl: zod.string().nullish(),
-  audioSizeBytes: zod.number().int().nullish(),
+  audioSizeBytes: zod.int().nullish(),
   audioMimeType: zod.string().nullish(),
   videoBlobHash: zod.string().nullish(),
   videoBlobUrl: zod.string().nullish(),
-  videoSizeBytes: zod.number().int().nullish(),
+  videoSizeBytes: zod.int().nullish(),
   videoMimeType: zod.string().nullish(),
   screenBlobHash: zod.string().nullish(),
   screenBlobUrl: zod.string().nullish(),
-  screenSizeBytes: zod.number().int().nullish(),
+  screenSizeBytes: zod.int().nullish(),
   screenMimeType: zod.string().nullish(),
-  screenDurationSeconds: zod.number().int().nullish(),
+  screenDurationSeconds: zod.int().nullish(),
   status: zod.enum(["processing", "ready", "error"]),
   createdAt: zod.coerce.date(),
 });
@@ -678,11 +665,11 @@ export const GetVaultSummaryQueryParams = zod.object({
 });
 
 export const GetVaultSummaryResponse = zod.object({
-  totalRecordings: zod.number().int(),
-  totalDurationSeconds: zod.number().int(),
-  totalSizeBytes: zod.number().int(),
-  totalSessions: zod.number().int(),
-  recordingsThisMonth: zod.number().int(),
+  totalRecordings: zod.int(),
+  totalDurationSeconds: zod.int(),
+  totalSizeBytes: zod.int(),
+  totalSessions: zod.int(),
+  recordingsThisMonth: zod.int(),
 });
 
 /**
@@ -705,24 +692,24 @@ export const GetRecentActivityResponse = zod.object({
       sessionTitle: zod.string().nullish(),
       ownerPubkey: zod.string(),
       participantName: zod.string(),
-      durationSeconds: zod.number().int(),
-      sizeBytes: zod.number().int(),
+      durationSeconds: zod.int(),
+      sizeBytes: zod.int(),
       mimeType: zod.string(),
       blobHash: zod.string().nullish(),
       blobUrl: zod.string().nullish(),
       audioBlobHash: zod.string().nullish(),
       audioBlobUrl: zod.string().nullish(),
-      audioSizeBytes: zod.number().int().nullish(),
+      audioSizeBytes: zod.int().nullish(),
       audioMimeType: zod.string().nullish(),
       videoBlobHash: zod.string().nullish(),
       videoBlobUrl: zod.string().nullish(),
-      videoSizeBytes: zod.number().int().nullish(),
+      videoSizeBytes: zod.int().nullish(),
       videoMimeType: zod.string().nullish(),
       screenBlobHash: zod.string().nullish(),
       screenBlobUrl: zod.string().nullish(),
-      screenSizeBytes: zod.number().int().nullish(),
+      screenSizeBytes: zod.int().nullish(),
       screenMimeType: zod.string().nullish(),
-      screenDurationSeconds: zod.number().int().nullish(),
+      screenDurationSeconds: zod.int().nullish(),
       status: zod.enum(["processing", "ready", "error"]),
       createdAt: zod.coerce.date(),
     }),
@@ -735,9 +722,8 @@ export const GetRecentActivityResponse = zod.object({
       hostName: zod.string(),
       status: zod.enum(["waiting", "live", "ended"]),
       inviteCode: zod.string(),
-      participantCount: zod.number().int(),
+      participantCount: zod.int(),
       maxParticipants: zod
-        .number()
         .int()
         .min(1)
         .max(getRecentActivityResponseRecentSessionsItemMaxParticipantsMax)

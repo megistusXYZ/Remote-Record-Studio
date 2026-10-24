@@ -55,7 +55,7 @@ catalog:
   tailwindcss: ^4.3.3
   tsx: ^4.23.15
   vite: ^7.3.7
-  zod: ^3.25.76
+  zod: ^4.6.7
 
 autoInstallPeers: false
 
@@ -136,6 +136,14 @@ overrides:
   "@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32": "-"
   "@expo/ngrok-bin>@expo/ngrok-bin-win32-x64": "-"
+  # Security fixes for indirect dependencies, held until their parents
+  # depend on the patched versions themselves.
+  "router>path-to-regexp": "^8.4.0"
+  "express>body-parser": "^2.4.0"
+  "nanoid@>=4.0.0 <5.1.16": "^5.1.16"
+  # sharp is transformers.js's Node image backend. Vessel only runs
+  # transformers.js in the browser, so the native library is never loaded.
+  "@huggingface/transformers>sharp": "-"
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"
