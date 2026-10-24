@@ -66,7 +66,9 @@ const DISCLOSED_LOG_FIELDS = {
 
 function actualColumnNames(table: Parameters<typeof getTableColumns>[0]) {
   return new Set(
-    Object.values(getTableColumns(table)).map((c) => (c as { name: string }).name),
+    Object.values(getTableColumns(table)).map(
+      (c) => (c as { name: string }).name,
+    ),
   );
 }
 
