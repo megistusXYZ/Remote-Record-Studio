@@ -270,6 +270,10 @@ export function StudioScreen({
     },
   });
 
+  const acceptedLivePeers = useMemo(
+    () => session.participants.map((p) => p.pubkey).filter(Boolean),
+    [session.participants],
+  );
   const liveTransport = useLiveTransport({
     sessionId: session.id,
     selfPubkey: currentPubkey,
@@ -283,6 +287,10 @@ export function StudioScreen({
     peers: callSignal.peers,
     signaling: callSignal.webRtcSignaling,
     selfSupportsMoq,
+    // Only people on the session's participant list may open a live
+    // connection to this browser; a stranger who learned the session id
+    // and signed a valid offer is ignored.
+    acceptedPeers: acceptedLivePeers,
   });
 
   // Forward live-transport quality back into the call-signal beat. The

@@ -22,6 +22,46 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * STUN servers plus, when the operator configured a TURN relay,
+time-limited TURN credentials for the caller. Signed request required;
+the credential is tied to the caller and expires after `ttlSeconds`.
+
+ * @summary ICE servers for the live preview
+ */
+export const getIceServersResponseIceServersItemUrlsItemMax = 512;
+
+export const getIceServersResponseIceServersItemUsernameMax = 128;
+
+export const getIceServersResponseIceServersItemCredentialMax = 256;
+
+export const getIceServersResponseTtlSecondsMin = 0;
+
+export const GetIceServersResponse = zod.object({
+  iceServers: zod.array(
+    zod.object({
+      urls: zod.array(
+        zod.string().max(getIceServersResponseIceServersItemUrlsItemMax),
+      ),
+      username: zod
+        .string()
+        .max(getIceServersResponseIceServersItemUsernameMax)
+        .optional(),
+      credential: zod
+        .string()
+        .max(getIceServersResponseIceServersItemCredentialMax)
+        .optional(),
+    }),
+  ),
+  ttlSeconds: zod
+    .number()
+    .min(getIceServersResponseTtlSecondsMin)
+    .describe(
+      "Seconds the TURN credential stays valid; 0 when no TURN is configured.",
+    ),
+  turnConfigured: zod.boolean(),
+});
+
+/**
  * @summary List all sessions for the current user
  */
 export const ListSessionsQueryParams = zod.object({

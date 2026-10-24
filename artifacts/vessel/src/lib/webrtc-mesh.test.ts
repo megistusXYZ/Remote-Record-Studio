@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { WebRtcMesh, type WebRtcSignaling, type WebRtcSignalPayload } from "./webrtc-mesh";
+import {
+  WebRtcMesh,
+  MAX_ICE_RESTARTS,
+  DISCONNECT_GRACE_MS,
+  type WebRtcMeshEvent,
+  type WebRtcSignaling,
+  type WebRtcSignalPayload,
+} from "./webrtc-mesh";
 
 // ─── Mocks ──────────────────────────────────────────────────────────────
 //
@@ -52,6 +59,7 @@ class MockPC {
   });
   addIceCandidate = vi.fn(async (_c: RTCIceCandidateInit) => {});
   getStats = vi.fn(async () => new Map());
+  restartIce = vi.fn();
   close = vi.fn(() => {
     this.signalingState = "closed";
     this.iceConnectionState = "closed";
@@ -232,5 +240,97 @@ describe("WebRtcMesh", () => {
     mesh.setPeers(["bob"]);
     mesh.setPeers(["bob"]);
     expect(createdPCs.length).toBe(1);
+  });
+});
+
+describe("WebRtcMesh — roster gate", () => {
+  it("drops signals from pubkeys outside the accepted set", async () => {
+    const sig = makeSignaling();
+    const accepted = new Set(["bob"]);
+    new WebRtcMesh({ selfPubkey: "self", signaling: sig, acceptedPeers: () => accepted });
+    // A valid-looking offer from someone who is not on the roster must
+    // not open a connection (and so never receive our camera).
+    sig.deliver("mallory", { type: "offer", sdp: "remote-sdp" });
+    await flush();
+    expect(createdPCs.length).toBe(0);
+    // The same offer from a roster member is accepted lazily as before.
+    sig.deliver("bob", { type: "offer", sdp: "remote-sdp" });
+    await flush();
+    expect(createdPCs.length).toBe(1);
+  });
+
+  it("accepts anyone when the gate returns null", async () => {
+    const sig = makeSignaling();
+    new WebRtcMesh({ selfPubkey: "self", signaling: sig, acceptedPeers: () => null });
+    sig.deliver("whoever", { type: "offer", sdp: "remote-sdp" });
+    await flush();
+    expect(createdPCs.length).toBe(1);
+  });
+});
+
+describe("WebRtcMesh — ICE recovery", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function failedPeer() {
+    const sig = makeSignaling();
+    const mesh = new WebRtcMesh({ selfPubkey: "self", signaling: sig });
+    mesh.setPeers(["bob"]);
+    const pc = createdPCs[0];
+    return { mesh, pc };
+  }
+
+  it("restarts ICE after a failure and stops once the peer is back", () => {
+    const { mesh, pc } = failedPeer();
+    pc.iceConnectionState = "failed";
+    pc.oniceconnectionstatechange?.();
+    // Immediate failure: first restart after the base backoff only.
+    expect(pc.restartIce).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(pc.restartIce).toHaveBeenCalledTimes(1);
+    // The restart worked: no further attempts, counter reset.
+    pc.iceConnectionState = "connected";
+    pc.oniceconnectionstatechange?.();
+    vi.advanceTimersByTime(60_000);
+    expect(pc.restartIce).toHaveBeenCalledTimes(1);
+    mesh.close();
+  });
+
+  it("gives a transient disconnect a grace period before restarting", () => {
+    const { mesh, pc } = failedPeer();
+    pc.iceConnectionState = "disconnected";
+    pc.oniceconnectionstatechange?.();
+    vi.advanceTimersByTime(DISCONNECT_GRACE_MS + 999);
+    expect(pc.restartIce).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(pc.restartIce).toHaveBeenCalledTimes(1);
+    mesh.close();
+  });
+
+  it("stops after the restart budget and reports the loss once", () => {
+    const { mesh, pc } = failedPeer();
+    const events: WebRtcMeshEvent[] = [];
+    mesh.on((ev) => events.push(ev));
+    pc.iceConnectionState = "failed";
+    pc.oniceconnectionstatechange?.();
+    vi.advanceTimersByTime(5 * 60_000);
+    expect(pc.restartIce).toHaveBeenCalledTimes(MAX_ICE_RESTARTS);
+    const lost = events.filter((e) => e.type === "disconnected" && "error" in e && e.error);
+    expect(lost).toHaveLength(1);
+    mesh.close();
+  });
+
+  it("cancels a pending restart when the peer leaves", () => {
+    const { mesh, pc } = failedPeer();
+    pc.iceConnectionState = "failed";
+    pc.oniceconnectionstatechange?.();
+    mesh.setPeers([]);
+    vi.advanceTimersByTime(60_000);
+    expect(pc.restartIce).not.toHaveBeenCalled();
+    mesh.close();
   });
 });
