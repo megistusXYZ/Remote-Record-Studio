@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { deriveSessionKey, openSignal, parseEnvelope, sealSignal } from "../lib/session-crypto";
 import type { Event as NostrEvent } from "nostr-tools";
 import { getRelayPool } from "../lib/relay-pool";
 import { DEFAULT_PUBLISH_RELAYS, getPublishRelays } from "../lib/relay-config";
@@ -201,6 +202,11 @@ export type TranscriptFragment = {
 export type UseCallSignalArgs = {
   sessionId: string;
   identity: VesselIdentity | null;
+  /** The session's invite code: the one secret every participant holds.
+   *  The per-session encryption key for all in-call messages is derived
+   *  from it. Without it messages go out unencrypted (and a warning is
+   *  logged), which only happens if a caller forgets to pass it. */
+  inviteCode?: string | null;
   myDisplayName: string;
   myMicEnabled: boolean;
   myCameraEnabled: boolean;
@@ -366,6 +372,7 @@ function clampString(input: unknown, max: number): string {
 export function useCallSignal({
   sessionId,
   identity,
+  inviteCode = null,
   myDisplayName,
   myMicEnabled,
   myCameraEnabled,
@@ -379,6 +386,37 @@ export function useCallSignal({
   onPeerLeave,
 }: UseCallSignalArgs): UseCallSignalResult {
   const myPubkey = identity?._pubkey ?? "";
+
+  // Per-session encryption key for everything we publish and receive on
+  // the signaling channel (see lib/session-crypto.ts). Relays see event
+  // kinds and the session tag, never names, chat or connection details.
+  const sessionKeyRef = useRef<CryptoKey | null>(null);
+  const sessionKeyPromiseRef = useRef<Promise<CryptoKey | null> | null>(null);
+  useEffect(() => {
+    sessionKeyRef.current = null;
+    if (!sessionId || !inviteCode) {
+      sessionKeyPromiseRef.current = null;
+      if (sessionId) {
+        console.warn("[call-signal] no invite code: in-call messages will not be encrypted");
+      }
+      return undefined;
+    }
+    let cancelled = false;
+    const promise = deriveSessionKey(sessionId, inviteCode)
+      .then((key) => {
+        if (!cancelled) sessionKeyRef.current = key;
+        return key;
+      })
+      .catch((err: unknown) => {
+        console.warn("[call-signal] could not derive the session key", err);
+        return null;
+      });
+    sessionKeyPromiseRef.current = promise;
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, inviteCode]);
+
   const hostPubkeyRef = useRef<string | null>(hostPubkey);
   useEffect(() => {
     hostPubkeyRef.current = hostPubkey;
@@ -500,7 +538,14 @@ export function useCallSignal({
     async (template: SignedTemplate): Promise<void> => {
       if (!identity) return;
       try {
-        const signed = (await identity._signer.signEvent(template)) as NostrEvent;
+        // Seal the content before signing so the signature covers the
+        // ciphertext and relays never see the plaintext.
+        let toSign = template;
+        const key = sessionKeyRef.current ?? (await sessionKeyPromiseRef.current) ?? null;
+        if (key) {
+          toSign = { ...template, content: await sealSignal(key, template.content) } as SignedTemplate;
+        }
+        const signed = (await identity._signer.signEvent(toSign)) as NostrEvent;
         // Mark our own event as seen so we don't echo it through the
         // subscription path.
         if (signed?.id) rememberSeen(signed.id);
@@ -897,7 +942,20 @@ export function useCallSignal({
           return;
         }
         if (payload && typeof payload === "object" && "kind" in (payload as object)) {
-          handleIncoming(payload as NostrEvent);
+          const ev = payload as NostrEvent;
+          const envelope = parseEnvelope(ev.content);
+          if (!envelope) {
+            // Plain content from an older client. Nothing of ours leaks by
+            // reading it; it is handled as before.
+            handleIncoming(ev);
+            return;
+          }
+          const key = sessionKeyRef.current;
+          if (!key) return; // can't read it yet; the next heartbeat will do
+          void openSignal(key, envelope).then((plain) => {
+            if (cancelled || plain === null) return;
+            handleIncoming({ ...ev, content: plain });
+          });
         }
       },
       error: (err: unknown) => {
