@@ -15,7 +15,12 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // index: the API server. migrate: one-shot migration runner used by
+    // deployments before the server starts (see src/migrate.ts).
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      path.resolve(artifactDir, "src/migrate.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",

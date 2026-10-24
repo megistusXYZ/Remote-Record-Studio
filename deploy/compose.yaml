@@ -1,0 +1,204 @@
+# Vessel in production: one host, Docker Compose, a CDN in front.
+#
+# The same file runs the flagship and a self-hosted instance. Walkthrough,
+# DNS records, firewall and upgrade steps: OPERATIONS.md § 10.
+#
+#   cp deploy/.env.example deploy/.env      # then fill it in
+#   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d
+#
+# Images are pulled from GitHub Container Registry (built by
+# .github/workflows/docker.yml on every push to main and every release tag).
+# Add --build to build them from this checkout instead.
+#
+# Services:
+#   web       Caddy: TLS, the web client, /api → api, relay.* → relay, files.* → files
+#   api       the Express API (also the image the migrate step runs)
+#   migrate   applies SQL migrations once per start, before api
+#   postgres  PostgreSQL 17, internal only
+#   relay     strfry sync server (signaling, share metadata)
+#   files     blossom-server storage server
+#   turn      coturn, so live video connects behind strict NATs
+#   backup    daily pg_dump into a volume
+
+name: vessel
+
+x-api-image: &api-image
+  image: ${VESSEL_IMAGE_PREFIX:-ghcr.io/megistusxyz/remote-record-studio}-api:${VESSEL_IMAGE_TAG:-latest}
+  build:
+    context: ..
+    dockerfile: deploy/api.Dockerfile
+
+x-db-url: &db-url postgresql://vessel:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}@postgres:5432/vessel
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vessel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: vessel
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vessel -d vessel"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    # No ports: only containers on this network can reach the database.
+
+  migrate:
+    <<: *api-image
+    restart: "no"
+    command: ["node", "dist/migrate.mjs"]
+    environment:
+      DATABASE_URL: *db-url
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: *db-url
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Live preview relay credentials (the turn service below).
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}
+      TURN_TTL_SECONDS: ${TURN_TTL_SECONDS:-43200}
+      STUN_URLS: ${STUN_URLS:-}
+      # Abuse controls (OPERATIONS.md § 4): observe first, enforce later.
+      VESSEL_RATE_LIMIT_MODE: ${VESSEL_RATE_LIMIT_MODE:-observe}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  web:
+    image: ${VESSEL_IMAGE_PREFIX:-ghcr.io/megistusxyz/remote-record-studio}-web:${VESSEL_IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+      - "${WEB_HTTPS_PORT:-443}:443/udp"
+    environment:
+      VESSEL_DOMAIN: ${VESSEL_DOMAIN:?set VESSEL_DOMAIN in deploy/.env}
+      VESSEL_RELAY_DOMAIN: ${VESSEL_RELAY_DOMAIN:-}
+      VESSEL_FILES_DOMAIN: ${VESSEL_FILES_DOMAIN:-}
+      VESSEL_RELAYS: ${VESSEL_RELAYS:-}
+      VESSEL_STORAGE_SERVER: ${VESSEL_STORAGE_SERVER:-}
+      VESSEL_MOQ_RELAY_URL: ${VESSEL_MOQ_RELAY_URL:-}
+      VESSEL_CSP_ENFORCE: ${VESSEL_CSP_ENFORCE:-false}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+      TRUSTED_PROXY_RANGES: ${TRUSTED_PROXY_RANGES:-}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - relay
+      - files
+
+  relay:
+    image: ghcr.io/hoytech/strfry:latest
+    restart: unless-stopped
+    command: ["relay"]
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - strfry-db:/app/strfry-db
+    ulimits:
+      nofile:
+        soft: 524288
+        hard: 524288
+
+  files:
+    image: ghcr.io/hzrd149/blossom-server:6
+    restart: unless-stopped
+    environment:
+      BLOSSOM_REQUIRE_CONFIG: "1"
+      # Bare hostname; blossom builds file URLs from it.
+      BLOSSOM_PUBLIC_DOMAIN: ${VESSEL_FILES_DOMAIN:-files.${VESSEL_DOMAIN}}
+    volumes:
+      - ./blossom.yml:/app/config.yml:ro
+      - blossom-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  turn:
+    image: coturn/coturn:4-alpine
+    restart: unless-stopped
+    # Host networking: the relay hands out ports from a range, which Docker
+    # port mapping handles badly. Nothing else on the host may use 3478 or
+    # the relay range. The external address is detected at start.
+    network_mode: host
+    environment:
+      DETECT_EXTERNAL_IP: "yes"
+      DETECT_RELAY_IP: "yes"
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --realm=${VESSEL_DOMAIN}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SHARED_SECRET:?set TURN_SHARED_SECRET in deploy/.env}
+      - --fingerprint
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --no-multicast-peers
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49200}
+      # The relay must never reach into the host's own networks.
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=::1
+      - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: vessel
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: vessel
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - db-backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  caddy-data:
+  caddy-config:
+  strfry-db:
+  blossom-data:
+  db-backups:

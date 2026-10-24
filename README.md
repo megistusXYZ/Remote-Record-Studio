@@ -114,6 +114,15 @@ environment variables, running the apps separately, and tests.
 > rollback switches, abuse-response runbooks, and the curl recipes for
 > verifying posture after each deploy.
 
+## Deploying
+
+One compose file runs the whole stack on a server: `deploy/compose.yaml`
+brings up Caddy with TLS, the API, PostgreSQL with migrations, a sync server,
+a storage server, TURN for live video and daily backups. Copy
+`deploy/.env.example`, fill it in, and follow
+[OPERATIONS.md § 10](./OPERATIONS.md#10-deploy-with-docker-compose). The same
+file is the self-host install.
+
 ## Project layout
 
 ```

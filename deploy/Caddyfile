@@ -1,0 +1,69 @@
+# Vessel edge. One Caddy in front of everything: TLS, the static web client,
+# /api to the API container, the sync server and the storage server on their
+# own hostnames. Placeholders come from the container environment; the
+# entrypoint fills in the derived ones (see deploy/web-entrypoint.sh).
+
+{
+	email {$ACME_EMAIL}
+	servers {
+		# Ranges allowed to set X-Forwarded-For; the entrypoint defaults this
+		# to Cloudflare's egress ranges. With them trusted, the visitor's
+		# address survives to the API, whose per-IP limits depend on it.
+		trusted_proxies static {$TRUSTED_PROXY_RANGES}
+	}
+}
+
+(security_headers) {
+	header {
+		# Share-link keys live in URL fragments; never leak a referrer.
+		Referrer-Policy "no-referrer"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Cross-Origin-Opener-Policy "same-origin"
+		# credentialless rather than require-corp: participants point Vessel at
+		# storage servers we cannot make send CORP headers.
+		Cross-Origin-Embedder-Policy "credentialless"
+		Permissions-Policy "accelerometer=(), ambient-light-sensor=(), autoplay=(self), battery=(), geolocation=(), gyroscope=(), magnetometer=(), midi=(), payment=(), usb=(), interest-cohort=()"
+		# Same policy the dev server sends; the header name switches to the
+		# enforcing one with VESSEL_CSP_ENFORCE=true.
+		{$VESSEL_CSP_HEADER} "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https: wss:; worker-src 'self' blob:"
+		-Server
+	}
+}
+
+{$VESSEL_DOMAIN} {
+	encode zstd gzip
+	root * /srv
+	import security_headers
+
+	@api path /api/*
+	handle @api {
+		# Host and X-Forwarded-* pass through unchanged; signed requests are
+		# bound to the URL the browser targeted.
+		reverse_proxy api:3001
+	}
+
+	handle {
+		# The app shell, the service worker and the runtime config must always
+		# revalidate; hashed assets never change.
+		@revalidate path / /index.html /config.js /sw.js /registerSW.js /manifest.webmanifest
+		header @revalidate Cache-Control "no-cache"
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$VESSEL_RELAY_DOMAIN} {
+	# Sync server (websockets).
+	reverse_proxy relay:7777
+}
+
+{$VESSEL_FILES_DOMAIN} {
+	# Storage server. Uploads can be large; no body limit here. If Cloudflare
+	# proxies this hostname its own per-request limit applies (100 MB on the
+	# free plan), so keep this record DNS-only or stay under it.
+	reverse_proxy files:3000
+}

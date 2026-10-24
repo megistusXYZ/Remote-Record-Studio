@@ -79,6 +79,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Deployment settings, written by the web container at start. Loaded
+         before the app so modules see them as they evaluate. -->
+    <script src="%BASE_URL%config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

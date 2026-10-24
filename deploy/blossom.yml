@@ -1,0 +1,47 @@
+# Vessel storage server (blossom-server). Mounted read-only at /app/config.yml.
+# ${VARIABLES} are substituted from the container environment at start.
+#
+# Defaults: uploads need a signed request, nobody can list anyone else's
+# files, and files that go unaccessed for a year are pruned. Data lives in
+# the blossom-data volume; switch `storage.backend` to s3 for a bucket.
+
+publicDomain: "${BLOSSOM_PUBLIC_DOMAIN}"
+
+database:
+  path: data/sqlite.db
+
+dashboard:
+  enabled: false
+
+storage:
+  backend: local
+  local:
+    dir: ./data/blobs
+  removeWhenNoOwners: false
+  # First match sets the expiry; the list is also the allowed-type list.
+  rules:
+    - type: audio/*
+      expiration: 1 year
+    - type: video/*
+      expiration: 1 year
+    - type: image/*
+      expiration: 1 year
+    - type: text/*
+      expiration: 1 year
+    - type: application/json
+      expiration: 1 year
+    - type: application/zip
+      expiration: 1 year
+    # Encrypted recording chunks upload as opaque bytes.
+    - type: application/octet-stream
+      expiration: 1 year
+
+upload:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+
+list:
+  enabled: true
+  requireAuth: true
+  allowListOthers: false

@@ -9,6 +9,8 @@
     "dev:api": "sh scripts/dev.sh api",
     "dev:web": "sh scripts/dev.sh web",
     "db:push": "sh scripts/dev.sh db:push",
+    "db:generate": "sh scripts/dev.sh db:generate",
+    "db:migrate": "sh scripts/dev.sh db:migrate",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",

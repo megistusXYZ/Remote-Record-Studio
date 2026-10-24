@@ -51,7 +51,8 @@ or reword multiple commits with `git rebase --signoff`.
   `lib/`. New code goes in the artifact it belongs to.
 - Prettier handles formatting. Just run `pnpm exec prettier --write .`
   before pushing if you're unsure.
-- TypeScript typecheck must pass: `pnpm run typecheck`.
+- TypeScript typecheck and tests must pass: `pnpm run typecheck` and
+  `pnpm test`.
 
 ## Pull request checklist
 
@@ -59,7 +60,7 @@ Before opening a PR, please check:
 
 - [ ] Branch is rebased on the latest `main`
 - [ ] All commits are signed off (DCO)
-- [ ] `pnpm run typecheck` passes
+- [ ] `pnpm run typecheck` and `pnpm test` pass
 - [ ] PR description explains the **why**, not just the **what**
 - [ ] If the change affects users, you've updated `README.md` or relevant
       docs
