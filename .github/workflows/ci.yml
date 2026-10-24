@@ -14,9 +14,12 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  NODE_VERSION: 24
+
 jobs:
   typecheck:
-    name: Typecheck
+    name: Typecheck and generated code
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -31,7 +34,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
@@ -39,6 +42,74 @@ jobs:
 
       - name: Run typecheck
         run: pnpm run typecheck
+
+      # The API clients in lib/api-zod and lib/api-client-react are generated
+      # from lib/api-spec/openapi.yaml and committed. A spec change without
+      # regenerated clients fails here instead of at runtime.
+      - name: Generated API clients match the spec
+        run: |
+          pnpm --filter @workspace/api-spec run codegen
+          git diff --exit-code -- lib/api-zod/src/generated lib/api-client-react/src/generated \
+            || { echo "::error::Generated API clients are stale. Run: pnpm --filter @workspace/api-spec run codegen"; exit 1; }
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # API server and web client suites. Neither needs a database: the API
+      # tests mock the pool and the client tests run in jsdom.
+      - name: Run tests
+        run: pnpm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the web client
+        env:
+          NODE_ENV: production
+          PORT: "5173"
+          BASE_PATH: /
+        run: pnpm --filter @workspace/vessel run build
+
+      - name: Build the API server
+        run: pnpm --filter @workspace/api-server run build
 
   audit:
     name: Dependency audit (pnpm)
@@ -60,7 +131,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - name: Install dependencies
