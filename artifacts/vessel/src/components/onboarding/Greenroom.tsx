@@ -279,7 +279,7 @@ export function Greenroom({
                 data-testid="input-greenroom-name"
               />
               <p className="text-xs text-vessel-text-muted mt-2">
-                Other people in the room — and your receipt — will see this.
+                Other people in the session, and your receipt, will see this.
               </p>
             </section>
 
@@ -305,7 +305,7 @@ export function Greenroom({
 
             <section className="rounded-2xl bg-vessel-bg-surface border border-vessel-border p-5">
               <p className="text-xs font-mono-vessel text-vessel-text-muted uppercase tracking-wider mb-3">
-                Preflight
+                Checks
               </p>
               <div className="space-y-2">
                 <PreflightChip
@@ -353,7 +353,7 @@ export function Greenroom({
                 className="w-full sm:flex-1"
                 data-testid="button-greenroom-continue"
               >
-                Continue to consent →
+                Continue
               </VesselButton>
             </div>
           </div>
@@ -719,7 +719,7 @@ function usePreflightChecks() {
       };
     }
     if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) {
-      return { kind: "warn", note: "Safari — works, may glitch" };
+      return { kind: "warn", note: "Safari: works, may glitch" };
     }
     return { kind: "ok", note: "Ready" };
   }, []);
@@ -728,7 +728,7 @@ function usePreflightChecks() {
     if (typeof window === "undefined") return { kind: "checking" };
     const cores = window.navigator.hardwareConcurrency || 0;
     if (cores === 0) return { kind: "warn", note: "Unknown" };
-    if (cores < 4) return { kind: "warn", note: `${cores} cores — may strain` };
+    if (cores < 4) return { kind: "warn", note: "May struggle with video" };
     return { kind: "ok", note: `${cores} cores` };
   }, []);
 
@@ -753,10 +753,10 @@ function usePreflightChecks() {
         return;
       }
       if (t === "3g") {
-        setNetwork({ kind: "warn", note: "3G — may stutter" });
+        setNetwork({ kind: "warn", note: "3G: may stutter" });
         return;
       }
-      setNetwork({ kind: "fail", note: `${t} — too slow` });
+      setNetwork({ kind: "fail", note: `${t}: too slow` });
       return;
     }
     // Fallback: small ping to the API base path. Best-effort; we don't fail
@@ -768,7 +768,7 @@ function usePreflightChecks() {
         if (cancelled) return;
         const ms = Math.round(performance.now() - start);
         if (ms < 250) setNetwork({ kind: "ok", note: `${ms}ms` });
-        else if (ms < 800) setNetwork({ kind: "warn", note: `${ms}ms — slow` });
+        else if (ms < 800) setNetwork({ kind: "warn", note: `${ms}ms: slow` });
         else setNetwork({ kind: "warn", note: `${ms}ms` });
       })
       .catch(() => {

@@ -83,7 +83,7 @@ function InspectorBody({ session }: { session: InspectorSession }) {
             <span className="font-mono-vessel text-xs text-vessel-accent">{`</>`}</span>
           </div>
           <SheetTitle className="text-vessel-text-primary text-base font-display">
-            View as data
+            Details
           </SheetTitle>
         </div>
         <SheetDescription className="text-vessel-text-muted text-xs">
@@ -93,7 +93,7 @@ function InspectorBody({ session }: { session: InspectorSession }) {
         <div className="flex items-center gap-2 pt-2 text-xs">
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono-vessel text-vessel-text-secondary bg-vessel-bg-elevated border border-vessel-border">
             {isSolo ? <MonitorPlay className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-            {isSolo ? "Solo" : "Studio"}
+            {isSolo ? "Solo" : "Session"}
           </span>
           <span className="text-vessel-text-muted font-mono-vessel">
             {session.recordings.length} track{session.recordings.length === 1 ? "" : "s"}
@@ -146,11 +146,12 @@ function SessionIdentitySection({ session }: { session: InspectorSession }) {
           testIdSuffix="session-id"
         />
       )}
+      {/* Prefer the Studio ID (bech32) form; raw hex only when encoding fails. */}
       <KeyValueRow
-        label="Owner"
-        value={owner}
-        secondary={npub}
-        secondaryLabel="As npub"
+        label={npub ? "Owner (Studio ID)" : "Owner (hex)"}
+        value={npub ?? (owner || null)}
+        secondary={npub ? owner : null}
+        secondaryLabel="Hex"
         mono
         testIdSuffix="owner"
       />
@@ -377,7 +378,7 @@ function VariantRow({
       {variant.url ? (
         <ValueWithCopy
           value={variant.url}
-          tinyLabel={local ? "Device URL" : "URL"}
+          tinyLabel={local ? "Saved on this device" : "File link"}
           mono
           testIdSuffix={`${testIdPrefix}-url`}
           breakAll
@@ -386,7 +387,7 @@ function VariantRow({
       {variant.hash ? (
         <ValueWithCopy
           value={variant.hash}
-          tinyLabel="Content hash"
+          tinyLabel="Checksum"
           mono
           testIdSuffix={`${testIdPrefix}-hash`}
           breakAll
@@ -465,7 +466,7 @@ function RawRecordSection({ recordings }: { recordings: Recording[] }) {
             ) : (
               <ChevronRight className="w-3.5 h-3.5 text-vessel-text-muted" />
             )}
-            {open ? "Hide" : "Show"} raw JSON
+            {open ? "Hide" : "Show"} raw data
           </span>
           <CopyButton
             value={JSON.stringify(json, null, 2)}

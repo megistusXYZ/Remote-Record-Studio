@@ -42,7 +42,7 @@ export function WaitingForGuestsEmpty() {
 
       <motion.div variants={fadeInUp}>
         <VesselBadge variant="accent" className="mb-4">
-          Studio doors are open
+          Doors are open
         </VesselBadge>
       </motion.div>
 

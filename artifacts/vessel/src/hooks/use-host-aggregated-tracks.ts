@@ -361,7 +361,7 @@ export function useHostAggregatedTracks({
       if (!parts) {
         setResolveErrors((prev) => {
           const next = new Map(prev);
-          next.set(rec.pubkey, "Pointer URL is malformed.");
+          next.set(rec.pubkey, "This link looks broken.");
           return next;
         });
         return;
@@ -399,12 +399,15 @@ export function useHostAggregatedTracks({
           });
         } catch (err) {
           if (epochRef.current !== myEpoch) return;
+          // Only ShareResolveError carries copy written for people; anything
+          // else is a raw transport/crypto failure that must not reach the UI.
+          if (!(err instanceof ShareResolveError)) {
+            console.warn("[host-aggregated-tracks] resolve failed", err);
+          }
           const message =
             err instanceof ShareResolveError
               ? err.message
-              : err instanceof Error
-                ? err.message
-                : "Couldn't resolve participant archive.";
+              : "Couldn't load this guest's track.";
           setResolveErrors((prev) => {
             const next = new Map(prev);
             next.set(rec.pubkey, message);

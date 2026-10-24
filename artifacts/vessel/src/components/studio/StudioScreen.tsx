@@ -562,7 +562,7 @@ export function StudioScreen({
       if (known.has(peer.pubkey)) continue;
       presenceOnly.push({
         pubkey: peer.pubkey,
-        displayName: peer.displayName?.trim() || `${peer.pubkey.slice(0, 8)}…`,
+        displayName: peer.displayName?.trim() || "Guest",
         role: "guest",
         isSelf: peer.pubkey === currentPubkey,
       });
@@ -889,7 +889,7 @@ export function StudioScreen({
         if (result.publish.successCount === 0) {
           setPersonalArchive({
             status: "error",
-            message: "No sharing servers accepted the receipt.",
+            message: "The receipt couldn't be published.",
           });
           return;
         }
@@ -925,17 +925,16 @@ export function StudioScreen({
           toast({
             variant: "destructive",
             description:
-              "Couldn't notify the host of your archive automatically. Share the link manually if needed — your local copy is safe.",
+              "Couldn't send your receipt link to the host automatically. Share the link manually if needed; your recording is safe on this device.",
           });
         }
       } catch (err) {
+        // Raw error text (relay/storage/crypto failures) stays in the console;
+        // the UI only ever shows the friendly line.
         console.error("Failed to publish personal archive", err);
         setPersonalArchive({
           status: "error",
-          message:
-            err instanceof Error
-              ? err.message
-              : "An unexpected problem prevented publishing.",
+          message: "We couldn't publish your receipt yet.",
         });
       }
     })();

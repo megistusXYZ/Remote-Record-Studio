@@ -41,7 +41,7 @@ export default function ShareView() {
       if (err instanceof ShareResolveError) {
         setError({ code: err.code, message: err.message });
       } else {
-        setError({ code: "network", message: "Something went wrong opening this archive." });
+        setError({ code: "network", message: "Something went wrong opening this share." });
       }
     } finally {
       setLoading(false);

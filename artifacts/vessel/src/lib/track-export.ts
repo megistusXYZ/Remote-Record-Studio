@@ -294,9 +294,9 @@ export async function downloadSelectionsAsZip(
         participantName: sel.source.participantName,
         reason:
           sel.stream === "audio-only"
-            ? "Audio-only sibling isn't available."
+            ? "Audio-only file isn't available."
             : sel.stream === "video-only"
-              ? "Video-only sibling isn't available."
+              ? "Video-only file isn't available."
               : sel.stream === "screen-only"
                 ? "Screen-share file isn't available."
                 : "Track blob isn't available on this device.",

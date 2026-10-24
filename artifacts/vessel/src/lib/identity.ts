@@ -261,13 +261,21 @@ export async function createGuestIdentity(displayName: string): Promise<VesselId
   return identity;
 }
 
+export const INVALID_RECOVERY_KEY_MESSAGE =
+  "That doesn't look like a recovery key. It starts with nsec1 and has no spaces.";
+
 export async function importIdentityFromBackup(
   nsec: string,
   displayName: string,
 ): Promise<VesselIdentity> {
-  const decoded = nip19.decode(nsec.trim());
+  let decoded: ReturnType<typeof nip19.decode>;
+  try {
+    decoded = nip19.decode(nsec.trim());
+  } catch {
+    throw new Error(INVALID_RECOVERY_KEY_MESSAGE);
+  }
   if (decoded.type !== "nsec") {
-    throw new Error("That backup key doesn't look right. Make sure it starts with nsec1.");
+    throw new Error(INVALID_RECOVERY_KEY_MESSAGE);
   }
   const secretKey = decoded.data as Uint8Array;
   const identity = buildLocalIdentity(displayName, secretKey, false);
@@ -295,7 +303,7 @@ export function isNostrExtensionAvailable(): boolean {
 export async function signInWithExtension(displayName: string): Promise<VesselIdentity> {
   if (!isNostrExtensionAvailable()) {
     throw new ExtensionMissingError(
-      "No Nostr browser extension detected. Install one (Alby, nos2x, etc.) and reload.",
+      "No key app found in this browser. Install Alby or nos2x, then reload.",
     );
   }
   const signer = new ExtensionSigner();
@@ -322,6 +330,9 @@ export function isSupportedRemoteSignerUri(uri: string): boolean {
   return uri.trim().startsWith("bunker://");
 }
 
+const INVALID_CONNECTION_LINK_MESSAGE =
+  "That doesn't look like a connection link. Copy it again from your key app.";
+
 /** Default relays used when we generate a `nostrconnect://` invite for the
  * signer. We use the shared NIP-46 pool. */
 const DEFAULT_NOSTRCONNECT_RELAYS = [
@@ -341,9 +352,7 @@ export async function signInWithRemoteSigner(
   ensureNostrConnectWired();
   const uri = rawUri.trim();
   if (!uri.startsWith("bunker://")) {
-    throw new Error(
-      "That doesn't look like a valid connection URL. Paste one that starts with 'bunker://'.",
-    );
+    throw new Error(INVALID_CONNECTION_LINK_MESSAGE);
   }
   return signInWithBunkerUri(uri, displayName);
 }
@@ -356,10 +365,10 @@ async function signInWithBunkerUri(
   try {
     parsed = parseBunkerURI(uri);
   } catch {
-    throw new Error("This bunker:// URL is malformed. Try copying it again.");
+    throw new Error(INVALID_CONNECTION_LINK_MESSAGE);
   }
   if (!parsed.relays || parsed.relays.length === 0) {
-    throw new Error("This connection URL is incomplete. Ask your signer for a complete URL.");
+    throw new Error(INVALID_CONNECTION_LINK_MESSAGE);
   }
 
   const clientSecretKey = generateSecretKey();
@@ -592,10 +601,7 @@ async function restoreV3(stored: StoredV3, isGuest: boolean): Promise<VesselIden
 
 export function exportIdentityBackup(identity: VesselIdentity): string {
   if (identity.signerType !== "local" || !identity._secretKey) {
-    throw new Error(
-      "Backup keys are only available for studios secured by a local key. " +
-        "When you sign in with a Nostr extension or remote signer, your key stays in that app.",
-    );
+    throw new Error("Your key lives in your key app, not in Vessel. Back it up there.");
   }
   return nip19.nsecEncode(identity._secretKey);
 }
@@ -610,13 +616,13 @@ export function getStudioIdBech32(identity: VesselIdentity): string {
 }
 
 /**
- * Build the contents of the .txt backup file. Used both by the onboarding
- * step and the Settings → Reveal backup key flow so the file is identical
- * everywhere — same headings, same instructions, same learn-more URL.
+ * Build the contents of the .txt recovery-key file. Used both by the
+ * onboarding step and the Settings → Show recovery key flow so the file is
+ * identical everywhere — same headings, same instructions.
  *
  * Plain-English copy by design. We surface the literal `npub1.../nsec1...`
  * strings (users need them verbatim to paste back in or use in other apps),
- * but call them "Studio ID" and "Backup Key" in body copy so the file
+ * but call them "Studio ID" and "Recovery key" in body copy so the file
  * matches Vessel's ownership-first voice.
  */
 export function buildBackupFileContent(
@@ -627,63 +633,60 @@ export function buildBackupFileContent(
   const created = new Date().toISOString().slice(0, 10);
   const display = identity.displayName || "(no name set)";
   const sep = "────────────────────────────────────────";
+  // Point the sign-in instructions at wherever this build is actually served
+  // from (local dev, staging, production) rather than a hardcoded hostname.
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : null;
 
   return [
-    "Vessel — Studio Backup",
-    "=======================",
+    "Vessel — Recovery key",
+    "=====================",
     "",
     `Created:      ${created}`,
     `Display name: ${display}`,
     "",
-    "This file holds the two pieces of your studio identity.",
+    "This file holds your studio's recovery key and public Studio ID.",
     "Keep this file somewhere private — a password manager works well.",
     "",
     sep,
-    "YOUR STUDIO ID  (public — safe to share)",
+    "YOUR STUDIO ID  (public)",
     sep,
     studioId,
     "",
-    "This is your public studio address. Share it anywhere —",
-    "on a podcast page, business card, email signature. Guests",
-    "use it to find your sessions and your recordings carry it",
-    "as proof they're yours.",
+    "This is your public studio address. Share it anywhere:",
+    "on a podcast page, business card, email signature. Your",
+    "recordings carry it as proof they're yours.",
     "",
     sep,
-    "YOUR BACKUP KEY  (private — never share)",
+    "YOUR RECOVERY KEY  (private, never share)",
     sep,
     backupKey,
     "",
-    "This signs you in to your studio. Anyone who has it becomes",
-    "you. If you lose it, no one can recover it for you — not even",
-    "Vessel. Vessel never sees this key; it never leaves your device",
-    "unless you choose to back it up (this file is one such backup).",
+    "This signs you in to your studio. Anyone who has it can sign",
+    "in as you. If you lose it, nobody can recover it for you, not",
+    "even Vessel. It never leaves your device unless you save it,",
+    "as in this file.",
     "",
     sep,
     "HOW TO SIGN BACK IN ON ANOTHER DEVICE",
     sep,
-    "1. Open vessel.fm in any browser.",
-    "2. On the home page, choose \"Sign in with backup key\".",
-    "3. Paste the backup key from above.",
+    origin ? `1. Open ${origin} in any browser.` : "1. Open Vessel in any browser.",
+    "2. On the home page, choose \"Sign in with your recovery key\".",
+    "3. Paste the recovery key from above.",
     "4. You're in — your past sessions and recordings reappear,",
     "   tied to your Studio ID.",
     "",
     sep,
     "HOW IT WORKS",
     sep,
-    "Vessel is built on an open identity protocol. Your studio is",
-    "not stored in any central account database — your identity",
-    "lives in this file and on the devices you sign in on, and",
-    "only you control it.",
+    "Your studio is not stored in any central account database.",
+    "It lives on your devices and in this file, and only you",
+    "control it. Apps that support the same open key format can",
+    "use this key too.",
     "",
-    "The same backup key works in any other app built on the same",
-    "protocol. Your Studio ID stays the same everywhere, so people",
-    "who know it can always find you across apps.",
-    "",
-    sep,
-    "LEARN MORE",
-    sep,
-    "https://vessel.fm",
-    "",
+    ...(origin ? [sep, "LEARN MORE", sep, origin, ""] : []),
   ].join("\n");
 }
 
@@ -696,7 +699,7 @@ export function downloadBackupFile(
   backupKey: string,
 ): string {
   const stamp = new Date().toISOString().slice(0, 10);
-  const filename = `vessel-studio-backup-${stamp}.txt`;
+  const filename = `vessel-recovery-key-${stamp}.txt`;
   const body = buildBackupFileContent(identity, backupKey);
   const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -795,11 +798,11 @@ export function getInitials(name: string): string {
 export function describeSignerType(type: SignerType): string {
   switch (type) {
     case "local":
-      return "Local studio key";
+      return "This device";
     case "extension":
-      return "Browser extension";
+      return "Key app in your browser";
     case "remote":
-      return "Remote signer";
+      return "Key app on another device";
   }
 }
 

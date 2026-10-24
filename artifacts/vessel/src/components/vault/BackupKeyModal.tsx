@@ -31,11 +31,21 @@ export type BackupKeyModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   identity: VesselIdentity | null;
+  /** Show the public Studio ID block above the key. Defaults to true. */
+  showStudioId?: boolean;
+  /** Called when the user clicks Done on the reveal stage (after the key was shown). */
+  onDone?: () => void;
 };
 
 type Stage = "warn" | "reveal";
 
-export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalProps) {
+export function BackupKeyModal({
+  open,
+  onOpenChange,
+  identity,
+  showStudioId = true,
+  onDone,
+}: BackupKeyModalProps) {
   const { toast } = useToast();
   const [stage, setStage] = useState<Stage>("warn");
   const [backupValue, setBackupValue] = useState<string | null>(null);
@@ -77,7 +87,7 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
   const handleReveal = () => {
     if (!identity) {
       setError(
-        "We couldn't find your studio identity on this device. Try signing in again.",
+        "We couldn't find your studio on this device. Try signing in again.",
       );
       return;
     }
@@ -88,7 +98,7 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
       setError(null);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Couldn't reveal your backup key.";
+        err instanceof Error ? err.message : "Couldn't show your recovery key.";
       setError(message);
     }
   };
@@ -98,7 +108,7 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
     try {
       await navigator.clipboard.writeText(backupValue);
       setCopied(true);
-      toast({ title: "Copied", description: "Backup key copied to clipboard." });
+      toast({ title: "Copied", description: "Recovery key copied." });
     } catch {
       toast({
         title: "Couldn't copy",
@@ -132,7 +142,7 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-vessel-bg-surface border-vessel-border text-vessel-text-primary max-w-md">
         <DialogHeader className="mb-2">
-          <DialogTitle className="font-display text-xl">Backup key</DialogTitle>
+          <DialogTitle className="font-display text-xl">Recovery key</DialogTitle>
           <DialogDescription className="text-vessel-text-secondary mt-2">
             {stage === "warn"
               ? "This key is your studio. Anyone who has it can sign in as you on any device."
@@ -171,20 +181,20 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
                 data-testid="button-backup-reveal"
               >
                 <Eye className="w-4 h-4 mr-2" />
-                Reveal key
+                Show key
               </VesselButton>
             </div>
           </div>
         ) : (
           <div className="mt-2 space-y-4">
-            {studioId && (
+            {showStudioId && studioId && (
               <div>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <label className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-vessel-text-muted">
                     <ShieldCheck className="w-3.5 h-3.5 text-vessel-accent" />
                     Studio ID
                     <span className="ml-1 normal-case text-[10px] tracking-normal text-vessel-text-muted/80">
-                      (public — safe to share)
+                      (public)
                     </span>
                   </label>
                   <button
@@ -213,9 +223,9 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
             <div>
               <label className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-vessel-text-muted">
                 <ShieldAlert className="w-3.5 h-3.5 text-vessel-amber" />
-                Backup key
+                Recovery key
                 <span className="ml-1 normal-case text-[10px] tracking-normal text-vessel-text-muted/80">
-                  (private — never share)
+                  (private, never share)
                 </span>
               </label>
               <code
@@ -296,7 +306,10 @@ export function BackupKeyModal({ open, onOpenChange, identity }: BackupKeyModalP
               <VesselButton
                 type="button"
                 variant="ghost"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  onOpenChange(false);
+                  onDone?.();
+                }}
                 data-testid="button-backup-close"
               >
                 Done

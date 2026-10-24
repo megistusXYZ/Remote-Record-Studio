@@ -277,13 +277,11 @@ export async function checkStorageReachability(
       reason: `Server responded with ${res.status}.`,
     };
   } catch (err) {
-    const reason =
-      err instanceof Error
-        ? err.name === "AbortError"
-          ? "Timed out reaching server."
-          : err.message
-        : "Couldn't reach server.";
-    return { state: "unreachable", reason };
+    if (err instanceof Error && err.name === "AbortError") {
+      return { state: "unreachable", reason: "Timed out reaching server." };
+    }
+    console.warn("Storage server test failed:", err);
+    return { state: "unreachable", reason: "Couldn't reach this server." };
   } finally {
     clearTimeout(timeoutId);
   }

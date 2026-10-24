@@ -323,10 +323,9 @@ function TrackRow({ track }: TrackRowProps) {
               This file doesn't match what the host shared
             </div>
             <p className="opacity-90">
-              The bytes from the storage server don't match the fingerprint in
-              the host's signed manifest. The file was not saved. Ask the host
-              to share a new link, or try again later in case the storage
-              server is in a bad state.
+              The file on the storage server doesn't match what the host
+              shared, so it was not saved. Ask the host for a new link, or try
+              again later.
             </p>
             <details className="mt-2">
               <summary className="cursor-pointer text-[11px] opacity-80 hover:opacity-100">
@@ -426,7 +425,7 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
         {loading && (
           <div className="flex flex-col items-center py-24" data-testid="recipient-loading">
             <Loader2 className="w-7 h-7 text-vessel-accent animate-spin mb-3" />
-            <p className="text-sm text-vessel-text-secondary">Opening this archive…</p>
+            <p className="text-sm text-vessel-text-secondary">Opening this share…</p>
           </div>
         )}
 
@@ -453,11 +452,11 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
                 : error.code === "wrong_key"
                 ? "Wrong link"
                 : error.code === "not_found"
-                ? "Archive not found"
+                ? "Share not found"
                 : error.code === "bad_pointer"
                 ? "Broken link"
                 : error.code === "bad_format"
-                ? "Couldn't read this archive"
+                ? "Couldn't read this share"
                 : "Connection trouble"
             }
             body={
@@ -466,14 +465,14 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
                 : error.code === "missing_key"
                 ? "This link is missing the part that lets you read it. Make sure you copied the whole link, including everything after the # sign."
                 : error.code === "wrong_key"
-                ? "The reading code in this link doesn't match this archive. The link may have been edited or truncated."
+                ? "This link doesn't match this share. It may have been edited or cut short."
                 : error.code === "not_found"
-                ? "We couldn't find this archive. It may have been removed by the host, or the link may be incomplete."
+                ? "We couldn't find this share. It may have been removed by the host, or the link may be incomplete."
                 : error.code === "bad_pointer"
                 ? "This share link looks broken or incomplete. Ask the sender to copy it again."
                 : error.code === "bad_format"
-                ? "We could open this archive but its contents looked unexpected."
-                : "We couldn't reach the network to open this archive. Check your connection and try again."
+                ? "We could open this share but its contents looked unexpected."
+                : "We couldn't reach the network to open this share. Check your connection and try again."
             }
             onRetry={
               error.code === "network" || error.code === "not_found" ? onRetry : undefined
@@ -509,7 +508,7 @@ export function RecipientPage({ loading, error, manifest, onRetry }: RecipientPa
               <ErrorBlock
                 icon={<Inbox className="w-6 h-6" />}
                 title="Nothing to download"
-                body="There are no tracks in this archive that match your link."
+                body="There are no tracks in this share that match your link."
               />
             ) : (
               <div className="space-y-3" data-testid="recipient-track-list">
