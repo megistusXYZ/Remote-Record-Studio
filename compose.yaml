@@ -1,0 +1,32 @@
+# Local development services. Not used in production — see OPERATIONS.md.
+#
+#   pnpm dev:db               start PostgreSQL in the background (waits until healthy)
+#   docker compose down       stop it (data persists in the vessel-pgdata volume)
+#   docker compose down -v    stop it AND wipe the database
+#
+# The credentials below are for local development only and match the
+# DATABASE_URL in .env.example.
+name: vessel
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: vessel-postgres
+    environment:
+      POSTGRES_USER: vessel
+      POSTGRES_PASSWORD: vessel
+      POSTGRES_DB: vessel
+    # Bound to loopback on 5434 so it never clashes with a PostgreSQL you may
+    # already have on the default 5432, and is unreachable from the LAN.
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - vessel-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vessel -d vessel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  vessel-pgdata:

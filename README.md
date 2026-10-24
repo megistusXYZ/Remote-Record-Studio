@@ -79,7 +79,8 @@ Vessel is a [pnpm](https://pnpm.io/) monorepo. You'll need:
 
 - **Node.js** ≥ 20
 - **pnpm** ≥ 9
-- **PostgreSQL** ≥ 14
+- **PostgreSQL** ≥ 14 — or Docker, and the included `compose.yaml` runs one
+  for you
 
 ```bash
 # 1. Clone and install
@@ -89,17 +90,20 @@ pnpm install
 
 # 2. Configure your environment
 cp .env.example .env
-# Edit .env — at minimum you need DATABASE_URL and SESSION_SECRET
+# The defaults point at the Docker PostgreSQL started in step 3. Edit
+# DATABASE_URL if you run your own server.
 
-# 3. Push the database schema
-pnpm --filter @workspace/api-server run db:push
+# 3. Start PostgreSQL (skip if you run your own) and push the schema
+pnpm dev:db
+pnpm db:push
 
-# 4. Start everything
-pnpm --filter @workspace/api-server run dev   # API on :3001
-pnpm --filter @workspace/vessel run dev       # Web on :5173
+# 4. Start everything — API on :3001, web on :5173
+pnpm dev
 ```
 
 Open <http://localhost:5173>, create your studio, and you're recording.
+[`docs/LOCAL-DEVELOPMENT.md`](./docs/LOCAL-DEVELOPMENT.md) covers ports,
+environment variables, running the apps separately, and tests.
 
 > **Running Vessel for the public?** Read [`OPERATIONS.md`](./OPERATIONS.md)
 > first. It covers CDN/WAF setup, security headers, the rate-limit

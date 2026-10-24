@@ -4,9 +4,15 @@
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "dev": "pnpm run --parallel \"/^dev:(api|web)$/\"",
+    "dev:db": "docker compose up -d --wait postgres",
+    "dev:api": "sh scripts/dev.sh api",
+    "dev:web": "sh scripts/dev.sh web",
+    "db:push": "sh scripts/dev.sh db:push",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test": "pnpm -r --no-bail --if-present run test"
   },
   "private": true,
   "devDependencies": {
