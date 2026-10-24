@@ -87,7 +87,7 @@ export function Greenroom({
   const [micEnabled, setMicEnabled] = useState(true);
   const [name, setName] = useState(initialName);
 
-  const { stream, error: streamError, isLoading } = useLocalStream({
+  const { stream, error: streamError, isLoading, videoUnavailableReason } = useLocalStream({
     cameraId: selectedCameraId,
     micId: selectedMicId,
     cameraEnabled,
@@ -238,6 +238,12 @@ export function Greenroom({
               <div className="px-4 py-3 bg-vessel-red/10 border-t border-vessel-red/30 text-vessel-red text-sm flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span data-testid="text-greenroom-stream-error">{streamError}</span>
+              </div>
+            )}
+            {!streamError && videoUnavailableReason && (
+              <div className="px-4 py-3 bg-vessel-bg-surface border-t border-vessel-border text-vessel-text-secondary text-sm flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-vessel-accent" />
+                <span data-testid="text-greenroom-audio-only">{videoUnavailableReason}</span>
               </div>
             )}
 

@@ -1,4 +1,5 @@
 import type { Event } from "nostr-tools/pure";
+import { sha256HexOfBlob as streamingSha256HexOfBlob } from "./streaming-hash";
 import { getRelayPool } from "./relay-pool";
 import {
   decryptManifestContent,
@@ -48,6 +49,10 @@ export type RecipientTrack = {
    *  combined track's duration because the screen recorder starts/stops
    *  on Share-screen, not on session start/end. Null when no screen file. */
   screenDurationSeconds: number | null;
+  /** Start of this track in ms since epoch on the recording device (v>=5). */
+  startedAtMs: number | null;
+  /** Server clock minus the recording device's clock at start, ms (v>=5). */
+  serverOffsetMs: number | null;
   eventId: string | null;
 };
 
@@ -120,6 +125,8 @@ export function parseManifestTrack(raw: unknown): RecipientTrack {
     video,
     screen,
     screenDurationSeconds,
+    startedAtMs: typeof t.startedAtMs === "number" ? t.startedAtMs : null,
+    serverOffsetMs: typeof t.serverOffsetMs === "number" ? t.serverOffsetMs : null,
     eventId: t.eventId ? String(t.eventId) : null,
   };
 }
@@ -395,14 +402,7 @@ export { decodeShareKey };
  * swapped the file between upload and download.
  */
 export async function sha256HexOfBlob(blob: Blob): Promise<string> {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("This browser can't verify downloads.");
-  }
-  const buf = await blob.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return streamingSha256HexOfBlob(blob);
 }
 
 export type TrackHashVerification =

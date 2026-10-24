@@ -13,6 +13,12 @@ import * as zod from "zod";
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+  nowMs: zod
+    .number()
+    .optional()
+    .describe(
+      "Server clock, milliseconds since the Unix epoch. Clients use it to express recording start times on one clock.",
+    ),
 });
 
 /**

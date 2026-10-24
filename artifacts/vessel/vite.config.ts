@@ -123,7 +123,9 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": a new version waits until the person applies it. The old
+      // auto-update took over open tabs on deploy, reloading them mid-session.
+      registerType: "prompt",
       includeAssets: [
         "favicon.svg",
         "favicon-16.png",
@@ -138,7 +140,6 @@ export default defineConfig({
         theme_color: "#080b0f",
         background_color: "#080b0f",
         display: "standalone",
-        orientation: "portrait",
         start_url: basePath,
         scope: basePath,
         categories: ["productivity", "music", "utilities"],
