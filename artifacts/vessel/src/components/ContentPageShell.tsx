@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { VesselBrandIcon } from "./icons/VesselBrandIcon";
+import { ThemeToggleButton } from "./vessel-ui/ThemeControls";
 
 interface ContentPageShellProps {
   title: string;
@@ -24,6 +25,8 @@ export function ContentPageShell({ title, eyebrow, children }: ContentPageShellP
             <div className="w-1.5 h-1.5 rounded-full bg-vessel-accent" />
           </div>
         </Link>
+        <div className="flex items-center gap-1">
+          <ThemeToggleButton />
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-medium text-vessel-text-secondary hover:text-vessel-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-vessel-accent rounded-md px-2 py-1"
@@ -32,6 +35,7 @@ export function ContentPageShell({ title, eyebrow, children }: ContentPageShellP
           <ArrowLeft size={14} />
           <span>Back to home</span>
         </Link>
+        </div>
       </header>
 
       <main className="relative z-10 px-6 pt-8 pb-24">
