@@ -23,7 +23,7 @@ import { SketchCircle } from "../components/icons/SketchCircle";
 import { SketchLine } from "../components/icons/SketchLine";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
-import { VesselBadge } from "../components/vessel-ui/VesselBadge";
+import { Eyebrow } from "../components/vessel-ui/Eyebrow";
 import seascapeAvif from "@/assets/illustrations/seascape.avif";
 import seascapeWebp from "@/assets/illustrations/seascape.webp";
 import shipAvif from "@/assets/illustrations/ship.avif";
@@ -267,9 +267,7 @@ export default function HowItWorks() {
             variants={fadeInUp}
             className="flex justify-center"
           >
-            <VesselBadge variant="accent" className="mb-7">
-              The plain-English version
-            </VesselBadge>
+            <Eyebrow className="mb-7">The plain-English version</Eyebrow>
           </motion.div>
           <motion.h1
             initial="hidden"

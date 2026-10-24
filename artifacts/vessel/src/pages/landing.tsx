@@ -4,7 +4,7 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { useIdentity } from "../hooks/use-identity";
 import { VesselButton } from "../components/vessel-ui/VesselButton";
 import { VesselCard } from "../components/vessel-ui/VesselCard";
-import { VesselBadge } from "../components/vessel-ui/VesselBadge";
+import { Eyebrow } from "../components/vessel-ui/Eyebrow";
 import { HeroDemo } from "../components/landing/HeroDemo";
 import { Check, X } from "lucide-react";
 import { deploymentContactUrl } from "../lib/runtime-config";
@@ -211,9 +211,7 @@ export default function LandingPage() {
           className="text-center max-w-4xl mx-auto flex flex-col items-center"
         >
           <motion.div variants={fadeInUp}>
-            <VesselBadge variant="accent" className="mb-8">
-              Studio-quality remote recording
-            </VesselBadge>
+            <Eyebrow className="mb-8">Studio-quality remote recording</Eyebrow>
           </motion.div>
 
           <motion.h1
