@@ -12,9 +12,9 @@ export const VesselBadge = React.forwardRef<HTMLDivElement, VesselBadgeProps>(
 
     const variants = {
       default: "bg-vessel-bg-surface text-vessel-text-muted border border-vessel-border",
-      success: "bg-[#2ed573]/10 text-vessel-green border border-[#2ed573]/20",
-      warning: "bg-[#ffa502]/10 text-vessel-amber border border-[#ffa502]/20",
-      error: "bg-[#ff4757]/10 text-vessel-red border border-[#ff4757]/20",
+      success: "bg-vessel-green/10 text-vessel-green border border-vessel-green/20",
+      warning: "bg-vessel-amber/10 text-vessel-amber border border-vessel-amber/20",
+      error: "bg-vessel-red/10 text-vessel-red border border-vessel-red/20",
       accent: "bg-vessel-accent-glow text-vessel-accent border border-vessel-accent/20",
     };
 

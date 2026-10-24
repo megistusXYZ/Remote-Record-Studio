@@ -21,7 +21,7 @@ export function Eyebrow({
     >
       <span
         aria-hidden="true"
-        className="h-1.5 w-1.5 shrink-0 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.6)]"
+        className="h-1.5 w-1.5 shrink-0 rounded-full bg-vessel-accent shadow-[0_0_8px_rgb(var(--vessel-accent-rgb)/0.6)]"
       />
       {children}
     </p>

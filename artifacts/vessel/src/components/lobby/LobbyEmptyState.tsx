@@ -33,10 +33,10 @@ function MicOnStandIllustration() {
       aria-hidden="true"
     >
       {/* base ring (ground) */}
-      <ellipse cx="44" cy="78" rx="22" ry="3" fill="#00d4aa" fillOpacity="0.08" />
+      <ellipse cx="44" cy="78" rx="22" ry="3" className="fill-vessel-accent" fillOpacity="0.08" />
       {/* stand */}
-      <rect x="42" y="48" width="4" height="26" rx="1.5" fill="#3a4453" />
-      <rect x="32" y="74" width="24" height="3" rx="1.5" fill="#3a4453" />
+      <rect x="42" y="48" width="4" height="26" rx="1.5" className="fill-vessel-text-muted" fillOpacity="0.6" />
+      <rect x="32" y="74" width="24" height="3" rx="1.5" className="fill-vessel-text-muted" fillOpacity="0.6" />
       {/* mic body */}
       <rect
         x="32"
@@ -44,18 +44,17 @@ function MicOnStandIllustration() {
         width="24"
         height="36"
         rx="12"
-        fill="#1a232f"
-        stroke="#00d4aa"
+        className="fill-vessel-bg-elevated stroke-vessel-accent"
         strokeOpacity="0.55"
         strokeWidth="1.5"
       />
       {/* grille lines */}
-      <line x1="36" y1="22" x2="52" y2="22" stroke="#00d4aa" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="36" y1="28" x2="52" y2="28" stroke="#00d4aa" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="36" y1="34" x2="52" y2="34" stroke="#00d4aa" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="36" y1="40" x2="52" y2="40" stroke="#00d4aa" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="36" y1="22" x2="52" y2="22" className="stroke-vessel-accent" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="36" y1="28" x2="52" y2="28" className="stroke-vessel-accent" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="36" y1="34" x2="52" y2="34" className="stroke-vessel-accent" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="36" y1="40" x2="52" y2="40" className="stroke-vessel-accent" strokeOpacity="0.5" strokeWidth="1.2" strokeLinecap="round" />
       {/* gentle glow */}
-      <circle cx="44" cy="32" r="20" fill="#00d4aa" fillOpacity="0.06" />
+      <circle cx="44" cy="32" r="20" className="fill-vessel-accent" fillOpacity="0.06" />
     </svg>
   );
 }

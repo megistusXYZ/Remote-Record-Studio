@@ -495,7 +495,7 @@ function TrackDownloadCard({ track }: { track: RecipientManifest["tracks"][numbe
 
   return (
     <div
-      className="p-6 rounded-xl bg-gradient-to-br from-vessel-bg-surface to-vessel-bg-elevated border border-vessel-accent/30 shadow-[0_0_40px_rgba(0,212,170,0.08)]"
+      className="p-6 rounded-xl bg-gradient-to-br from-vessel-bg-surface to-vessel-bg-elevated border border-vessel-accent/30 shadow-[0_0_40px_rgb(var(--vessel-accent-rgb)/0.08)]"
       data-testid="receipt-track-card"
     >
       <div className="flex items-center justify-between mb-2">

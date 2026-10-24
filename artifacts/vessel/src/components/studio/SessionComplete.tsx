@@ -708,7 +708,11 @@ export function SessionComplete({
       canvas.height = window.innerHeight;
 
       const particles: Array<{ x: number; y: number; r: number; color: string; vx: number; vy: number; life: number; maxLife: number }> = [];
-      const colors = ["#00d4aa", "#ffffff", "#00a886"];
+      // The active theme's accent, its deeper shade, and the text colour.
+      const css = getComputedStyle(document.documentElement);
+      const colors = ["--vessel-accent", "--vessel-text-primary", "--vessel-accent-dim"].map(
+        (name) => css.getPropertyValue(name).trim() || "#00d4aa",
+      );
 
       for (let i = 0; i < 80; i++) {
         particles.push({

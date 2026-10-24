@@ -67,8 +67,9 @@
   --color-vessel-border-strong: var(--vessel-border-strong);
 }
 
-:root, .dark {
-  /* Vessel Broadcast Dark palette */
+:root, [data-theme="dark"] {
+  /* Vessel Broadcast Dark palette. Every colour pair is checked for
+     readability in src/theme-contrast.test.ts. */
   --vessel-bg-base: #080b0f;
   --vessel-bg-surface: #0f1318;
   --vessel-bg-elevated: #161c23;
@@ -77,13 +78,19 @@
   --vessel-border-strong: rgba(255,255,255,0.13);
   --vessel-text-primary: #f0f4f8;
   --vessel-text-secondary: #8a9ab0;
-  --vessel-text-muted: #4a5568;
+  --vessel-text-muted: #7a889c;
   --vessel-accent: #00d4aa;
   --vessel-accent-glow: rgba(0,212,170,0.15);
   --vessel-accent-dim: #00a886;
   --vessel-red: #ff4757;
   --vessel-amber: #ffa502;
   --vessel-green: #2ed573;
+  /* Channel triples for glows and shadows: rgb(var(--vessel-accent-rgb) / 0.4). */
+  --vessel-accent-rgb: 0 212 170;
+  --vessel-red-rgb: 255 71 87;
+  --vessel-shadow-rgb: 0 0 0;
+  /* The line-art illustrations are dark ink; the dark theme flips them to light. */
+  --vessel-illustration-filter: invert(1) grayscale(1);
   --vessel-font-display: 'Syne Variable', 'Syne', sans-serif;
   --vessel-font-body: 'DM Sans Variable', 'DM Sans', sans-serif;
   --vessel-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
@@ -119,6 +126,59 @@
   --radius: 0.75rem;
 }
 
+[data-theme="light"] {
+  /* Vessel Broadcast Light: the same brand on a cool off-white page. The
+     accent is a deeper teal so links and button labels stay readable. */
+  --vessel-bg-base: #f6f8fa;
+  --vessel-bg-surface: #ffffff;
+  --vessel-bg-elevated: #eef2f6;
+  --vessel-bg-overlay: #e4e9ef;
+  --vessel-border: rgba(15,23,42,0.08);
+  --vessel-border-strong: rgba(15,23,42,0.16);
+  --vessel-text-primary: #0b1218;
+  --vessel-text-secondary: #4a5a6e;
+  --vessel-text-muted: #5f6b7c;
+  --vessel-accent: #007a63;
+  --vessel-accent-glow: rgba(0,122,99,0.10);
+  --vessel-accent-dim: #00644f;
+  --vessel-red: #c8283a;
+  --vessel-amber: #a85a00;
+  --vessel-green: #15803d;
+  --vessel-accent-rgb: 0 122 99;
+  --vessel-red-rgb: 200 40 58;
+  --vessel-shadow-rgb: 15 23 42;
+  --vessel-illustration-filter: grayscale(1);
+
+  --background: 210 29% 97%;
+  --foreground: 207 37% 7%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 207 37% 7%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 207 37% 7%;
+
+  --primary: 169 100% 24%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 29% 95%;
+  --secondary-foreground: 207 37% 7%;
+
+  --muted: 210 29% 95%;
+  --muted-foreground: 214 13% 43%;
+
+  --destructive: 353 67% 47%;
+  --destructive-foreground: 0 0% 100%;
+
+  --accent: 169 100% 24%;
+  --accent-foreground: 0 0% 100%;
+
+  --border: 214 20% 88%;
+  --border-strong: 214 18% 82%;
+
+  --ring: 169 100% 24%;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -126,7 +186,6 @@
 
   html {
     background-color: var(--vessel-bg-base);
-    color-scheme: dark;
     /* Stop iOS Safari from auto-resizing fonts when the device
        rotates landscape — we already pick deliberate type sizes per
        breakpoint and the auto-resize fights with them. */
@@ -196,7 +255,7 @@
     @apply inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97];
   }
   .vessel-btn-primary {
-    @apply bg-primary text-primary-foreground hover:brightness-110 shadow-[0_0_15px_rgba(0,212,170,0.15)];
+    @apply bg-primary text-primary-foreground hover:brightness-110 shadow-[0_0_15px_rgb(var(--vessel-accent-rgb)/0.15)];
   }
   .vessel-btn-secondary {
     @apply bg-transparent border border-border text-foreground hover:bg-secondary hover:border-border-strong;
@@ -231,3 +290,10 @@
   .audio-bar:nth-child(4) { animation-duration: 0.8s; animation-delay: 0.3s; }
   .audio-bar:nth-child(5) { animation-duration: 0.6s; animation-delay: 0.4s; }
 }
+
+/* The speaking ring's pulse, in the active theme's accent. */
+@keyframes speaking-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(var(--vessel-accent-rgb) / 0); }
+  50% { box-shadow: 0 0 22px 4px rgb(var(--vessel-accent-rgb) / 0.35); }
+}
+.speaking-glow { animation: speaking-glow 1.6s ease-in-out infinite; }

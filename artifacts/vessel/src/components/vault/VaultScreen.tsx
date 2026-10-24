@@ -489,7 +489,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
           className="pointer-events-none fixed inset-0 z-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
             backgroundImage: `image-set(url('${observationCabinAvif}') type('image/avif'), url('${observationCabinWebp}') type('image/webp'))`,
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",
             WebkitMaskImage:
@@ -563,7 +563,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                       data-testid={`vault-filter-${tab.value}`}
                       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                         isActive
-                          ? "bg-vessel-accent/15 text-vessel-accent shadow-[0_0_0_1px_rgba(0,212,170,0.25)_inset]"
+                          ? "bg-vessel-accent/15 text-vessel-accent shadow-[0_0_0_1px_rgb(var(--vessel-accent-rgb)/0.25)_inset]"
                           : "text-vessel-text-secondary hover:text-vessel-text-primary hover:bg-vessel-bg-elevated"
                       }`}
                     >
@@ -624,7 +624,7 @@ export function VaultScreen({ pubkey }: VaultScreenProps) {
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.4)]" />
+                        <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgb(var(--vessel-accent-rgb)/0.4)]" />
                         <h2 className="font-display text-lg font-bold text-vessel-text-primary truncate">{session.title}</h2>
                         {isSoloSession(session.id) ? (
                           <span

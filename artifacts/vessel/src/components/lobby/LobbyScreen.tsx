@@ -154,7 +154,7 @@ export function LobbyScreen({
           className="absolute inset-0 bg-center bg-no-repeat bg-cover opacity-[0.06]"
           style={{
             backgroundImage: `image-set(url('${wheelhouseAvif}') type('image/avif'), url('${wheelhouseWebp}') type('image/webp'))`,
-            filter: "invert(1) grayscale(1)",
+            filter: "var(--vessel-illustration-filter)",
             maskImage:
               "radial-gradient(ellipse at center, black 35%, transparent 80%)",
             WebkitMaskImage:
@@ -177,7 +177,7 @@ export function LobbyScreen({
                 </p>
               </div>
 
-              <VesselCard className="p-5 sm:p-6 md:p-8 mb-4 sm:mb-6 border-vessel-accent/30 shadow-[0_0_40px_rgba(0,212,170,0.08)]">
+              <VesselCard className="p-5 sm:p-6 md:p-8 mb-4 sm:mb-6 border-vessel-accent/30 shadow-[0_0_40px_rgb(var(--vessel-accent-rgb)/0.08)]">
                 <div className="mb-5 sm:mb-6">
                   <h2 className="font-display text-xl sm:text-2xl font-bold text-vessel-text-primary leading-tight mb-1">
                     Start a new session
@@ -355,7 +355,7 @@ export function LobbyScreen({
           <div className="container max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10 md:py-12">
             <div className="mb-6 sm:mb-8">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.8)] animate-pulse shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgb(var(--vessel-accent-rgb)/0.8)] animate-pulse shrink-0" />
                 <span className="text-vessel-text-secondary text-sm" data-testid="text-lobby-eyebrow">
                   {isHost ? "Your session is open" : session.title}
                 </span>
@@ -369,7 +369,7 @@ export function LobbyScreen({
             </div>
 
             {isHost && (
-            <VesselCard className="p-5 sm:p-6 border-vessel-accent/40 shadow-[0_0_30px_rgba(0,212,170,0.12)]">
+            <VesselCard className="p-5 sm:p-6 border-vessel-accent/40 shadow-[0_0_30px_rgb(var(--vessel-accent-rgb)/0.12)]">
               <label className="block text-xs text-vessel-text-muted uppercase tracking-wider mb-3">
                 Invite guests
               </label>

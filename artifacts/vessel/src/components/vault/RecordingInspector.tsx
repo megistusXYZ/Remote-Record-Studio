@@ -699,7 +699,7 @@ function JsonNode({
   if (typeof node === "number") {
     return (
       <>
-        <span className="text-[#ffaa7b]">{String(node)}</span>
+        <span className="text-vessel-amber">{String(node)}</span>
         {trailingComma ? "," : ""}
       </>
     );

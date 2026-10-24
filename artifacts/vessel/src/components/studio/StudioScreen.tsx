@@ -1211,7 +1211,7 @@ export function StudioScreen({
               </>
             ) : (
               <>
-                <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgba(0,212,170,0.4)]" />
+                <div className="w-2 h-2 rounded-full bg-vessel-accent shadow-[0_0_8px_rgb(var(--vessel-accent-rgb)/0.4)]" />
                 <span className="text-xs text-vessel-text-secondary font-medium">
                   Ready to record
                 </span>

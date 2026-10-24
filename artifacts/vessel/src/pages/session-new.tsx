@@ -150,7 +150,7 @@ export default function NewSession() {
                           "flex flex-col items-start text-left rounded-xl border px-3 py-2.5 transition-all",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                           isSelected
-                            ? "border-primary bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(0,212,170,0.4)_inset]"
+                            ? "border-primary bg-primary/10 text-foreground shadow-[0_0_0_1px_rgb(var(--vessel-accent-rgb)/0.4)_inset]"
                             : "border-border-strong bg-surface text-secondary-foreground hover:border-primary/40 hover:text-foreground",
                         )}
                         data-testid={`button-room-size-${preset.value}`}

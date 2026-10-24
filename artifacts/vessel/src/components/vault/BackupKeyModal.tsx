@@ -158,7 +158,7 @@ export function BackupKeyModal({
 
         {stage === "warn" ? (
           <div className="mt-2 space-y-5">
-            <div className="rounded-xl border border-[#ffa502]/20 bg-[#ffa502]/5 p-4 flex gap-3">
+            <div className="rounded-xl border border-vessel-amber/20 bg-vessel-amber/5 p-4 flex gap-3">
               <ShieldAlert className="w-5 h-5 text-vessel-amber shrink-0 mt-0.5" />
               <div className="text-sm text-vessel-text-secondary leading-relaxed">
                 Make sure no one is looking at your screen. Vessel will never
