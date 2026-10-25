@@ -296,6 +296,11 @@ the API, PostgreSQL, a one-shot migration step, a sync server (strfry), a
 storage server (blossom-server), a TURN relay (coturn) and a daily backup.
 The flagship and a self-hosted instance use the same file.
 
+**Guided route:** run `bash scripts/deploy-vps.sh` from your own computer.
+It walks through renting the server, DNS, Docker, the firewall, settings
+and secrets, the first start and the checks below, over SSH. The steps it
+automates are spelled out here.
+
 ### What you need
 
 - A Linux host with 2 vCPUs, 4 GB RAM and 40 GB of disk to start, x86-64 or
