@@ -39,8 +39,9 @@ The web app runs on <http://localhost:5173> and the API on port 3001. See
 ## Deploying
 
 [`deploy/compose.yaml`](./deploy/compose.yaml) runs Caddy with TLS, the API,
-PostgreSQL, a sync server, a storage server, TURN and daily backups. Follow
-[OPERATIONS.md](./OPERATIONS.md#10-deploy-with-docker-compose).
+PostgreSQL, a sync server, a storage server, TURN and daily backups. Run
+`bash scripts/deploy-vps.sh` for a guided first deploy to a fresh server, or
+follow [OPERATIONS.md](./OPERATIONS.md#10-deploy-with-docker-compose).
 
 ## Project layout
 
