@@ -100,6 +100,6 @@
     "onnxruntime-common": "1.30.0",
     "onnxruntime-web": "1.30.0",
     "qrcode.react": "^4.2.0",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.16"
   }
 }
