@@ -17,9 +17,9 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "express-rate-limit": "^8.7.1",
+    "express-rate-limit": "^8.7.4",
     "helmet": "^8.3.0",
-    "nostr-tools": "^2.25.2",
+    "nostr-tools": "^2.26.0",
     "pino": "^9",
     "pino-http": "^10"
   },
@@ -34,7 +34,7 @@
     "esbuild-plugin-pino": "^2.3.3",
     "pg": "^8.23.1",
     "pino-pretty": "^13",
-    "supertest": "^7.3.1",
+    "supertest": "^7.3.2",
     "thread-stream": "3.2.0",
     "vitest": "^4.1.12"
   }
