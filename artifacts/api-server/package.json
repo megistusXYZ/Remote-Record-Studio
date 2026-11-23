@@ -30,7 +30,7 @@
     "@types/node": "catalog:",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
-    "esbuild": "^0.28.2",
+    "esbuild": "^0.28.1",
     "esbuild-plugin-pino": "^2.3.3",
     "pg": "^8.23.1",
     "pino-pretty": "^13",
